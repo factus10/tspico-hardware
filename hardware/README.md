@@ -68,9 +68,10 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 Autorouted headlessly with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, keepout on B.Cu under the RP2350B body, single-threaded optimizer, GUI disabled in `~/Library/Application Support/freerouting/freerouting.json` because its plane renderer crashes). Default net class 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6/0.3 via.
 
-72 mm board, transceivers in finger order, SD flush with the edge, flash/PSRAM 2 mm off the chip, thinner left decoupling column: 525 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
+72 mm board, transceivers in finger order, SD shell 0.35 mm inside the edge (its front shield tabs need 0.3 mm copper-to-edge), flash/PSRAM 2 mm off the chip, thinner left decoupling column: 524 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
 
-- +3V3 to RP2350B IOVDD pins 41, 64 and 68 (each has a short stub already) and to U11 pin 16: a via next to each stub, or a track to the nearest decoupling cap's +3V3 pad.
-- SD_MISO from U20 pin 45 to the SD series resistor R33 area; nMWR from the U8 region to its via near the crystal; MA14 between U10 and U1.
+- +3V3 to RP2350B IOVDD pins 41, 64 and 68 (each has a short stub already) and to U11 pin 16: a via next to each stub, or a track to the nearest decoupling cap's +3V3 pad (the router's own attempt at U11 landed on a ground via and was removed).
+- GND: SD socket J2 rear shield tab (pad 4 area, about x 16 y 32) and one shield tab left to the router: a via each, clear of the SWCLK track on B.Cu.
+- SD_MISO from U20 pin 45 to the R33 area; nMWR between its two vias near the crystal; MA14 between U10 and U1.
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.

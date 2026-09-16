@@ -79,7 +79,7 @@ P["J3"] = (95, 4, 90)
 # left edge: USB-C below the ESP32, micro SD below that (both open to the left)
 P["J1"] = (3.2, 21, 270)
 row(["R24", "R25", "R26", "R27"], 12, 21, 3, 0)
-P["J2"] = (11.5, 35, 270)      # socket flush with the edge, card protrudes about 2 mm
+P["J2"] = (8.75, 35, 270)      # shell 0.35 mm inside the edge: its front shield tabs need 0.3 mm copper-to-edge (fab outline includes the card)
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
     P[r] = (23.5, 27 + 2.5 * i, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
