@@ -68,9 +68,9 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 Autorouted headlessly with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, keepout on B.Cu under the RP2350B body, single-threaded optimizer, GUI disabled in `~/Library/Application Support/freerouting/freerouting.json` because its plane renderer crashes). Default net class 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6/0.3 via.
 
-72 mm board, transceivers in finger order: 520 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
+72 mm board, transceivers in finger order, SD flush with the edge, flash/PSRAM 2 mm off the chip, thinner left decoupling column: 525 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
 
-- RP2350B (U20) pins on the QSPI/USB side: USB_DP (pin 67), MD1 and MD2 (78, 79), SD_MISO (45), RUN (35), nEXROM_L (20), one DVDD link and one IOVDD +3V3 stub. The 0.4 mm-pitch escape on that side is crowded by the decoupling column and the flash/PSRAM; hand-route with 0.15 mm tracks and 0.5/0.25 vias in the fanout ring.
-- nIORQ_V (U6 output to U20), MA5 and MA7 (short gaps in the mux/transceiver rows), Z80_A15 (one segment removed near U31 to clear a 0.0006 mm DRC nick; re-route past U31 pad 2).
+- +3V3 to RP2350B IOVDD pins 41, 64 and 68 (each has a short stub already) and to U11 pin 16: a via next to each stub, or a track to the nearest decoupling cap's +3V3 pad.
+- SD_MISO from U20 pin 45 to the SD series resistor R33 area; nMWR from the U8 region to its via near the crystal; MA14 between U10 and U1.
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.
