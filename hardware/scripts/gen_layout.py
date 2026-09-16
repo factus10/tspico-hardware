@@ -58,19 +58,20 @@ P["JP10"] = (85, 62.5, 0)
 # RP2350B core, rotated so GPIO0-7 (MD bus) sit at the bottom-left corner, the
 # control GPIOs along the bottom, QSPI/USB on the left, crystal on the right
 P["U20"] = (62, 26, 90)
-for i, r in enumerate(["C23", "C24", "C25", "C26", "C27"]):
-    P[r] = (52.5, 19 + 3.5 * i, 0)
+for i, r in enumerate(["C23", "C24", "C25"]):
+    P[r] = (51.5, 20 + 4 * i, 0)          # thinner left column: room for the QSPI/USB/MD escapes
+P["C26"], P["C27"] = (57, 33.5, 90), (67, 33.5, 90)   # under the bottom edge, where IOVDD pins 5 and 15 are
 for i, r in enumerate(["C28", "C29", "C30", "C31", "C32"]):
     P[r] = (71.5, 19 + 3.5 * i, 0)
 P["C33"], P["C34"] = (58, 17, 90), (66, 17, 90)
 row(["L1", "C20", "C21", "C22"], 52, 37, 4.5, 0)
 P["Y1"], P["C35"], P["C36"], P["R20"] = (77, 26, 0), (77, 21.5, 0), (77, 30.5, 0), (81, 26, 90)
-P["U21"], P["C37"], P["R21"] = (46, 20, 0), (40, 20, 90), (40, 25, 0)
-P["U22"], P["C38"] = (46, 30, 0), (40, 30, 90)
+P["U21"], P["C37"], P["R21"] = (44, 20, 0), (38, 20, 90), (38, 25, 0)
+P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
 P["TP1"], P["TP2"], P["TP3"] = (6, 46, 0), (9.5, 46, 0), (13, 46, 0)
 # top edge: ESP32-C3 (antenna over the edge), LED, buttons on 0.5 in centres, OLED header
 P["U40"] = (20, 8, 0)
-P["C60"], P["C61"], P["R40"] = (36, 19, 0), (36, 23, 0), (36, 27, 0)
+P["C60"], P["C61"], P["R40"] = (34, 19, 0), (34, 23, 0), (34, 27, 0)
 P["D4"], P["R5"] = (37, 8, 0), (37, 12, 0)
 row(["SW1", "SW2", "SW3", "SW4"], 50, 4, 12.7, 0)
 P["R22"], P["R23"] = (72, 9.5, 0), (92, 9, 0)
@@ -78,12 +79,12 @@ P["J3"] = (95, 4, 90)
 # left edge: USB-C below the ESP32, micro SD below that (both open to the left)
 P["J1"] = (3.2, 21, 270)
 row(["R24", "R25", "R26", "R27"], 12, 21, 3, 0)
-P["J2"] = (12.8, 35, 270)
+P["J2"] = (11.5, 35, 270)      # socket flush with the edge, card protrudes about 2 mm
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
-    P[r] = (25, 27 + 2.5 * i, 0)
+    P[r] = (23.5, 27 + 2.5 * i, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
-    P[r] = (28.5, 27 + 2.5 * i, 0)
-P["C50"], P["C51"] = (32, 30, 0), (32, 34, 0)
+    P[r] = (27, 27 + 2.5 * i, 0)
+P["C50"], P["C51"] = (30.5, 30, 0), (30.5, 34, 0)
 # power block, top right, below the OLED header; LDOs right of the crystal
 P["D2"], P["D3"] = (98, 12, 0), (98, 17, 0)
 P["C40"], P["C41"] = (106.5, 14, 0), (117, 14, 0)
