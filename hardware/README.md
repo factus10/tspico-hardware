@@ -28,8 +28,8 @@ Measured from the v2.2 fab Gerbers (`../old/tsPico2_2Fab/Gerber/tsPico.GTL`, `.G
 
 | Item | Value |
 |---|---|
-| Board | 130.00 x 100.00 mm, 1.6 mm |
-| Body | 130.00 x 91.75 mm |
+| Board | 130.00 x 72.25 mm, 1.6 mm (v2.2 was 100 mm tall; v3 body is 64 mm plus the 8.25 mm tongue) |
+| Body | 130.00 x 64.00 mm |
 | Tongue | 83.66 mm wide, 8.25 mm deep, left edge 18.48 mm from the board's left edge, 1.0 mm corner chamfers |
 | Positions | 32 at 2.54 mm pitch, 31 fingers per side |
 | Keying slot | position 6, 2.03 mm wide, 8.26 mm deep |
@@ -59,8 +59,7 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 ## Layout notes (placement pass)
 
-- Right edge, top to bottom: USB-C (J1), micro SD (J2, card exits to the right), 3.5 mm jack (J4), DE-9 joystick (J5) at the bottom right. All openings face outward.
-- Top edge: ESP32-C3 antenna over the top-left corner, the four buttons on 0.5 in centres (TS Reset, NMI, RUN, BOOTSEL from the left), the OLED header at the top right.
+- Buttons left to right: TS Reset, NMI, RUN, BOOTSEL. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
 - Z80 transceivers U1-U4 directly above the fingers; gating and muxes above them; registers above those; RP2350B cluster in the centre with crystal, QSPI flash and PSRAM around it; power block below the OLED header.
 - Joystick conditioning is one row per line (series R, pull-up, cap) beside the DE-9 pins; audio parts are in signal order per channel next to the op-amp, left of the jack; SD pull-ups and series resistors sit just below the SD socket.
 - Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, confirm the SD socket's card-detect switch polarity, and add 3D models if wanted for the jack and the TS-1187A switches (KiCad ships none for them).

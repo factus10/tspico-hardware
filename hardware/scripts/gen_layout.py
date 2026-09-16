@@ -10,7 +10,7 @@ KiCad or project library, assign nets, place parts per PLACEMENT below, add
 GND (In1.Cu) and +3V3 (In2.Cu) zones, save tspico-v3.kicad_pcb.
 
 Coordinates: mm, board origin at the top-left corner of the body, y down.
-Body 130 x 91.75; tongue below y = 91.75 between x = 18.48 and 102.14.
+Body 130 x 64; tongue below y = 64 between x = 18.48 and 102.14.
 Rotation: degrees counter-clockwise as in KiCad.
 """
 import os
@@ -38,72 +38,74 @@ def row(refs, x0, y, dx, rot=0):
         P[r] = (x0 + i * dx, y, rot)
 
 
+# Body is 130 x 64 mm (tongue below y = 64). Rows above the fingers at 8 mm pitch.
+# Left edge: ESP32 antenna (top corner), USB-C, micro SD. Right edge: audio jack, DE-9.
 # Z80 transceivers above the fingers, B side (Z80) facing the connector
-row(["U1", "U2", "U3", "U4"], 30, 83, 18, 270)
-row(["C1", "C2", "C3", "C4"], 38, 83, 18, 90)
+row(["U1", "U2", "U3", "U4"], 30, 58.5, 18, 270)
+row(["C1", "C2", "C3", "C4"], 38, 58.5, 18, 90)
 # gating, open-drain, DMA drivers, XOR, address muxes
-row(["U5", "U6", "U7", "U8"], 25, 73, 12, 270)
-P["U9"] = (73, 73, 0)
-row(["C5", "C6", "C7", "C8"], 31, 73, 12, 90)
-row(["U10", "U11"], 84, 73, 12, 270)
-row(["C10", "C11"], 90, 73, 12, 90)
-# registers, power-on-reset parts to the right of them
-row(["U12", "U13", "U14", "U15", "U16"], 24, 63, 16, 270)
-row(["C12", "C13", "C14", "C15", "C16"], 31, 63, 16, 90)
-P["R4"], P["C9"], P["D1"] = (96, 78, 0), (99.5, 78, 0), (104, 78, 0)
-# RP2350B core
-P["U20"] = (62, 38, 0)
+row(["U5", "U6", "U7", "U8"], 25, 50.5, 12, 270)
+P["U9"] = (73, 50.5, 0)
+row(["C5", "C6", "C7", "C8"], 31, 50.5, 12, 90)
+row(["U10", "U11"], 84, 50.5, 12, 270)
+row(["C10", "C11"], 90, 50.5, 12, 90)
+# registers, power-on-reset parts and the joystick jumper near the bottom right
+row(["U12", "U13", "U14", "U15", "U16"], 28, 42.5, 16, 270)
+row(["C12", "C13", "C14", "C15"], 35, 42.5, 16, 90)
+P["C16"] = (98, 42.5, 90)
+P["R4"], P["C9"], P["D1"] = (95.5, 60, 0), (99, 60, 0), (103, 60, 0)
+P["JP10"] = (92, 62.5, 0)
+# RP2350B core (bottom-layer keepout is added under U20 by the script)
+P["U20"] = (62, 26, 0)
 for i, r in enumerate(["C23", "C24", "C25", "C26", "C27"]):
-    P[r] = (52.5, 31 + 3.5 * i, 0)
+    P[r] = (52.5, 19 + 3.5 * i, 0)
 for i, r in enumerate(["C28", "C29", "C30", "C31", "C32"]):
-    P[r] = (71.5, 31 + 3.5 * i, 0)
-P["C33"], P["C34"] = (58, 29, 90), (66, 29, 90)
-row(["L1", "C20", "C21", "C22"], 54, 48, 4.5, 0)
-P["Y1"], P["C35"], P["C36"], P["R20"] = (76, 45, 0), (72.5, 49, 0), (79.5, 49, 0), (76, 41, 90)
-P["U21"], P["C37"], P["R21"] = (46, 24, 0), (46, 19, 90), (39, 24, 0)
-P["U22"], P["C38"] = (80, 24, 0), (80, 19, 90)
-row(["TP1", "TP2", "TP3"], 74, 52, 3.5, 0)
-# switches along the top edge on 0.5 in centres: TS Reset, NMI, RUN, BOOTSEL
-row(["SW1", "SW2", "SW3", "SW4"], 45, 4, 12.7, 0)
-P["R22"], P["R23"] = (70.4, 9.5, 0), (83.1, 9.5, 0)
-# ESP32-C3 module top-left, antenna over the edge; its caps below it
+    P[r] = (71.5, 19 + 3.5 * i, 0)
+P["C33"], P["C34"] = (58, 17, 90), (66, 17, 90)
+row(["L1", "C20", "C21", "C22"], 54, 37.5, 4.5, 0)
+P["Y1"], P["C35"], P["C36"], P["R20"] = (76.2, 31, 0), (72.5, 35, 0), (79.5, 35, 0), (76.2, 27, 90)
+P["U21"], P["C37"], P["R21"] = (46, 13, 0), (44, 8, 0), (40, 17, 0)
+P["U22"], P["C38"] = (80, 13, 0), (76, 17, 90)
+P["TP1"], P["TP2"], P["TP3"] = (46, 30, 0), (46, 33.5, 0), (46, 37, 0)
+# top edge: ESP32-C3 (antenna over the edge), LED, buttons on 0.5 in centres, OLED header
 P["U40"] = (20, 8, 0)
-P["C60"], P["C61"], P["R40"] = (12, 19, 0), (16, 19, 0), (20, 19, 0)
-# OLED header at the top edge, right of the switches; LED beside it
-P["J3"] = (93, 4, 90)
-P["D4"], P["R5"] = (112, 9, 0), (116, 9, 0)
-# power block below the header
-P["D2"], P["D3"] = (96, 12, 0), (96, 17, 0)
-P["C40"], P["C41"] = (105.5, 14, 0), (115.5, 14, 0)
-P["U30"], P["C42"], P["C43"] = (95, 23, 0), (88.5, 23, 0), (101.5, 23, 0)
-P["U31"], P["C44"], P["C45"], P["C46"] = (95, 31, 0), (88.5, 31, 0), (101.5, 31, 0), (92, 39.5, 0)
-# right edge, top to bottom: USB-C, micro SD, 3.5 mm jack, DE-9
-P["J1"] = (126.8, 15, 90)
-row(["R24", "R25", "R26", "R27"], 112, 22, 3, 0)
-P["J2"] = (117.2, 33, 90)
+P["C60"], P["C61"], P["R40"] = (36, 19, 0), (36, 23, 0), (36, 27, 0)
+P["D4"], P["R5"] = (37, 8, 0), (37, 12, 0)
+row(["SW1", "SW2", "SW3", "SW4"], 50, 4, 12.7, 0)
+P["R22"], P["R23"] = (72, 9.5, 0), (92, 9, 0)
+P["J3"] = (95, 4, 90)
+# left edge: USB-C below the ESP32, micro SD below that (both open to the left)
+P["J1"] = (3.2, 21, 270)
+row(["R24", "R25", "R26", "R27"], 12, 21, 3, 0)
+P["J2"] = (12.8, 35, 270)
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
-    P[r] = (98 + 3 * i, 43, 0)
+    P[r] = (25, 27 + 2.5 * i, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
-    P[r] = (98 + 3 * i, 45.5, 0)
-P["C50"], P["C51"] = (98, 48, 0), (101.5, 48, 0)
-P["J4"] = (121.9, 48, 270)
-P["J5"] = (122.3, 66, 90)
-# audio in signal order: row L, row R, then common/output parts; op-amp to their left
-P["U50"], P["C79"] = (88, 55, 0), (86, 51, 0)
+    P[r] = (28.5, 27 + 2.5 * i, 0)
+P["C50"], P["C51"] = (32, 30, 0), (32, 34, 0)
+# power block, top right, below the OLED header
+P["D2"], P["D3"] = (98, 12, 0), (98, 17, 0)
+P["C40"], P["C41"] = (106.5, 14, 0), (117, 14, 0)
+P["U30"], P["C42"], P["C43"] = (86.5, 23, 0), (80, 23, 0), (93, 23, 0)
+P["U31"], P["C44"], P["C45"], P["C46"] = (86.5, 31, 0), (80, 31, 0), (93, 31, 0), (107.5, 23, 0)
+# right edge: audio jack, then the DE-9 (face 7.7 mm beyond the pin-1 row)
+P["J4"] = (121.9, 24, 270)
+P["J5"] = (122.3, 41, 90)
+# audio: op-amp below the LDO caps, passives in signal order in three rows of six
+P["U50"], P["C79"] = (99.5, 30, 0), (105, 30, 0)
 for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):
-    P[r] = (94 + 3.4 * i, 52, 0)
+    P[r] = (97 + 3.4 * i, 35, 0)
 for i, r in enumerate(["R75", "C75", "R76", "C76", "R77", "R78"]):
-    P[r] = (94 + 3.4 * i, 55.5, 0)
+    P[r] = (97 + 3.4 * i, 38, 0)
 for i, r in enumerate(["C70", "R70", "C80", "R80", "C81", "R81"]):
-    P[r] = (94 + 3.4 * i, 59, 0)
-# joystick: one row per line (series R, pull-up, cap) beside the DE-9 pins
+    P[r] = (101.5 + 3.4 * i, 41, 0)
+# joystick: one row per line beside the DE-9 pins
 for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
                                     ["R96", "R97", "R98", "R99", "R100", "R101"],
                                     ["C90", "C91", "C92", "C93", "C94", "C95"])):
-    P[rs], P[rp], P[c] = (106, 62 + 2.5 * i, 0), (110, 62 + 2.5 * i, 0), (114, 62 + 2.5 * i, 0)
-P["JP10"] = (110, 78, 0)
-# misc interface passives in the left margin
-P["R1"], P["R2"], P["R3"] = (10, 84, 0), (10, 79, 0), (10, 74, 0)
+    P[rs], P[rp], P[c] = (106, 44 + 2.5 * i, 0), (110, 44 + 2.5 * i, 0), (114, 44 + 2.5 * i, 0)
+# misc interface passives in the left margin below the SD
+P["R1"], P["R2"], P["R3"] = (10, 56, 0), (10, 51, 0), (10, 46, 0)
 
 # ---------------------------------------------------------------------------
 
@@ -213,8 +215,22 @@ def main():
                 pad.SetNet(netinfo[name])
     print("nets assigned; missing pads:", missing)
 
-    # zones: GND on In1.Cu, +3V3 on In2.Cu, covering the body
-    body_h = 91.75
+    # keepout: no tracks or vias on B.Cu under the RP2350B (QSPI, crystal, USB stay clean)
+    ko = pcbnew.ZONE(board)
+    ko.SetIsRuleArea(True)
+    ko.SetDoNotAllowTracks(True)
+    ko.SetDoNotAllowVias(True)
+    ko.SetLayer(pcbnew.B_Cu)
+    ko.SetZoneName("U20_keepout_B")
+    ux, uy = P["U20"][0], P["U20"][1]
+    kop = ko.Outline()
+    kop.NewOutline()
+    for x, y in ((ux - 7.5, uy - 7.5), (ux + 7.5, uy - 7.5), (ux + 7.5, uy + 7.5), (ux - 7.5, uy + 7.5)):
+        kop.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
+    board.Add(ko)
+
+    # zones: GND on In1.Cu, +3V3 on In2.Cu, covering the body and the tongue
+    body_h = 64.0
     for layer, netname in ((pcbnew.In1_Cu, "GND"), (pcbnew.In2_Cu, "+3V3")):
         z = pcbnew.ZONE(board)
         z.SetLayer(layer)
@@ -222,7 +238,9 @@ def main():
         z.SetZoneName(netname + "_plane")
         outline = z.Outline()
         outline.NewOutline()
-        for x, y in ((0.5, 0.5), (129.5, 0.5), (129.5, body_h - 0.5), (0.5, body_h - 0.5)):
+        for x, y in ((0.5, 0.5), (129.5, 0.5), (129.5, body_h - 0.5), (101.6, body_h - 0.5), (101.6, body_h + 7.5),
+                     (35.2, body_h + 7.5), (35.2, body_h - 0.5), (32.2, body_h - 0.5), (32.2, body_h + 7.5),
+                     (19.0, body_h + 7.5), (19.0, body_h - 0.5), (0.5, body_h - 0.5)):
             outline.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
         z.SetLocalClearance(pcbnew.FromMM(0.25))
         z.SetMinThickness(pcbnew.FromMM(0.25))
