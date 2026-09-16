@@ -17,19 +17,19 @@ Companion files:
 | EDA | KiCad 10. Old Altium binaries are used only for geometry (Gerbers) and reference (PDF). |
 | MCU | RP2350B chip-down with 16 MB QSPI flash and 8 MB PSRAM, USB-C, BOOTSEL and RUN buttons. Decided 2026-09-16. |
 | Assembly | JLCPCB PCBA. All SMT: 0603 passives, SOIC/TSSOP logic, TSOP-32 flash, SOP-32 SRAM, QFN-80 MCU. Through-hole only for the DE-9 joystick, the OLED header, and optional pin headers paralleling solder jumpers. |
-| Memories | Flash and SRAM kept as real chips on a 3.3 V local bus. Z80 keeps read and write access to both (today's behaviour with P10 closed). Pico gains direct access. |
-| Bank logic | Stays in PIO, driving MA14 to MA18, chip selects and /BE per cycle as the shipped firmware does. No hardware bank mux or comparator. |
+| Memories | No flash or SRAM chips. The RP2350B serves the card's memory from internal SRAM with PIO and DMA; images live on its 16 MB QSPI flash and the SD card, cached in 8 MB PSRAM; a slot map file replaces the fixed flash banks. Z80 reads and writes work as today; persistence of ROM-slot writes is a firmware policy. Decided 2026-09-16. |
+| Bank logic | In PIO: the class decision (DOCK / EXROM / HOME) selects which image base pointer is used for the DMA fetch. No hardware bank logic. |
 | I/O ports | All port decode in PIO. $0E/$0F (legacy), optionally $1C to $1E, $1F Kempston, $FFFD/$BFFD AY. Port-pair jumper eliminated; it is a firmware setting. |
 | Wait states | /WAIT driven by PIO side-set, enabled by a firmware flag. |
 | SD | On-board push-push micro SD socket on SPI0. |
 | Display | 7-pin header for a 1.27" 128x96 SSD1351 SPI module on SPI1. |
-| WiFi | ESP32-C3-MINI-1 module running Zimodem (has a native ESP32-C3 target) over UART0, flashed through the card's USB-C via the RP2350 as a bridge. The RP2350 emulates the TS2050's Intel 8251 at ports $73/$77 (as in the TS-2050-Wifi project) and pipes it to Zimodem. |
+| WiFi | ESP32-C3-WROOM-02 (castellated SMT, 4 MB) running Zimodem (native ESP32-C3 target) over UART0, flashed through the card's USB-C via the RP2350 as a bridge. The RP2350 emulates the TS2050's Intel 8251 at ports $73/$77 (as in the TS-2050-Wifi project) and pipes it to Zimodem. |
 | Joystick | DE-9 Kempston, read through the STAT buffer and served at $1F by PIO. |
 | Audio | AY-3-8910 emulated on core 1, PWM stereo, mixed with the 2068 SOUND line by an op-amp, 3.5 mm jack. |
 | Reset | 555 removed. Pico-controlled /RESET line that defaults to asserted while the Pico boots. |
 | Power | 5 V comes only from the edge connector; the expansion bus the card plugs into selects the source (2068 rail or its own barrel supply). The card's USB-C is a data connection to the user's PC and does not power the card or take power from it (VBUS isolated, used at most for detect). Bulk capacitance for WiFi bursts. The +15 V buck footprint is dropped. |
 | Jumpers | /BE_OUT and flash write-protect eliminated. Anything remaining is a solder jumper with a parallel through-hole header. |
-| DMA | Hardware provision (one 74LVC125 and bidirectional address transceivers) for Pico access to the 2068's own memory after a bus grant, for snapshots. Validated on the prototype. |
+| DMA | Hardware provision (74LVC126 drivers, ALO/AHI latches, bidirectional address transceivers) for Pico access to the 2068's own memory after a bus grant, for snapshots. Validated on the prototype. |
 | Tape | EAR out and SPK/TAP in wired to GPIO through dividers for TZX playback and SAVE capture. |
 
 ## 2. What the current firmware needs from the hardware
@@ -47,13 +47,13 @@ From `tspico-firmware-build` (current), the memory note in `TS2068-PICO/doc`, an
 
 | | v2.2 (through-hole) | Pico 2 plan (archived) | RP2350B plan |
 |---|---|---|---|
-| Glue logic packages | 8 (74LS/LVC) + 555 | about 20 (74HCT/LVC) | 12 (74LVC) |
-| Memory | DIP flash + DIP SRAM | TSOP + SOP | TSOP + SOP on 3.3 V |
+| Glue logic packages | 8 (74LS/LVC) + 555 | about 20 (74HCT/LVC) | 15 (74LVC) |
+| Memory | DIP flash + DIP SRAM | TSOP + SOP | none: RP2350B SRAM, QSPI flash, PSRAM |
 | MCU | Pico on headers | Pico 2 castellated | RP2350B + flash + PSRAM + crystal + USB |
 | Bank logic | 74LS157 + PIO | hardware mux + registers | PIO |
 | Port decode | 74LS glue | comparator + flip-flop | PIO |
 
-The architecture doc's section 9 describes the further step of emulating the memories inside the RP2350B (about 6 glue packages, no memory chips). Recommended as a v4 investigation, with a breadboard latency test done before v3 layout is final.
+Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory chips and the bank hardware; the multiplexed local bus adds two muxes. A breadboard latency test is scheduled before v3 layout is final.
 
 ## 4. Work plan
 
@@ -67,7 +67,7 @@ The architecture doc's section 9 describes the further step of emulating the mem
 - Chip-down RP2350B decided; power from the edge connector only, USB is data only.
 
 ### Phase 2: Schematic
-- Sheets: 2068 interface (fingers, transceivers, open-drain drivers, reset, buttons, tape dividers), memory bus (flash, SRAM, ALO/AHI/CTL/STAT, 139, 157, 125), RP2350B core (MCU, QSPI flash, PSRAM, crystal, USB-C, BOOTSEL/RUN, SWD pads), power (buck, LDOs, OR-ing, bulk), SD and OLED, WiFi module, audio (PWM filters, mixer, jack), joystick.
+- Sheets: 2068 interface (fingers, transceivers, gating, open-drain drivers, DMA drivers, reset, buttons, tape divider) [done], local bus and registers (address byte muxes, ALO/AHI/CTL/STAT, 139, power-on clear) [done], RP2350B core (MCU, QSPI flash, PSRAM, crystal, USB-C, BOOTSEL/RUN, SWD pads), power (buck, LDOs, OR-ing, bulk), SD and OLED, WiFi module, audio (PWM filters, mixer, jack), joystick.
 - ERC clean; export netlist and a GPIO cross-reference table for the firmware.
 
 ### Phase 3: Layout
@@ -83,7 +83,8 @@ The architecture doc's section 9 describes the further step of emulating the mem
 ### Phase 5: Prototype and firmware bring-up
 - 5 boards, 2 assembled.
 - MicroPython board definition for the RP2350B build (flash size, PSRAM CS1 on GP47, pin names), plus a C user module for the AY emulation and any PIO/DMA paths.
-- Bring-up order: power rails and reset behaviour; USB boot and REPL; PSRAM; register writes read back through STAT; Pico-mode SRAM read/write; Pico-mode flash program and verify; Z80 I/O port with and without /WAIT; Z80 memory mapping with the existing ROM images; Z80-side flash and SRAM update with the existing update TAPs; SD; OLED; WiFi AT link; joystick at $1F; AY at $FFFD/$BFFD with audio out; tape out/in; DMA to 2068 memory last.
+- Before layout is final: breadboard proof of emulated memory (Pico 2 plus three 74LVC245s on a 2068 serving a 16 KB ROM, fetch latency on a scope).
+- Bring-up order: power rails and reset behaviour; USB boot and REPL; PSRAM; register writes read back through STAT; Z80 memory served from SRAM with the existing ROM images; Z80 I/O port with and without /WAIT; ROM-slot writes with the existing update TAPs; slot map load from QSPI and SD; SD; OLED; Zimodem link; joystick at $1F; AY at $FFFD/$BFFD with audio out; tape out/in; DMA to 2068 memory last.
 
 ## 5. Firmware impact
 

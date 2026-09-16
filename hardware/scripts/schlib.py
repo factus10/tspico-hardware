@@ -207,11 +207,15 @@ class Sheet:
         s = s.replace('"', "'")
         self.items.append(f'(text "{s}" (exclude_from_sim no) (at {x} {y} 0) (effects (font (size {size} {size})) (justify left bottom)) (uuid "{u()}"))')
 
-    def power(self, net, x, y, ref):
-        """Place a power symbol (+5V, +3V3, GND ...) and a PWR_FLAG on it."""
+    def power(self, net, x, y, ref, flag=True):
+        """Place a power symbol (+5V, +3V3, GND ...) and, once per project net,
+        a PWR_FLAG on it (flag=False on sheets where the net is flagged elsewhere)."""
         lib_id = "power:" + net
         p = self.place(lib_id, ref, net, "", x, y)
         pa = p.pin("1")
+        if not flag:
+            self.label(net, pa)
+            return p
         f = self.place("power:PWR_FLAG", ref.replace("#PWR", "#FLG"), "PWR_FLAG", "", pa[0] + 7.62, pa[1])
         fa = f.pin("1")
         self.wire(pa[:2], fa[:2])

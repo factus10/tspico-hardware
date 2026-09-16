@@ -3,21 +3,21 @@
 
 Contents (see docs/v3-architecture.md sections 2, 3, 5):
   P1   TS2068 edge connector
-  U1   74LVC245  Z80 A0-A7   <-> MA0-MA7        DIR=DMA_EN, /OE=nOE_ADDR
-  U2   74LVC245  Z80 A8-A15  <-> MA8-MA13, DMA_A14, DMA_A15
+  U1   74LVC245  Z80 A0-A7   <-> MA0-MA7        DIR=DMA_EN, always enabled
+  U2   74LVC245  Z80 A8-A15  <-> MA8-MA15
   U3   74LVC245  Z80 D0-D7   <-> MD0-MD7        DIR=DATA_DIR (nRD xor DMA_EN), /OE=nDATA_OE
   U4   74LVC245  Z80 control inputs -> 3.3 V copies for the MCU (fixed B->A)
   U5   74LVC04   inverters for the gating below, one spare
   U6   74LVC08   nMREQ_V = /(MREQ & /RFSH), nIORQ_V = /(IORQ & /M1),
-                 nDMA_MREQ = nMRD & nMWR, nOE_ADDR = BUS_OWN & /DMA_EN
-  U7   74LVC07   open-drain drivers: nBE, nWAIT, nBUSRQ, nNMI, nRESET
+                 nDMA_MREQ = nMRD & nMWR, one spare
+  U7   74LVC06   open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT, nBUSRQ, nNMI, nRESET
   U8   74LVC126  DMA bus drivers for nMREQ, nRD, nWR (OE = DMA_EN)
   U9   74LVC1G86 DATA_DIR = nRD xor DMA_EN
-  SW1/SW2 TS reset and NMI buttons; R1 RESET_REQ pull-down; R2/R3 EAR divider
+  SW1/SW2 TS reset and NMI buttons; R1 RESET_HOLD pull-up; R2/R3 EAR divider
   C1-C8 decoupling
 Net naming: n<NAME> = active low. Signals with suffix _L are 3.3 V copies of
-5 V bus signals; suffix _G are 3.3 V requests from the MCU/CTL that the
-open-drain drivers turn into bus signals.
+5 V bus signals; *_REQ / BUSRQ / RESET_HOLD are active-high requests that the
+open-drain inverting drivers turn into active-low bus signals.
 """
 import os
 import sys
@@ -80,21 +80,19 @@ def main():
     U1 = transceiver("U1", 150, 50)
     for i in range(8):
         s.label(f"A{i}", U1.pin(f"B{i}"))          # Z80 side (B)
-        s.glabel(f"MA{i}", U1.pin(f"A{i}"), OUT)   # local side (A)
+        s.glabel(f"MA{i}", U1.pin(f"A{i}"), BI)    # local side (A); driven by ALO in DMA mode
     s.glabel("DMA_EN", U1.pin("1"), IN)
-    s.label("nOE_ADDR", U1.pin("19"))
+    s.label("GND", U1.pin("19"))
     s.label("+3V3", U1.pin("20"))
     s.label("GND", U1.pin("10"))
 
     U2 = transceiver("U2", 150, 110)
     for i in range(8):
         s.label(f"A{8 + i}", U2.pin(f"B{i}"))
-    for i in range(6):
-        s.glabel(f"MA{8 + i}", U2.pin(f"A{i}"), OUT)
-    s.glabel("DMA_A14", U2.pin("A6"), IN)
-    s.glabel("DMA_A15", U2.pin("A7"), IN)
+    for i in range(8):
+        s.glabel(f"MA{8 + i}", U2.pin(f"A{i}"), BI)
     s.glabel("DMA_EN", U2.pin("1"), IN)
-    s.label("nOE_ADDR", U2.pin("19"))
+    s.label("GND", U2.pin("19"))
     s.label("+3V3", U2.pin("20"))
     s.label("GND", U2.pin("10"))
 
@@ -131,31 +129,31 @@ def main():
     s.label("+3V3", pw6.pin("14")); s.label("GND", pw6.pin("7"))
 
     # inverter a: nMREQ -> MREQ_H ; b: nIORQ -> IORQ_H ; c: MREQ_RFSH -> nMREQ_V
-    # d: IORQ_M1 -> nIORQ_V ; e: DMA_EN -> nDMA_EN ; f: spare (input to GND)
+    # d: IORQ_M1 -> nIORQ_V ; e: DMA_EN -> nDMA_EN ; f: WIFI_DL -> nWIFI_BOOT (ESP32 IO9)
     s.label("nMREQ", inv[0].pin("1"));   s.label("MREQ_H", inv[0].pin("2"))
     s.label("nIORQ", inv[1].pin("3"));   s.label("IORQ_H", inv[1].pin("4"))
     s.label("MREQ_RFSH", inv[2].pin("5")); s.glabel("nMREQ_V", inv[2].pin("6"), OUT)
     s.label("IORQ_M1", inv[3].pin("9"));   s.glabel("nIORQ_V", inv[3].pin("8"), OUT)
-    s.glabel("DMA_EN", inv[4].pin("11"), IN); s.label("nDMA_EN", inv[4].pin("10"))
-    s.label("GND", inv[5].pin("13"));    s.nc(inv[5].pin("12"))
+    s.glabel("DMA_EN", inv[4].pin("11"), IN); s.glabel("nDMA_EN", inv[4].pin("10"), OUT)
+    s.glabel("WIFI_DL", inv[5].pin("13"), IN); s.glabel("nWIFI_BOOT", inv[5].pin("12"), OUT)
 
-    # AND a: MREQ_H & nRFSH ; b: IORQ_H & nM1 ; c: nMRD & nMWR ; d: BUS_OWN & nDMA_EN
+    # AND a: MREQ_H & nRFSH ; b: IORQ_H & nM1 ; c: nMRD & nMWR ; d: spare
     s.label("MREQ_H", ands[0].pin("1")); s.label("nRFSH", ands[0].pin("2")); s.label("MREQ_RFSH", ands[0].pin("3"))
     s.label("IORQ_H", ands[1].pin("4")); s.label("nM1", ands[1].pin("5"));   s.label("IORQ_M1", ands[1].pin("6"))
     s.glabel("nMRD", ands[2].pin("9"), IN); s.glabel("nMWR", ands[2].pin("10"), IN); s.label("nDMA_MREQ", ands[2].pin("8"))
-    s.glabel("BUS_OWN", ands[3].pin("12"), IN); s.label("nDMA_EN", ands[3].pin("13")); s.label("nOE_ADDR", ands[3].pin("11"))
+    s.label("GND", ands[3].pin("12")); s.label("GND", ands[3].pin("13")); s.nc(ands[3].pin("11"))
 
     # ---- U7 open-drain drivers -------------------------------------------------
     od_x, od_y = 330, 60
-    od = [s.place("74xx:74LS07", "U7", "74LVC07APW", TSSOP14, od_x, od_y + 15 * k, unit=k + 1) for k in range(6)]
-    pw7 = s.place("74xx:74LS07", "U7", "74LVC07APW", TSSOP14, od_x, od_y + 100, unit=7)
+    od = [s.place("74xx:74LS06", "U7", "74LVC06APW", TSSOP14, od_x, od_y + 15 * k, unit=k + 1) for k in range(6)]
+    pw7 = s.place("74xx:74LS06", "U7", "74LVC06APW", TSSOP14, od_x, od_y + 100, unit=7)
     s.label("+3V3", pw7.pin("14")); s.label("GND", pw7.pin("7"))
-    od_map = [("nBE_G", "nBE", "1", "2"), ("nWAIT_G", "nWAIT", "3", "4"), ("nBUSRQ_G", "nBUSRQ", "5", "6"),
-              ("nNMI_G", "nNMI", "9", "8"), ("RESET_REQ", "nRESET", "11", "10")]
+    od_map = [("BE_REQ", "nBE", "1", "2"), ("WAIT_REQ", "nWAIT", "3", "4"), ("BUSRQ", "nBUSRQ", "5", "6"),
+              ("NMI_REQ", "nNMI", "9", "8"), ("RESET_HOLD", "nRESET", "11", "10")]
     for k, (src, dst, pi, po) in enumerate(od_map):
         s.glabel(src, od[k].pin(pi), IN)
         s.label(dst, od[k].pin(po))
-    s.label("+3V3", od[5].pin("13")); s.nc(od[5].pin("12"))   # spare buffer: input high, output off
+    s.label("GND", od[5].pin("13")); s.nc(od[5].pin("12"))    # spare inverter: input low, output off
 
     # ---- U8 DMA bus drivers (74LVC126, OE active high = DMA_EN) -----------------
     dma_x, dma_y = 330, 185
@@ -182,8 +180,8 @@ def main():
     s.label("nRESET", SW1.pin("1")); s.label("GND", SW1.pin("2"))
     SW2 = s.place("Switch:SW_Push", "SW2", "NMI", SW_FP, 385, 165)
     s.label("nNMI", SW2.pin("1")); s.label("GND", SW2.pin("2"))
-    R1 = s.place("Device:R", "R1", "10k", R0603, 395, 60)
-    s.glabel("RESET_REQ", R1.pin("1"), IN); s.label("GND", R1.pin("2"))
+    R1 = s.place("Device:R", "R1", "4k7", R0603, 380, 50)
+    s.label("+3V3", R1.pin("1")); s.glabel("RESET_HOLD", R1.pin("2"), IN)
     R2 = s.place("Device:R", "R2", "4k7", R0603, 395, 90)
     s.glabel("TAPE_OUT", R2.pin("1"), IN); s.label("EAR", R2.pin("2"))
     R3 = s.place("Device:R", "R3", "1k", R0603, 395, 110)

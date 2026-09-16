@@ -9,7 +9,7 @@
     (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc" (page "2"))))
   )
   (sheet (at 110.0 30.0) (size 60 30) (fields_autoplaced yes) (stroke (width 0.1524) (type solid)) (fill (color 0 0 0 0.0000)) (uuid "e99fe9a8-9037-4040-a342-12a0ddc42052")
-    (property "Sheetname" "Memory Bus" (at 110.0 29.3 0) (effects (font (size 1.27 1.27)) (justify left bottom)))
+    (property "Sheetname" "Local Bus and Registers" (at 110.0 29.3 0) (effects (font (size 1.27 1.27)) (justify left bottom)))
     (property "Sheetfile" "memory.kicad_sch" (at 110.0 60.6 0) (effects (font (size 1.27 1.27)) (justify left top)))
     (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc" (page "3"))))
   )
