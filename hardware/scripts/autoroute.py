@@ -92,6 +92,8 @@ def plane_fanout(board):
                         continue
                     if any(_seg_dist(pp, cand, op) < pcbnew.FromMM(0.5) for op, onet in other_pads if onet != net):
                         continue
+                    if any(z.GetIsRuleArea() and z.GetDoNotAllowVias() and z.Outline().Contains(cand) for z in board.Zones()):
+                        continue
                     vp = cand
                     break
                 if vp is None:

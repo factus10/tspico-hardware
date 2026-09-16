@@ -221,8 +221,9 @@ def main():
     # around a 4 x 4 mm centre window that leaves the thermal-pad via legal
     # (Freerouting crashes on KiCad's tracks-only "wire_keepout", so this is a full keepout)
     ux, uy = P["U20"][0], P["U20"][1]
-    for name, (x0, y0, x1, y1) in {"L": (-7.5, -7.5, -2.0, 7.5), "R": (2.0, -7.5, 7.5, 7.5),
-                                   "T": (-2.0, -7.5, 2.0, -2.0), "B": (-2.0, 2.0, 2.0, 7.5)}.items():
+    # only the chip body (10 x 10 mm): the 0.4 mm QFN needs vias in its fanout ring
+    for name, (x0, y0, x1, y1) in {"L": (-5.3, -5.3, -2.0, 5.3), "R": (2.0, -5.3, 5.3, 5.3),
+                                   "T": (-2.0, -5.3, 2.0, -2.0), "B": (-2.0, 2.0, 2.0, 5.3)}.items():
         ko = pcbnew.ZONE(board)
         ko.SetIsRuleArea(True)
         ko.SetDoNotAllowTracks(True)

@@ -66,13 +66,11 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 ## Routing state and hand-finish list
 
-Autorouted with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, single-threaded optimizer). The default net class is 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6-0.3 via; a final continuation pass used 0.15 mm tracks and 0.5-0.25 vias for the last nets.
+Autorouted headlessly with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, keepout on B.Cu under the RP2350B body, single-threaded optimizer, GUI disabled in `~/Library/Application Support/freerouting/freerouting.json` because its plane renderer crashes). Default net class 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6/0.3 via.
 
-Still unrouted (KiCad DRC "unconnected items"):
+72 mm board, transceivers in finger order: 520 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
 
-- U20 IOVDD pins 5, 41, 50, 64, 68, 76 to +3V3. The 0.4 mm pitch defeats the router's fanout. Route each straight out from the pad (0.15 to 0.2 mm) to a 0.5/0.25 via placed where the neighbouring fanout tracks have diverged, or to the +3V3 pad of the adjacent decoupling cap.
-- nMREQ: P1 finger A17 to the existing via near U5.
-- MA9, MA7, MD3: short gaps in the transceiver/mux rows.
-- D3 and D4: U3 pins 5 and 6 to fingers A12 and A13.
+- RP2350B (U20) pins on the QSPI/USB side: USB_DP (pin 67), MD1 and MD2 (78, 79), SD_MISO (45), RUN (35), nEXROM_L (20), one DVDD link and one IOVDD +3V3 stub. The 0.4 mm-pitch escape on that side is crowded by the decoupling column and the flash/PSRAM; hand-route with 0.15 mm tracks and 0.5/0.25 vias in the fanout ring.
+- nIORQ_V (U6 output to U20), MA5 and MA7 (short gaps in the mux/transceiver rows), Z80_A15 (one segment removed near U31 to clear a 0.0006 mm DRC nick; re-route past U31 pad 2).
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.
