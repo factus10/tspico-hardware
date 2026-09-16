@@ -64,16 +64,24 @@ class SymLib:
         lib, name = lib_id.split(":")
         txt = self._lib_text(lib)
         blk = _find_symbol(txt, name)
-        m = re.search(r'\(extends "([^"]+)"\)', blk)
-        if m:
-            parent = _find_symbol(txt, m.group(1))
-            # child properties override the parent's; parent supplies the body
-            props = re.findall(r'\(property "(\w+)" "([^"]*)"', blk)
-            body = parent
-            for k, v in props:
-                body = re.sub(r'\(property "%s" "[^"]*"' % k, '(property "%s" "%s"' % (k, v.replace('\\', '\\\\')), body, count=1)
-            body = body.replace('(symbol "%s"' % m.group(1), '(symbol "%s"' % name, 1)
-            body = body.replace('(symbol "%s_' % m.group(1), '(symbol "%s_' % name)
+        # resolve (extends ...) chains: the root ancestor supplies the body,
+        # each derived level overrides properties
+        chain = [blk]
+        cur = blk
+        while True:
+            m = re.search(r'\(extends "([^"]+)"\)', cur)
+            if not m:
+                break
+            cur = _find_symbol(txt, m.group(1))
+            chain.append(cur)
+        if len(chain) > 1:
+            root_name = re.match(r'\(symbol "([^"]+)"', chain[-1]).group(1)
+            body = chain[-1]
+            for derived in reversed(chain[:-1]):
+                for k, v in re.findall(r'\(property "(\w+)" "([^"]*)"', derived):
+                    body = re.sub(r'\(property "%s" "[^"]*"' % re.escape(k), lambda mm: '(property "%s" "%s"' % (k, v), body, count=1)
+            body = body.replace('(symbol "%s"' % root_name, '(symbol "%s"' % name, 1)
+            body = body.replace('(symbol "%s_' % root_name, '(symbol "%s_' % name)
             blk = body
         blk = blk.replace('(symbol "%s"' % name, '(symbol "%s"' % lib_id, 1)
         pins = {}
