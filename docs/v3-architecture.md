@@ -121,8 +121,9 @@ All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA,
 | 28 | nMWR | out | DMA write strobe. |
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
-| 31-35 | spare | | Five spares. |
-| 36-39 | SD MISO, CS, SCK, MOSI | | SPI0 pin group. |
+| 31, 33-36 | spare | | Five spares. |
+| 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
+| 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
 | 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from CTL. |
 | 44, 45 | WIFI_TX, WIFI_RX | | ESP32-C3 UART0 (module GPIO20/21). XON/XOFF flow control; EN and IO9 from CTL. |
 | 46 | AUDIO_L (PWM) | out | |

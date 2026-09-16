@@ -68,10 +68,13 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 Autorouted headlessly with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, keepout on B.Cu under the RP2350B body, single-threaded optimizer, GUI disabled in `~/Library/Application Support/freerouting/freerouting.json` because its plane renderer crashes). Default net class 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6/0.3 via.
 
-72 mm board, transceivers in finger order, SD shell 0.35 mm inside the edge (its front shield tabs need 0.3 mm copper-to-edge), flash/PSRAM 2 mm off the chip, thinner left decoupling column: 524 of 532 connections routed, zero DRC rule violations. Still unrouted (KiCad DRC "unconnected items"):
+72 mm board, transceivers in finger order, SD shell 0.35 mm inside the edge (its front shield tabs need 0.3 mm copper-to-edge), flash/PSRAM 2 mm off the chip, thinner left decoupling column: Freerouting reached 524 of 532 connections with zero rule violations, and `scripts/finish_route.py` (plane-via placement, clearance-checked stubs, A* on a single layer) hand-finished the last eight. **The board is fully routed with zero DRC errors.**
 
-- +3V3 to RP2350B IOVDD pins 41, 64 and 68 (each has a short stub already) and to U11 pin 16: a via next to each stub, or a track to the nearest decoupling cap's +3V3 pad (the router's own attempt at U11 landed on a ground via and was removed).
-- GND: SD socket J2 rear shield tab (pad 4 area, about x 16 y 32) and one shield tab left to the router: a via each, clear of the SWCLK track on B.Cu.
-- SD_MISO from U20 pin 45 to the R33 area; nMWR between its two vias near the crystal; MA14 between U10 and U1.
+Hand-finish notes:
+
+- Five signals run partly on In2.Cu, the +3V3 plane layer; the zone fills around them, so they cut slits in the plane (about 125 mm in total: SD_MISO 58, nMWR 26, MA14 24, WIFI_TX 10, MA6 8). Nothing runs on the GND plane (In1.Cu). To keep the +3V3 plane whole, these are the tracks to move to F.Cu/B.Cu by hand.
+- SD_MISO moved from GP36 to GP32 (both SPI0 RX): the GP36 pad is boxed in by the SD_CS/SD_SCK fan-out vias outside the package and by DVDD and SWDIO inside it. The schematic, the GPIO table in `docs/v3-architecture.md` and the firmware pin map follow. Pad 45 (GP36) has no net in the PCB file; "Update PCB from Schematic" in pcbnew names it.
+- RP2350B IOVDD pins 50, 61 and 64 are joined inside the package to IOVDD pads that already have plane vias; pins 41 and 68 and U11 pin 16 got 0.5 mm vias of their own (the U11 one sits inside the U11 body).
+- WIFI_TX leaves pad 55 straight up to a via and continues on In2 to its old F.Cu track near (51, 17.5); MA6 leaves U11 pin 14 through a via and runs on In2 to its existing via near (46.2, 46.6).
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.

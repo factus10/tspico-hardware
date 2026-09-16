@@ -35,16 +35,16 @@ GPIO = {
     21: ("nINT_L", IN), 22: ("TAPE_IN", IN), 23: ("TAPE_OUT", OUT),
     24: ("REG_SEL0", OUT), 25: ("REG_SEL1", OUT), 26: ("nREG_STB", OUT),
     27: ("nMRD", OUT), 28: ("nMWR", OUT), 29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
-    36: ("SD_MISO", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
+    32: ("SD_MISO", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
     40: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),
     44: ("WIFI_TX", OUT), 45: ("WIFI_RX", IN), 46: ("AUDIO_L", OUT),
 }
-SPARE = [31, 32, 33, 34, 35]
+SPARE = [31, 33, 34, 35, 36]
 
 
 def main():
     s = Sheet("tspico-v3.kicad_sch", "mcu.kicad_sch", "TS-Pico v3: RP2350B Core")
-    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP31-GP35 spare.", 20, 285, 2.5)
+    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP31, GP33-GP36 spare.", 20, 285, 2.5)
     s.text("USB-C: data, and VBUS to the power sheet (diode-ORed with the edge +5V) so the card runs from USB alone on the bench.", 20, 290, 2.0)
 
     s.power("+3V3", 300, 30, "#PWR06", flag=False)
