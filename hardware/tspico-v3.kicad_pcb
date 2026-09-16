@@ -33797,7 +33797,7 @@
 	(footprint "Fiducial:Fiducial_1mm_Mask2mm"
 		(layer "F.Cu")
 		(uuid "fd341d37-0e6f-4ce8-a793-9cb545c64c92")
-		(at 42 3.2)
+		(at 44.5 7)
 		(descr "Fiducial, circular marking, 1mm bare copper, 2mm soldermask opening (Level A)")
 		(tags "fiducial")
 		(property "Reference" "FID2"
