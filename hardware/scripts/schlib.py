@@ -157,8 +157,11 @@ class Sheet:
         for uu in pins.values():
             allpins.update(uu)
         p = Placed(self, lib_id, ref, x, y, unit, upins, rot)
-        props = [("Reference", ref, (x + 2, y - 2), False),
-                 ("Value", value, (x + 2, y + 2), False),
+        # put Reference/Value above the symbol, right of any vertical pin label
+        ymax = max([pp[1] for pp in upins.values()] + [2.54])
+        xr = round(x + 3.0, 2)
+        props = [("Reference", ref, (xr, round(y - ymax - 4.5, 2)), False),
+                 ("Value", value, (xr, round(y - ymax - 2.0, 2)), False),
                  ("Footprint", footprint, (x, y), True),
                  ("Datasheet", "", (x, y), True),
                  ("Description", "", (x, y), True)]

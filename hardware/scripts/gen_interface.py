@@ -158,9 +158,9 @@ def main():
     s.label("+3V3", od[5].pin("13")); s.nc(od[5].pin("12"))   # spare buffer: input high, output off
 
     # ---- U8 DMA bus drivers (74LVC126, OE active high = DMA_EN) -----------------
-    dma_x, dma_y = 330, 180
+    dma_x, dma_y = 330, 185
     dr = [s.place("74xx:74LS126", "U8", "74LVC126APW", TSSOP14, dma_x, dma_y + 18 * k, unit=k + 1) for k in range(4)]
-    pw8 = s.place("74xx:74LS126", "U8", "74LVC126APW", TSSOP14, dma_x, dma_y + 80, unit=5)
+    pw8 = s.place("74xx:74LS126", "U8", "74LVC126APW", TSSOP14, dma_x + 35, dma_y + 45, unit=5)
     s.label("+3V3", pw8.pin("14")); s.label("GND", pw8.pin("7"))
     dr_map = [("nDMA_MREQ", "nMREQ", "2", "3", "1"), ("nMRD", "nRD", "5", "6", "4"), ("nMWR", "nWR", "9", "8", "10")]
     for k, (src, dst, pi, po, oe) in enumerate(dr_map):
@@ -178,9 +178,9 @@ def main():
     s.label("+3V3", U9.pin("5")); s.label("GND", U9.pin("3"))
 
     # ---- reset / NMI buttons, pull-down, tape divider --------------------------
-    SW1 = s.place("Switch:SW_Push", "SW1", "TS Reset", SW_FP, 380, 240)
+    SW1 = s.place("Switch:SW_Push", "SW1", "TS Reset", SW_FP, 385, 150)
     s.label("nRESET", SW1.pin("1")); s.label("GND", SW1.pin("2"))
-    SW2 = s.place("Switch:SW_Push", "SW2", "NMI", SW_FP, 380, 255)
+    SW2 = s.place("Switch:SW_Push", "SW2", "NMI", SW_FP, 385, 165)
     s.label("nNMI", SW2.pin("1")); s.label("GND", SW2.pin("2"))
     R1 = s.place("Device:R", "R1", "10k", R0603, 395, 60)
     s.glabel("RESET_REQ", R1.pin("1"), IN); s.label("GND", R1.pin("2"))
@@ -188,11 +188,12 @@ def main():
     s.glabel("TAPE_OUT", R2.pin("1"), IN); s.label("EAR", R2.pin("2"))
     R3 = s.place("Device:R", "R3", "1k", R0603, 395, 110)
     s.label("EAR", R3.pin("1")); s.label("GND", R3.pin("2"))
-    s.text("R2/R3: TAPE_OUT (3.3 V) divided to about 0.6 V for the 2068 EAR input; values to be confirmed on the prototype.", 380, 125, 1.5)
+    s.text("R2/R3: TAPE_OUT divided to ~0.6 V for the 2068 EAR input.", 355, 125, 1.5)
+    s.text("Values to be confirmed on the prototype.", 355, 128, 1.5)
 
     # ---- decoupling ------------------------------------------------------------
     for k in range(8):
-        C = s.place("Device:C", f"C{k + 1}", "100n", C0603, 300 + 12 * k, 280)
+        C = s.place("Device:C", f"C{k + 1}", "100n", C0603, 40 + 9 * k, 255)
         s.label("+3V3", C.pin("1")); s.label("GND", C.pin("2"))
 
     s.write()
