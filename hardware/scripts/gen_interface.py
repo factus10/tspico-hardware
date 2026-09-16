@@ -38,13 +38,13 @@ OUT, IN, BI = "output", "input", "bidirectional"
 def main():
     s = Sheet("tspico-v3.kicad_sch", "interface.kicad_sch", "TS-Pico v3: 2068 Interface")
     s.text("TS2068 bus interface. Nets: n = active low, _L = 3.3 V copy of a bus signal, _G = 3.3 V request driven onto the bus through an open-drain buffer.", 20, 285, 2.5)
-    s.text("Power: +5V from edge pin B4 only. +15V (B3) unused. USB is data only.", 20, 290, 2.0)
+    s.text("Power: edge +5V (B4) goes to the power sheet as +5V_EDGE and is diode-ORed with USB VBUS. +15V (B3) unused.", 20, 290, 2.0)
 
     # ---- P1 edge connector -------------------------------------------------
     P1 = s.place("tspico:TS2068_Edge", "P1", "TS2068_Edge", "tspico:TS2068_EdgeConnector_2x32", 60, 120)
     bus_out = {  # pin -> (net, kind) for signals leaving the connector into logic on this sheet
         "A1": ("GND", "pwr"), "B1": ("GND", "pwr"), "A32": ("GND", "pwr"), "B32": ("GND", "pwr"),
-        "B7": ("GND", "pwr"), "B8": ("GND", "pwr"), "B4": ("+5V", "pwr"),
+        "B7": ("GND", "pwr"), "B8": ("GND", "pwr"), "B4": ("+5V_EDGE", OUT),
         "A2": ("EAR", "loc"), "B2": ("SPKR_TAPE", "loc"),
         "A4": ("D7", "loc"), "A7": ("D0", "loc"), "A8": ("D1", "loc"), "A9": ("D2", "loc"),
         "A10": ("D6", "loc"), "A11": ("D5", "loc"), "A12": ("D3", "loc"), "A13": ("D4", "loc"),
@@ -69,9 +69,8 @@ def main():
         s.nc(P1.pin(pin))
 
     # ---- power symbols -----------------------------------------------------
-    s.power("+5V", 300, 30, "#PWR01")
-    s.power("+3V3", 330, 30, "#PWR02")
-    s.power("GND", 360, 40, "#PWR03")
+    s.power("+3V3", 330, 30, "#PWR02", flag=False)
+    s.power("GND", 360, 40, "#PWR03", flag=False)
 
     # ---- U1/U2 address transceivers ------------------------------------------
     def transceiver(ref, x, y, value="74LVC245APW"):

@@ -27,7 +27,7 @@ Companion files:
 | Joystick | DE-9 Kempston, read through the STAT buffer and served at $1F by PIO. |
 | Audio | AY-3-8910 emulated on core 1, PWM stereo, mixed with the 2068 SOUND line by an op-amp, 3.5 mm jack. |
 | Reset | 555 removed. Pico-controlled /RESET line that defaults to asserted while the Pico boots. |
-| Power | 5 V comes only from the edge connector; the expansion bus the card plugs into selects the source (2068 rail or its own barrel supply). The card's USB-C is a data connection to the user's PC and does not power the card or take power from it (VBUS isolated, used at most for detect). Bulk capacitance for WiFi bursts. The +15 V buck footprint is dropped. |
+| Power | The card's 5 V rail is a Schottky diode-OR of the edge connector +5 V (B4) and USB-C VBUS. It runs from the 2068 or expansion bus, from USB alone on the bench (programming), or both at once while debugging, with no back-feed either way. Two 3.3 V LDOs (logic, WiFi). +15 V unused. |
 | Jumpers | /BE_OUT and flash write-protect eliminated. Anything remaining is a solder jumper with a parallel through-hole header. |
 | DMA | Hardware provision (74LVC126 drivers, ALO/AHI latches, bidirectional address transceivers) for Pico access to the 2068's own memory after a bus grant, for snapshots. Validated on the prototype. |
 | Tape | EAR out and SPK/TAP in wired to GPIO through dividers for TZX playback and SAVE capture. |
@@ -64,10 +64,10 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 
 ### Phase 1: Interface spec sign-off
 - Review `docs/v3-architecture.md` with the firmware maintainers. Settle its section 11 questions. The GPIO map, register bits and port list are the contract.
-- Chip-down RP2350B decided; power from the edge connector only, USB is data only.
+- Chip-down RP2350B decided; power from edge +5 V diode-ORed with USB VBUS.
 
 ### Phase 2: Schematic
-- Sheets: 2068 interface (fingers, transceivers, gating, open-drain drivers, DMA drivers, reset, buttons, tape divider) [done], local bus and registers (address byte muxes, ALO/AHI/CTL/STAT, 139, power-on clear) [done], RP2350B core (MCU, QSPI flash, PSRAM, crystal, USB-C, BOOTSEL/RUN, SWD pads), power (buck, LDOs, OR-ing, bulk), SD and OLED, WiFi module, audio (PWM filters, mixer, jack), joystick.
+- Sheets: 2068 interface (fingers, transceivers, gating, open-drain drivers, DMA drivers, reset, buttons, tape divider), local bus and registers, RP2350B core, power (diode-OR, two LDOs, bulk), SD and OLED, WiFi module, audio (PWM filters, mixer, jack), joystick. All drawn 2026-09-16; ERC clean.
 - ERC clean; export netlist and a GPIO cross-reference table for the firmware.
 
 ### Phase 3: Layout
@@ -99,7 +99,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - **Chip-down MCU** adds power, crystal, USB and QSPI layout to get right. Follow the RP2350 hardware design guide layout exactly; JLC assembles QFN-80 routinely.
 - **Bank-rule fidelity.** The PIO keeps the rule, but the `/RDROM` condition is now computed. Verify on the prototype with the existing ROM images.
 - **Bus contention.** Two masters on the local bus plus a DMA mode onto the 2068 bus. CTL powers up with BUS_OWN and DMA_EN clear; scope the hand-over edges.
-- **2068 power.** WiFi transmit bursts (about 350 mA at 3.3 V for the ESP32-C3) on top of a 250 mA card would strain the 2068's 78S40-based 5 V rail. Mitigations in order: bulk capacitance on the card, keep the radio in modem-sleep unless a network feature is in use, and power the card from the expansion bus's own supply when WiFi is used heavily.
+- **2068 power.** WiFi transmit bursts (about 350 mA at 3.3 V for the ESP32-C3) on top of a 250 mA card would strain the 2068's 78S40-based 5 V rail. Mitigations in order: bulk capacitance on the card, keep the radio in modem-sleep unless a network feature is in use, and power the card from the expansion bus's own supply or USB when WiFi is used heavily.
 - **AY emulation load.** Core 1 in C is required; MicroPython cannot do it. Plan the C user-module build into the existing docker firmware build.
 - **Edge connector fit** remains the hard mechanical constraint; verify the footprint against the old Gerbers and test-fit the first prototype.
 - **Part stock at JLC**: 3.3 V flash, SD socket, ESP32-C3 module, RP2350B. Keep alternates in the BOM.

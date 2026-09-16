@@ -27,7 +27,7 @@ Registers on MD0-MD7, selected by 74LVC139 (REG_SEL0/1, nREG_STB <-- GPIO):
   ALO, AHI  74LVC574  DMA-mode address
   CTL       74LVC273  DMA_EN, BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, LED, spare (cleared at power-up)
   STAT      74LVC541  joystick x6, nBUSAK, SD_CD
-RP2350B support: W25Q128 QSPI (16 MB), APS6404L PSRAM (CS1 = GP47), 12 MHz, USB-C (data only), BOOTSEL/RUN
+RP2350B support: W25Q128 QSPI (16 MB), APS6404L PSRAM (CS1 = GP47), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
 SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> STAT
 ```
 
@@ -95,7 +95,7 @@ All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA,
 
 - RESET_HOLD is an RP2350 GPIO with a 4.7k pull-up into a 74LVC06 open-drain inverter on the 2068 /RESET line. Floating (RP2350 booting or absent) means high, so the 2068 is held in reset; the firmware drives it low to release and pulses it high to reset the 2068. Same behaviour the 555 gave, under firmware control.
 - TS Reset and NMI buttons pull the bus lines directly, as today. BOOTSEL and RUN buttons for the RP2350B.
-- Power: +5 V from edge pin B4 only; the expansion bus the card sits in chooses between the 2068's 78S40 rail and an external supply. USB-C is a data link and is not tied to the 5 V rail in either direction. Budget about 250 mA average plus ESP32-C3 transmit bursts of up to about 350 mA at 3.3 V; 2 x 220 uF bulk on 5 V, 100 uF at the module, radio in modem-sleep unless in use. Two 3.3 V LDOs: logic and RP2350B, and the ESP32 module.
+- Power: the card's 5 V rail is a Schottky diode-OR (SS34) of edge pin B4 and USB-C VBUS, so it runs from the 2068 or the expansion bus, from USB alone on the bench for programming, or both at once while debugging, without back-feeding either source. Budget about 250 mA average plus ESP32-C3 transmit bursts of up to about 350 mA at 3.3 V; 2 x 220 uF bulk on 5 V, 100 uF at the module, radio in modem-sleep unless in use. Two TLV1117LV33 LDOs (0.35 V dropout, needed because of the diode drop): logic and RP2350B, and the ESP32 module. When USB-powered with the card in an unpowered 2068, only the open-drain lines and the address transceivers (inputs) face the bus, so nothing drives the dead machine.
 
 ## 7. GPIO map (RP2350B)
 

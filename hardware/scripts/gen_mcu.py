@@ -45,7 +45,7 @@ SPARE = [31, 32, 33, 34, 35]
 def main():
     s = Sheet("tspico-v3.kicad_sch", "mcu.kicad_sch", "TS-Pico v3: RP2350B Core")
     s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP31-GP35 spare.", 20, 285, 2.5)
-    s.text("USB-C is data only: VBUS is not connected to the card. Rd on CC1/CC2 so a Type-C host attaches.", 20, 290, 2.0)
+    s.text("USB-C: data, and VBUS to the power sheet (diode-ORed with the edge +5V) so the card runs from USB alone on the bench.", 20, 290, 2.0)
 
     s.power("+3V3", 300, 30, "#PWR06", flag=False)
     s.power("GND", 330, 40, "#PWR07", flag=False)
@@ -133,7 +133,9 @@ def main():
 
     # ---- USB-C, data only -----------------------------------------------------------
     J1 = s.place("Connector:USB_C_Receptacle_USB2.0_16P", "J1", "USB-C", "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12", 40, 60)
-    for pin in ("A4", "A9", "B4", "B9", "A8", "B8"):
+    for pin in ("A4", "A9", "B4", "B9"):
+        s.glabel("VBUS", J1.pin(pin), OUT)
+    for pin in ("A8", "B8"):
         s.nc(J1.pin(pin))
     for pin in ("A1", "A12", "B1", "B12", "SH"):
         s.label("GND", J1.pin(pin))
@@ -148,7 +150,7 @@ def main():
     s.label("USB_DP_C", R26.pin("1")); s.label("USB_DP", R26.pin("2"))
     R27 = s.place("Device:R", "R27", "27", R0603, 95, 85)
     s.label("USB_DM_C", R27.pin("1")); s.label("USB_DM", R27.pin("2"))
-    s.text("J1: USB 2.0 only. VBUS and SBU unconnected.", 20, 100, 1.5)
+    s.text("J1: USB 2.0. VBUS -> power sheet. SBU unconnected.", 20, 100, 1.5)
     s.text("R24/R25 5.1 k Rd. R26/R27 27 R series.", 20, 103, 1.5)
 
     # ---- SWD pads ---------------------------------------------------------------------

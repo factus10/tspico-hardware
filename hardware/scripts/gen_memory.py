@@ -102,6 +102,13 @@ def main():
     s.text("R4/C9/D1: ~10 ms power-on clear of CTL,", 355, 118, 1.5)
     s.text("so all control bits start at 0.", 355, 121, 1.5)
 
+    # ---- activity LED from CTL bit 6 ---------------------------------------------------
+    R5 = s.place("Device:R", "R5", "1k", R0603, 370, 160)
+    s.glabel("LED", R5.pin("1"), IN); s.label("LED_K", R5.pin("2"))
+    D4 = s.place("Device:LED", "D4", "green", "LED_SMD:LED_0603_1608Metric", 375, 180)
+    s.label("LED_K", D4.pin("A")); s.label("GND", D4.pin("K"))
+    s.text("R5/D4: activity LED, CTL bit 6.", 355, 195, 1.5)
+
     # ---- decoupling -----------------------------------------------------------------------
     for k in range(7):
         C = s.place("Device:C", f"C{10 + k}", "100n", C0603, 40 + 9 * k, 255)

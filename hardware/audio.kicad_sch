@@ -1,8 +1,1577 @@
-(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+(kicad_sch (version 20250114) (generator "schlib.py") (generator_version "1")
   (uuid "90d631f6-e6d9-451f-9d39-ff4a79b9db46")
   (paper "A3")
   (title_block (title "TS-Pico v3: Audio") (rev "0.1") (company "Timex/Sinclair Online User Group"))
-  (lib_symbols)
-  (text "PWM stereo RC filters, op-amp mixer with 2068 SOUND, 3.5 mm jack" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "4d98a329-1bde-4a5f-8b71-1c893c069799"))
+  (lib_symbols
+    (symbol "power:+5V"
+    		(power global)
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0)
+    			(hide yes)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "#PWR"
+    			(at 0 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "+5V"
+    			(at 0 3.556 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Power symbol creates a global label with name \"+5V\""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "global power"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "+5V_0_1"
+    			(polyline
+    				(pts
+    					(xy -0.762 1.27) (xy 0 2.54)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy 0 2.54) (xy 0.762 1.27)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy 0 0) (xy 0 2.54)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "+5V_1_1"
+    			(pin power_in line
+    				(at 0 0 90)
+    				(length 0)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "power:GND"
+    		(power global)
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0)
+    			(hide yes)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "#PWR"
+    			(at 0 -6.35 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "GND"
+    			(at 0 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "global power"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "GND_0_1"
+    			(polyline
+    				(pts
+    					(xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "GND_1_1"
+    			(pin power_in line
+    				(at 0 0 270)
+    				(length 0)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Device:C"
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0.254)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "C"
+    			(at 0.635 2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Value" "C"
+    			(at 0.635 -2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0.9652 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Unpolarized capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "cap capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "C_*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "C_0_1"
+    			(polyline
+    				(pts
+    					(xy -2.032 0.762) (xy 2.032 0.762)
+    				)
+    				(stroke
+    					(width 0.508)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy -2.032 -0.762) (xy 2.032 -0.762)
+    				)
+    				(stroke
+    					(width 0.508)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "C_1_1"
+    			(pin passive line
+    				(at 0 3.81 270)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -3.81 90)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Device:R"
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "R"
+    			(at 2.032 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "R"
+    			(at 0 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at -1.778 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Resistor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "R res resistor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "R_*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "R_0_1"
+    			(rectangle
+    				(start -1.016 -2.54)
+    				(end 1.016 2.54)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "R_1_1"
+    			(pin passive line
+    				(at 0 3.81 270)
+    				(length 1.27)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -3.81 90)
+    				(length 1.27)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Amplifier_Operational:MCP6002-xSN"
+    		(pin_names
+    			(offset 0.127)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "U"
+    			(at 0 5.08 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Value" "MCP6002-xSN"
+    			(at 0 -5.08 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" "http://ww1.microchip.com/downloads/en/DeviceDoc/21733j.pdf"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "1MHz, Low-Power Op Amp, SOIC-8"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_locked" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "dual opamp"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "SOIC*3.9x4.9mm*P1.27mm* DIP*W7.62mm* TO*99* OnSemi*Micro8* TSSOP*3x3mm*P0.65mm* TSSOP*4.4x3mm*P0.65mm* MSOP*3x3mm*P0.65mm* SSOP*3.9x4.9mm*P0.635mm* LFCSP*2x2mm*P0.5mm* *SIP* SOIC*5.3x6.2mm*P1.27mm*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "MCP6002-xSN_1_1"
+    			(polyline
+    				(pts
+    					(xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)
+    				)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type background)
+    				)
+    			)
+    			(pin output line
+    				(at 7.62 0 180)
+    				(length 2.54)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin input line
+    				(at -7.62 -2.54 0)
+    				(length 2.54)
+    				(name "-"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin input line
+    				(at -7.62 2.54 0)
+    				(length 2.54)
+    				(name "+"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "3"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(symbol "MCP6002-xSN_2_1"
+    			(polyline
+    				(pts
+    					(xy -5.08 5.08) (xy 5.08 0) (xy -5.08 -5.08) (xy -5.08 5.08)
+    				)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type background)
+    				)
+    			)
+    			(pin input line
+    				(at -7.62 2.54 0)
+    				(length 2.54)
+    				(name "+"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "5"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin input line
+    				(at -7.62 -2.54 0)
+    				(length 2.54)
+    				(name "-"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "6"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin output line
+    				(at 7.62 0 180)
+    				(length 2.54)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "7"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(symbol "MCP6002-xSN_3_1"
+    			(pin power_in line
+    				(at -2.54 -7.62 90)
+    				(length 3.81)
+    				(name "V-"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "4"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin power_in line
+    				(at -2.54 7.62 270)
+    				(length 3.81)
+    				(name "V+"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "8"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Device:C_Polarized"
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0.254)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "C"
+    			(at 0.635 2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Value" "C_Polarized"
+    			(at 0.635 -2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0.9652 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Polarized capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "cap capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "CP_*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "C_Polarized_0_1"
+    			(rectangle
+    				(start -2.286 0.508)
+    				(end 2.286 1.016)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy -1.778 2.286) (xy -0.762 2.286)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy -1.27 2.794) (xy -1.27 1.778)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(rectangle
+    				(start 2.286 -0.508)
+    				(end -2.286 -1.016)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type outline)
+    				)
+    			)
+    		)
+    		(symbol "C_Polarized_1_1"
+    			(pin passive line
+    				(at 0 3.81 270)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -3.81 90)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Connector_Audio:AudioJack3"
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "J"
+    			(at 0 8.89 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "AudioJack3"
+    			(at 0 6.35 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Audio Jack, 3 Poles (Stereo / TRS)"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "audio jack receptacle stereo headphones phones TRS connector"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "Jack*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "AudioJack3_0_1"
+    			(rectangle
+    				(start -5.08 -5.08)
+    				(end -6.35 -2.54)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type outline)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy -1.905 -2.54) (xy -1.27 -3.175) (xy -0.635 -2.54) (xy -0.635 0) (xy 2.54 0)
+    				)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy 0 -2.54) (xy 0.635 -3.175) (xy 1.27 -2.54) (xy 2.54 -2.54)
+    				)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(rectangle
+    				(start 2.54 3.81)
+    				(end -5.08 -5.08)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type background)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy 2.54 2.54) (xy -2.54 2.54) (xy -2.54 -2.54) (xy -3.175 -3.175) (xy -3.81 -2.54)
+    				)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "AudioJack3_1_1"
+    			(pin passive line
+    				(at 5.08 0 180)
+    				(length 2.54)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "R"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 5.08 2.54 180)
+    				(length 2.54)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "S"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 5.08 -2.54 180)
+    				(length 2.54)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "T"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+  )
+  (text "Emulated AY-3-8910 on RP2350B PWM (AUDIO_L/R), low-passed, mixed with the 2068 SOUND line, buffered to a stereo 3.5 mm jack." (exclude_from_sim no) (at 20 285 0) (effects (font (size 2.5 2.5)) (justify left bottom)) (uuid "dc40c8db-1010-415c-ab1d-e0f40893fb73"))
+  (text "Op-amp on the +5V rail (rail-to-rail MCP6002). Component values are starting points; tune on the prototype." (exclude_from_sim no) (at 20 290 0) (effects (font (size 2.0 2.0)) (justify left bottom)) (uuid "6d8b068f-c716-407d-92f2-a58ff6a7c055"))
+  (symbol (lib_id "power:+5V") (at 299.72 30.48 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "495e76dd-cbee-46ef-9ea9-3eefb4856ec3")
+    (property "Reference" "#PWR16" (at 302.72 23.44 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "+5V" (at 302.72 25.94 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 299.72 30.48 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 299.72 30.48 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 299.72 30.48 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "4507f734-2be9-4034-977a-83b2baab23ec"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "#PWR16") (unit 1))))
+  )
+  (label "+5V" (at 299.72 30.48 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "8820953b-2830-4b85-bf33-403928dd3a57"))
+  (symbol (lib_id "power:GND") (at 330.2 39.37 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "710623c1-e3fb-4a3c-87fb-580a59f12c51")
+    (property "Reference" "#PWR17" (at 333.2 32.33 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "GND" (at 333.2 34.83 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "7b20affa-290b-4cb6-b8a2-768d5cadde64"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "#PWR17") (unit 1))))
+  )
+  (label "GND" (at 330.20 39.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "e5813bc0-e4f7-459b-adcb-de3f4c42bd7f"))
+  (symbol (lib_id "Device:C") (at 39.37 59.69 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "78e60161-722b-4d41-b8fc-427dfb902af5")
+    (property "Reference" "C70" (at 42.37 51.38 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1u" (at 42.37 53.88 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 39.37 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 39.37 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 39.37 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "f6fd8b32-1448-4ee0-aead-773cf5e43abf"))
+    (pin "2" (uuid "4bb4748b-8035-4c67-8b59-135834937439"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C70") (unit 1))))
+  )
+  (global_label "SOUND_2068" (shape input) (at 39.37 55.88 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "a2500c4e-7a3b-4340-8dfb-c63f531e87b4"))
+  (label "SOUND_AC" (at 39.37 63.50 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "e074fd9b-d07a-47c6-bcdb-cebfdb2bf129"))
+  (symbol (lib_id "Device:R") (at 54.61 59.69 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "c1291cc2-b7be-4991-881f-a54db0adaf31")
+    (property "Reference" "R70" (at 57.61 51.38 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100k" (at 57.61 53.88 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 54.61 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 54.61 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 54.61 59.69 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "5e434468-e41f-493f-8373-16a9f885fca1"))
+    (pin "2" (uuid "20d117e2-6d70-42a5-a426-93dc21b41e85"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R70") (unit 1))))
+  )
+  (label "SOUND_AC" (at 54.61 55.88 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "77112892-cef3-442c-a1d2-ced72626e3ee"))
+  (label "GND" (at 54.61 63.50 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "b3d9fff4-3ead-4c1c-ba3f-9d5f4891555b"))
+  (symbol (lib_id "Device:R") (at 59.69 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "baed1926-d67f-44c6-85eb-a008ccb9281c")
+    (property "Reference" "R71" (at 62.69 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 62.69 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 59.69 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 59.69 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 59.69 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "bf4c7364-26e6-4c81-ac03-0f5eaca30712"))
+    (pin "2" (uuid "83c2aae7-b502-4512-b4e2-2238e06e250a"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R71") (unit 1))))
+  )
+  (global_label "AUDIO_L" (shape input) (at 59.69 106.68 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "1d786dcb-2429-4600-8957-ee2a6bbb2d75"))
+  (label "L_F1" (at 59.69 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "2fc7b6a6-7861-4c83-ac26-3418d1003252"))
+  (symbol (lib_id "Device:C") (at 74.93 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "2c9c5c65-3a7a-4d25-86dc-dbdac278e0cf")
+    (property "Reference" "C71" (at 77.93 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10n" (at 77.93 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 74.93 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 74.93 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 74.93 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "d3f9662d-cce7-40bb-ab8b-8ba6301492d6"))
+    (pin "2" (uuid "4b4e0e84-d76c-4a87-94b4-20c98c6401ba"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C71") (unit 1))))
+  )
+  (label "L_F1" (at 74.93 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "650768e0-3fea-4895-a131-0ef62fbed893"))
+  (label "GND" (at 74.93 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "11b41f57-cb4a-4ede-b03f-9f25f078490b"))
+  (symbol (lib_id "Device:R") (at 90.17 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "4234c1e3-c83f-4c9e-90bd-666c412c605c")
+    (property "Reference" "R72" (at 93.17 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 93.17 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 90.17 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 90.17 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 90.17 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "6dab1046-75dc-4144-ab8d-85486f65501a"))
+    (pin "2" (uuid "2fd9b582-5250-4bd5-903d-5b3e15a547bc"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R72") (unit 1))))
+  )
+  (label "L_F1" (at 90.17 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "53c4a88c-8880-433d-863d-135635facd38"))
+  (label "L_F2" (at 90.17 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "25c7dab1-cf3a-4f4f-bc55-24d48830e198"))
+  (symbol (lib_id "Device:C") (at 105.41 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "1046c8a9-32fe-48da-8443-9c4849936363")
+    (property "Reference" "C72" (at 108.41 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10n" (at 108.41 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 105.41 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 105.41 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 105.41 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "aee55fdf-6f87-4b36-89e9-88d20e01e4ee"))
+    (pin "2" (uuid "057470c1-78b6-4984-9402-8c8ff9ff9f9f"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C72") (unit 1))))
+  )
+  (label "L_F2" (at 105.41 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "7eff64fa-cfea-4948-9d39-adf34ee20e67"))
+  (label "GND" (at 105.41 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "34211f68-ce2a-4ec8-b780-cd6d76351dbd"))
+  (symbol (lib_id "Device:R") (at 119.38 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "a67c7903-1582-43b1-8106-b145bcf4c64f")
+    (property "Reference" "R73" (at 122.38 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 122.38 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 119.38 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 119.38 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 119.38 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "ba5d00a8-69e8-4ce2-85c1-026a1b920f9b"))
+    (pin "2" (uuid "7f223c7c-b645-4c8f-aa40-6f9fbe2e5bab"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R73") (unit 1))))
+  )
+  (label "L_F2" (at 119.38 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "10440d8c-4b17-45c4-b60c-855173d2bfcb"))
+  (label "L_MIX" (at 119.38 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "56bb6e7a-70d5-42f3-9da4-4c9d36f6ba23"))
+  (symbol (lib_id "Device:R") (at 134.62 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "0a4deedb-3ce0-4f78-9e0c-e820b2436372")
+    (property "Reference" "R74" (at 137.62 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "22k" (at 137.62 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 134.62 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 134.62 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 134.62 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "52e13ee6-0c97-4154-88fc-3252446847db"))
+    (pin "2" (uuid "4178801c-7812-423c-8e13-d8bd774a0ea0"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R74") (unit 1))))
+  )
+  (label "SOUND_AC" (at 134.62 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "dc584d4a-9805-4dd0-9c31-2d51ed30e0f5"))
+  (label "L_MIX" (at 134.62 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "99f9ea98-fa2e-46a7-8c43-599c30683218"))
+  (symbol (lib_id "Device:R") (at 59.69 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "a9fafea5-02e5-4657-9d65-5d19387ed217")
+    (property "Reference" "R75" (at 62.69 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 62.69 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 59.69 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 59.69 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 59.69 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "26346cec-69ff-4e5f-9f99-138955116f8e"))
+    (pin "2" (uuid "c4c38ab8-6671-4a59-b29d-d7b4d13cb3af"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R75") (unit 1))))
+  )
+  (global_label "AUDIO_R" (shape input) (at 59.69 166.37 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "529e381b-cd46-4728-a7b7-bc90aaf39291"))
+  (label "R_F1" (at 59.69 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "7613f15d-001e-47aa-876b-9b3aa61460eb"))
+  (symbol (lib_id "Device:C") (at 74.93 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "e73f7f60-c30d-4da1-8c37-99f3ae387c6e")
+    (property "Reference" "C75" (at 77.93 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10n" (at 77.93 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 74.93 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 74.93 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 74.93 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "bdc74095-d088-414e-ab70-73cf50c997bb"))
+    (pin "2" (uuid "8f242866-dda6-464b-a4ba-b69fe12e44b4"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C75") (unit 1))))
+  )
+  (label "R_F1" (at 74.93 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "24f23f81-e139-4760-8bef-6c7b9138bf7e"))
+  (label "GND" (at 74.93 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "622038e0-e1dc-4753-8ae9-606cda819f4a"))
+  (symbol (lib_id "Device:R") (at 90.17 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "e467c013-c770-41b4-97c3-e70d3f93927c")
+    (property "Reference" "R76" (at 93.17 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 93.17 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 90.17 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 90.17 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 90.17 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "a2bd8cc4-baa8-4db3-8229-41aed0c09fea"))
+    (pin "2" (uuid "2f32203a-966b-4de5-aa96-4f630e2106cc"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R76") (unit 1))))
+  )
+  (label "R_F1" (at 90.17 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "b9578e19-a1a1-4b91-8463-6f1e3f3d7b97"))
+  (label "R_F2" (at 90.17 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "f0a778fc-54d1-4a0c-ac69-a39692f023c8"))
+  (symbol (lib_id "Device:C") (at 105.41 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "586e0aaf-ce8a-4c90-b835-9b04fb00666b")
+    (property "Reference" "C76" (at 108.41 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10n" (at 108.41 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 105.41 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 105.41 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 105.41 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "81c52688-6e35-4cd3-9f98-c1fe0d1edda5"))
+    (pin "2" (uuid "bfebbcae-ef52-4c0f-81e2-ecae9fb1361f"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C76") (unit 1))))
+  )
+  (label "R_F2" (at 105.41 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "aa771fe3-44b3-4ec1-a235-10b1c0e8f2be"))
+  (label "GND" (at 105.41 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "aba26b38-426c-4c8d-82d8-7e5d34452c58"))
+  (symbol (lib_id "Device:R") (at 119.38 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b7b1b968-f420-46de-8ff0-2809431d366d")
+    (property "Reference" "R77" (at 122.38 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 122.38 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 119.38 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 119.38 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 119.38 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "9bd31709-4c28-4ce1-a470-273f951bca27"))
+    (pin "2" (uuid "bd8049e7-2f52-46b4-9cc9-db0946c59b99"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R77") (unit 1))))
+  )
+  (label "R_F2" (at 119.38 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "d2a9a1b5-4e67-4e1a-9b55-110f7d9a0435"))
+  (label "R_MIX" (at 119.38 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "751a47d8-ffc6-4a1d-aa3a-d568a64def94"))
+  (symbol (lib_id "Device:R") (at 134.62 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "c83e30de-c53e-4a26-bebc-99cf059461c2")
+    (property "Reference" "R78" (at 137.62 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "22k" (at 137.62 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 134.62 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 134.62 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 134.62 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "404826e2-4b68-433a-8595-0d4e2907b144"))
+    (pin "2" (uuid "e4366dfd-4eba-4ed8-86f3-2e41fb785e04"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R78") (unit 1))))
+  )
+  (label "SOUND_AC" (at 134.62 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "3449bd00-ceb3-4189-adb7-52d936e51b12"))
+  (label "R_MIX" (at 134.62 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "a17cc669-a2d6-4343-a6ba-e566bdb04f5e"))
+  (symbol (lib_id "Amplifier_Operational:MCP6002-xSN") (at 199.39 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "ce88abe6-6c70-4eff-9ccb-306079c246a5")
+    (property "Reference" "U50" (at 202.39 103.45 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "MCP6002-E/SN" (at 202.39 105.95 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 199.39 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 199.39 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 199.39 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "027c1347-5752-41dd-a4d1-e1862e83aed4"))
+    (pin "2" (uuid "985f5733-9325-459b-8d18-a5ce4b36cc6b"))
+    (pin "3" (uuid "0903d849-a823-4bd2-9675-e91fd9408ca4"))
+    (pin "5" (uuid "b97cf6eb-39ee-4f04-9933-8b8139c46d7a"))
+    (pin "6" (uuid "c57e7d64-c0c1-4c65-adb0-3fb6257891b9"))
+    (pin "7" (uuid "893349a2-f535-4f64-8034-3ffe9f6b1ad1"))
+    (pin "4" (uuid "ad52f4d8-86da-4b4e-8527-753d20e4ad46"))
+    (pin "8" (uuid "3b12006b-cb8a-415b-a828-4b3499ada8d6"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "U50") (unit 1))))
+  )
+  (label "L_MIX" (at 191.77 107.95 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "5f926436-1e23-4709-aa27-8216e2c54b9d"))
+  (label "L_OUT" (at 191.77 113.03 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "610d8f6a-f023-46b0-acf3-10e3376d51c5"))
+  (label "L_OUT" (at 207.01 110.49 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "18ac3e28-70bf-4323-a5ce-5779dd272836"))
+  (symbol (lib_id "Amplifier_Operational:MCP6002-xSN") (at 199.39 170.18 0) (unit 2)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "a777198e-649e-4c9b-9d76-c1b2f50a1726")
+    (property "Reference" "U50" (at 202.39 163.14 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "MCP6002-E/SN" (at 202.39 165.64 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 199.39 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 199.39 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 199.39 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "43353e06-4af7-4309-826e-51368fd852e8"))
+    (pin "2" (uuid "4f901178-f6c1-4883-a9dd-f6add5ea0a83"))
+    (pin "3" (uuid "20ad7f86-8591-4491-b5fb-b38c79f86ca3"))
+    (pin "5" (uuid "a91e0503-ce46-4f95-bfcb-2630676f3f7c"))
+    (pin "6" (uuid "b83baed9-e97d-4290-a9af-00cc9d035203"))
+    (pin "7" (uuid "34e02f2a-d924-4499-bade-b02471b5c165"))
+    (pin "4" (uuid "5208ef4a-d05a-4e79-b7b6-a93aa171ea9e"))
+    (pin "8" (uuid "d3e6af8b-ec3f-4be2-91eb-c341b725d6ec"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "U50") (unit 2))))
+  )
+  (label "R_MIX" (at 191.77 167.64 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "dcb95ce5-0380-457f-82a4-611cfb9d3b47"))
+  (label "R_OUT" (at 191.77 172.72 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "3b8cd73a-2903-41ad-863a-363621764b94"))
+  (label "R_OUT" (at 207.01 170.18 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "d07f2d62-cb40-48a0-8bc9-6e4682235d66"))
+  (symbol (lib_id "Amplifier_Operational:MCP6002-xSN") (at 199.39 229.87 0) (unit 3)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "5367240c-5577-4400-a1c4-76177d6c5a46")
+    (property "Reference" "U50" (at 202.39 217.75 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "MCP6002-E/SN" (at 202.39 220.25 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" (at 199.39 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 199.39 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 199.39 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "6224e7d8-45e2-49e4-a051-819710509793"))
+    (pin "2" (uuid "dd3afdf4-9b6c-4b7a-838a-9ea094ea9023"))
+    (pin "3" (uuid "74262e94-9a4c-486b-b888-32694c2125c1"))
+    (pin "5" (uuid "77a514b9-7795-485f-bd11-2c632d2805b6"))
+    (pin "6" (uuid "602bd256-4be8-48e7-9c23-dede25555453"))
+    (pin "7" (uuid "e23526b8-7d92-403e-a284-832e0b459936"))
+    (pin "4" (uuid "3d4b149d-7639-40e0-a19b-4cb2f2def086"))
+    (pin "8" (uuid "3aff3c2a-6f7d-40f8-8a5a-0c3d8f79fcff"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "U50") (unit 3))))
+  )
+  (label "+5V" (at 196.85 222.25 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "080d32b5-a799-46da-b5c6-19591db501e5"))
+  (label "GND" (at 196.85 237.49 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "3f2e8894-6d6b-4803-ab9b-7e280efc7e5e"))
+  (symbol (lib_id "Device:C") (at 229.87 229.87 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "362b1b69-7ab2-4da6-928a-b6232a7b14c8")
+    (property "Reference" "C79" (at 232.87 221.56 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100n" (at 232.87 224.06 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 229.87 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 229.87 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 229.87 229.87 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "6a51805d-2340-45f1-9041-1024f757583c"))
+    (pin "2" (uuid "749877c0-ae7c-4153-98e2-6bbc9e896eb1"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C79") (unit 1))))
+  )
+  (label "+5V" (at 229.87 226.06 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "4e4546b7-fe95-47c8-87eb-d5f2866e8f7d"))
+  (label "GND" (at 229.87 233.68 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "d893bcf6-23ca-40fa-a9d1-08276e57722c"))
+  (symbol (lib_id "Device:C_Polarized") (at 250.19 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "e17c625e-a668-4889-882c-92ad1b4ae4f8")
+    (property "Reference" "C80" (at 253.19 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10u" (at 253.19 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric" (at 250.19 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 250.19 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 250.19 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "3d7d1d92-b655-41e3-b42c-40ceb517630f"))
+    (pin "2" (uuid "68e6725c-cc46-4321-a86b-d7e1062ad98f"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C80") (unit 1))))
+  )
+  (label "L_OUT" (at 250.19 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "957e561f-ca81-4391-b8cd-93b9515881c5"))
+  (label "L_AC" (at 250.19 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "4cacbef7-7b26-4bee-8473-39055ec0bd70"))
+  (symbol (lib_id "Device:R") (at 270.51 110.49 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "c16ed6bc-50ee-460f-8df4-d0a34d0a7803")
+    (property "Reference" "R80" (at 273.51 102.18 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100" (at 273.51 104.68 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 270.51 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 270.51 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 270.51 110.49 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "47d1e2d3-9eeb-4515-ac66-62f38d05aedb"))
+    (pin "2" (uuid "cad24048-f83e-4308-918b-dbe9ee374621"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R80") (unit 1))))
+  )
+  (label "L_AC" (at 270.51 106.68 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "2fc65d14-e9c1-4ab4-bd44-ac4cbe2faf30"))
+  (label "L_JACK" (at 270.51 114.30 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "4733cd5f-c729-405c-b514-d8a5eb8768e1"))
+  (symbol (lib_id "Device:C_Polarized") (at 250.19 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "6f789bef-c4ee-4150-bca2-fb1648ea276a")
+    (property "Reference" "C81" (at 253.19 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10u" (at 253.19 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric" (at 250.19 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 250.19 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 250.19 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "283e50e4-1a8b-4bf0-82eb-19ec1cfcdbec"))
+    (pin "2" (uuid "b842cdc8-68f3-412d-9996-196b916b6a43"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "C81") (unit 1))))
+  )
+  (label "R_OUT" (at 250.19 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "734eb46d-d9fd-47e1-b3e4-7175174e5a21"))
+  (label "R_AC" (at 250.19 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "563f1cbd-86cd-46d8-bdfd-0484c2c1dc76"))
+  (symbol (lib_id "Device:R") (at 270.51 170.18 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "439fe48b-5197-418a-a2ed-d086b4ab4486")
+    (property "Reference" "R81" (at 273.51 161.87 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100" (at 273.51 164.37 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 270.51 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 270.51 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 270.51 170.18 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "65fa2590-065c-4933-9391-717b97839921"))
+    (pin "2" (uuid "f8d33b71-9bf0-4789-a063-3d4286ee2883"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "R81") (unit 1))))
+  )
+  (label "R_AC" (at 270.51 166.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "a1eef72a-dca9-4600-a792-ac56ddea21fd"))
+  (label "R_JACK" (at 270.51 173.99 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "0bfef4e4-88f5-4779-8572-3abec88815e5"))
+  (symbol (lib_id "Connector_Audio:AudioJack3") (at 320.04 139.7 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "be56be7d-63a6-4f4d-b97a-c08d3f238eba")
+    (property "Reference" "J4" (at 323.04 132.66 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "3.5mm stereo" (at 323.04 135.16 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Connector_Audio:Jack_3.5mm_CUI_SJ-3523-SMT_Horizontal" (at 320.04 139.7 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 320.04 139.7 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 320.04 139.7 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "R" (uuid "f97c257d-9a20-406b-954e-b366a9e65c0b"))
+    (pin "S" (uuid "b7bfa0ab-9fc6-4193-aef7-41e56c4d55ce"))
+    (pin "T" (uuid "9c617595-4c64-4a73-a575-7e15fccf0c0d"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/2f11af4c-93bf-47a1-9f9b-ac2a74f731ab" (reference "J4") (unit 1))))
+  )
+  (label "L_JACK" (at 325.12 142.24 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "8ff1e2f4-5d35-4c49-859d-161b5f8aaa9d"))
+  (label "R_JACK" (at 325.12 139.70 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "fc383d4f-90c5-4ff0-ac2a-9f87cffd1d97"))
+  (label "GND" (at 325.12 137.16 0) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "aff4d9dc-e719-4ddb-b6c0-773e7619eb87"))
+  (text "Mix: L = AY A + AY B/2, R = AY C + AY B/2 done in firmware; SOUND_2068 added to both channels here." (exclude_from_sim no) (at 40 215 0) (effects (font (size 1.5 1.5)) (justify left bottom)) (uuid "0b514745-e8ee-442c-8c67-ce82b9158e08"))
+  (text "The PWM branch (0 to 3.3 V, DC about 1.65 V) also biases the buffer input; SOUND is AC-coupled by C70." (exclude_from_sim no) (at 40 218 0) (effects (font (size 1.5 1.5)) (justify left bottom)) (uuid "3e720685-4f96-4e5b-a3a0-c076b8c46e6b"))
   (embedded_fonts no)
 )

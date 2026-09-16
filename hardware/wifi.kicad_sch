@@ -1,8 +1,963 @@
-(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+(kicad_sch (version 20250114) (generator "schlib.py") (generator_version "1")
   (uuid "41ad5754-742c-43eb-8624-fcc17de46ace")
   (paper "A3")
   (title_block (title "TS-Pico v3: WiFi") (rev "0.1") (company "Timex/Sinclair Online User Group"))
-  (lib_symbols)
-  (text "ESP32-C3 module on UART, enable from CTL, antenna keep-out" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "46eac35e-23a9-4dc3-b62e-406ea23ae38d"))
+  (lib_symbols
+    (symbol "power:GND"
+    		(power global)
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0)
+    			(hide yes)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "#PWR"
+    			(at 0 -6.35 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "GND"
+    			(at 0 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "global power"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "GND_0_1"
+    			(polyline
+    				(pts
+    					(xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27)
+    				)
+    				(stroke
+    					(width 0)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "GND_1_1"
+    			(pin power_in line
+    				(at 0 0 270)
+    				(length 0)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "RF_Module:ESP32-C3-WROOM-02"
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "U"
+    			(at -12.192 21.336 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "ESP32-C3-WROOM-02"
+    			(at 12.192 21.336 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" "RF_Module:ESP32-C3-WROOM-02"
+    			(at 0 0.635 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" "https://www.espressif.com/sites/default/files/documentation/esp32-c3-wroom-02_datasheet_en.pdf"
+    			(at 0 0.635 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "802.11 b/g/n Wi­Fi and Bluetooth 5 module, ESP32­C3 SoC, RISC­V microprocessor, On-board antenna"
+    			(at 0 0.635 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "esp32 espressif WiFi Bluetooth LE"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "ESP32?C3*WROOM?02*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "ESP32-C3-WROOM-02_1_1"
+    			(rectangle
+    				(start -12.7 20.32)
+    				(end 12.7 -20.32)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type background)
+    				)
+    			)
+    			(pin power_in line
+    				(at 0 22.86 270)
+    				(length 2.54)
+    				(name "3V3"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin input line
+    				(at -15.24 17.78 0)
+    				(length 2.54)
+    				(name "EN"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 2.54 0)
+    				(length 2.54)
+    				(name "IO4"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "3"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 0 0)
+    				(length 2.54)
+    				(name "IO5"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "4"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -2.54 0)
+    				(length 2.54)
+    				(name "IO6"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "5"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -5.08 0)
+    				(length 2.54)
+    				(name "IO7"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "6"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -7.62 0)
+    				(length 2.54)
+    				(name "IO8"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "7"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -10.16 0)
+    				(length 2.54)
+    				(name "IO9"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "8"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin power_in line
+    				(at 0 -22.86 90)
+    				(length 2.54)
+    				(name "GND"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "9"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -12.7 0)
+    				(length 2.54)
+    				(name "IO10"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "10"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at 15.24 17.78 180)
+    				(length 2.54)
+    				(name "IO20/RXD"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "11"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at 15.24 15.24 180)
+    				(length 2.54)
+    				(name "IO21/TXD"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "12"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -15.24 0)
+    				(length 2.54)
+    				(name "IO18"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "13"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 -17.78 0)
+    				(length 2.54)
+    				(name "IO19"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "14"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 5.08 0)
+    				(length 2.54)
+    				(name "IO3"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "15"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 7.62 0)
+    				(length 2.54)
+    				(name "IO2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "16"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 10.16 0)
+    				(length 2.54)
+    				(name "IO1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "17"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin bidirectional line
+    				(at -15.24 12.7 0)
+    				(length 2.54)
+    				(name "IO0"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "18"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -22.86 90)
+    				(length 2.54)
+    				(hide yes)
+    				(name "GND"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "19"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Device:R"
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "R"
+    			(at 2.032 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Value" "R"
+    			(at 0 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at -1.778 0 90)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Resistor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "R res resistor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "R_*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "R_0_1"
+    			(rectangle
+    				(start -1.016 -2.54)
+    				(end 1.016 2.54)
+    				(stroke
+    					(width 0.254)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "R_1_1"
+    			(pin passive line
+    				(at 0 3.81 270)
+    				(length 1.27)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -3.81 90)
+    				(length 1.27)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+    (symbol "Device:C"
+    		(pin_numbers
+    			(hide yes)
+    		)
+    		(pin_names
+    			(offset 0.254)
+    		)
+    		(exclude_from_sim no)
+    		(in_bom yes)
+    		(on_board yes)
+    		(in_pos_files yes)
+    		(duplicate_pin_numbers_are_jumpers no)
+    		(property "Reference" "C"
+    			(at 0.635 2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Value" "C"
+    			(at 0.635 -2.54 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    				(justify left)
+    			)
+    		)
+    		(property "Footprint" ""
+    			(at 0.9652 -3.81 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Datasheet" ""
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "Description" "Unpolarized capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_keywords" "cap capacitor"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(property "ki_fp_filters" "C_*"
+    			(at 0 0 0)
+    			(show_name no)
+    			(do_not_autoplace no)
+    			(hide yes)
+    			(effects
+    				(font
+    					(size 1.27 1.27)
+    				)
+    			)
+    		)
+    		(symbol "C_0_1"
+    			(polyline
+    				(pts
+    					(xy -2.032 0.762) (xy 2.032 0.762)
+    				)
+    				(stroke
+    					(width 0.508)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    			(polyline
+    				(pts
+    					(xy -2.032 -0.762) (xy 2.032 -0.762)
+    				)
+    				(stroke
+    					(width 0.508)
+    					(type default)
+    				)
+    				(fill
+    					(type none)
+    				)
+    			)
+    		)
+    		(symbol "C_1_1"
+    			(pin passive line
+    				(at 0 3.81 270)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "1"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    			(pin passive line
+    				(at 0 -3.81 90)
+    				(length 2.794)
+    				(name ""
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    				(number "2"
+    					(effects
+    						(font
+    							(size 1.27 1.27)
+    						)
+    					)
+    				)
+    			)
+    		)
+    		(embedded_fonts no)
+    	)
+  )
+  (text "ESP32-C3-WROOM-02 running Zimodem (Hayes modem over UART). Antenna end over the board edge, copper keep-out per the module datasheet." (exclude_from_sim no) (at 20 285 0) (effects (font (size 2.5 2.5)) (justify left bottom)) (uuid "cc41c5da-929f-4004-aa42-a7feb8b31b2d"))
+  (text "Flashing: RP2350B acts as USB-UART bridge; firmware sets WIFI_DL=1 then pulses WIFI_EN for download mode." (exclude_from_sim no) (at 20 290 0) (effects (font (size 2.0 2.0)) (justify left bottom)) (uuid "f3fd05fa-6f43-4b3f-802c-96a447c1f992"))
+  (symbol (lib_id "power:GND") (at 330.2 39.37 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "04c51b13-6d34-47a9-bebf-24763d165c90")
+    (property "Reference" "#PWR15" (at 333.2 32.33 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "GND" (at 333.2 34.83 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 330.2 39.37 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "7bdd88e7-3824-4288-9575-1957b691b354"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/d28d46ae-5d37-4c4f-b909-43ed531db596" (reference "#PWR15") (unit 1))))
+  )
+  (label "GND" (at 330.20 39.37 90) (effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "458cbe1c-74f2-49ac-975e-43f49725c68c"))
+  (symbol (lib_id "RF_Module:ESP32-C3-WROOM-02") (at 149.86 119.38 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "e5246902-56b8-44dc-b579-0b4b9de55d0b")
+    (property "Reference" "U40" (at 152.86 92.02 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "ESP32-C3-WROOM-02-N4" (at 152.86 94.52 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "RF_Module:ESP32-C3-WROOM-02" (at 149.86 119.38 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 149.86 119.38 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 149.86 119.38 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "70d746b6-10fc-41c6-832f-294767f2c099"))
+    (pin "2" (uuid "c5a60352-fcf7-4fa9-a65d-8dda6d34904a"))
+    (pin "3" (uuid "769e9448-0aee-4f2d-bcbf-d857457d990a"))
+    (pin "4" (uuid "6acb8094-ca05-40ac-b417-c600b1f54323"))
+    (pin "5" (uuid "9c71485a-71ca-468c-a48e-ff8016bb9980"))
+    (pin "6" (uuid "e26ed521-106b-4e80-854a-6cd1ac21688f"))
+    (pin "7" (uuid "8c53cc1c-c41f-41c4-ada3-159eb9b85d7c"))
+    (pin "8" (uuid "42cc83b4-68bd-4d24-9ca0-d36ee3f1d51f"))
+    (pin "9" (uuid "f2631a01-ae30-4379-94ee-10d025925b2a"))
+    (pin "10" (uuid "0cefaca0-bbc7-44d3-9188-f5489ec606f5"))
+    (pin "11" (uuid "70fe3d80-ef18-4921-aefd-ca8a2e28a641"))
+    (pin "12" (uuid "d2493fb0-7dbb-4928-9cbc-2c8526fdc705"))
+    (pin "13" (uuid "251aa30b-2ffd-4f06-a6a3-03d9648ecc58"))
+    (pin "14" (uuid "2b4a211b-b052-4965-96cf-37b9bae2b2a2"))
+    (pin "15" (uuid "8574fbe3-7d4f-4302-bbe3-fb417aa5d10d"))
+    (pin "16" (uuid "298af3fd-16e1-4fd9-a940-021026e43c1c"))
+    (pin "17" (uuid "28021364-c878-4f42-a9d1-a1c5cde112c8"))
+    (pin "18" (uuid "bbaf4a10-4117-409c-8651-8a0884b60dbf"))
+    (pin "19" (uuid "2fdd0628-c0d5-4eba-b1db-8b09b0174699"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/d28d46ae-5d37-4c4f-b909-43ed531db596" (reference "U40") (unit 1))))
+  )
+  (global_label "+3V3_WIFI" (shape input) (at 149.86 96.52 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "56e025b5-6618-4804-8638-8dc6776614b5"))
+  (label "GND" (at 149.86 142.24 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "733f55de-5e8a-4cc4-8964-ace9d3851c84"))
+  (label "GND" (at 149.86 142.24 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "24f14adc-d697-4796-842e-05c7d08e4147"))
+  (global_label "WIFI_EN" (shape input) (at 134.62 101.60 180) (effects (font (size 1.27 1.27)) (justify right)) (uuid "4a7e4c9c-2e48-4547-b42d-65759e1434a9"))
+  (global_label "nWIFI_BOOT" (shape input) (at 134.62 129.54 180) (effects (font (size 1.27 1.27)) (justify right)) (uuid "11e1f9e8-e89d-4067-9b2b-6cd3b6de2cf2"))
+  (label "ESP_IO8" (at 134.62 127.00 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "9f783f1a-6b5c-4412-8f01-dd9178012d5e"))
+  (global_label "WIFI_TX" (shape input) (at 165.10 101.60 0) (effects (font (size 1.27 1.27)) (justify left)) (uuid "65316222-feb0-4b58-a37f-cfd39e72c150"))
+  (global_label "WIFI_RX" (shape output) (at 165.10 104.14 0) (effects (font (size 1.27 1.27)) (justify left)) (uuid "7f7a100c-6035-4361-b935-2c25e0e56235"))
+  (no_connect (at 134.62 116.84) (uuid "85c4eefb-a08a-4366-abc3-f0db574f106c"))
+  (no_connect (at 134.62 119.38) (uuid "746ab84d-bc95-48d2-b967-6961287a8e5a"))
+  (no_connect (at 134.62 121.92) (uuid "d0d84d33-317c-44ab-b443-c66e692260e9"))
+  (no_connect (at 134.62 124.46) (uuid "29f1ab5f-f284-46d4-8775-6f7a0406a644"))
+  (no_connect (at 134.62 132.08) (uuid "8b586c3c-b216-4691-bd33-722c329d8312"))
+  (no_connect (at 134.62 134.62) (uuid "7a132a6f-92de-4d8c-ad79-f48a796d355a"))
+  (no_connect (at 134.62 137.16) (uuid "3530c26d-0d1b-44c2-9a83-215c8d6393b8"))
+  (no_connect (at 134.62 114.30) (uuid "d47b6a35-e1f2-4617-a5da-7539680d84ab"))
+  (no_connect (at 134.62 111.76) (uuid "1f51c95d-0be9-43a5-a385-b0c33a02238a"))
+  (no_connect (at 134.62 109.22) (uuid "db550f29-f9ea-4c1b-87ba-7e1fb7086e29"))
+  (no_connect (at 134.62 106.68) (uuid "a7cd4b35-c520-4995-8f28-98f4d802fcdf"))
+  (symbol (lib_id "Device:R") (at 229.87 90.17 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "d323fb01-c9be-49f6-9905-43c6defc6eb3")
+    (property "Reference" "R40" (at 232.87 81.86 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 232.87 84.36 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Resistor_SMD:R_0603_1608Metric" (at 229.87 90.17 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 229.87 90.17 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 229.87 90.17 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "ae3c7b74-cf4e-4291-a53c-cb259713c3bc"))
+    (pin "2" (uuid "2c511e2c-8c98-4611-8c4b-b34ec24f0154"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/d28d46ae-5d37-4c4f-b909-43ed531db596" (reference "R40") (unit 1))))
+  )
+  (global_label "+3V3_WIFI" (shape input) (at 229.87 86.36 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "6c998a3e-6e05-44ef-9cd0-3769f1edc573"))
+  (label "ESP_IO8" (at 229.87 93.98 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "5e84feba-0cf1-490f-9546-2d353c5af8b8"))
+  (symbol (lib_id "Device:C") (at 229.87 129.54 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "3e80b840-637e-4b31-9914-9cddbbb9bc95")
+    (property "Reference" "C60" (at 232.87 121.23 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10u" (at 232.87 123.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric" (at 229.87 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 229.87 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 229.87 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "a8184f46-7d31-4a6d-8eee-45577081bb02"))
+    (pin "2" (uuid "430e0637-c62b-49e1-a1b3-3e753d3c8751"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/d28d46ae-5d37-4c4f-b909-43ed531db596" (reference "C60") (unit 1))))
+  )
+  (global_label "+3V3_WIFI" (shape input) (at 229.87 125.73 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "2181d62b-e595-49fc-9cc5-824336ca7c0f"))
+  (label "GND" (at 229.87 133.35 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "26e76d25-a21b-4456-8c10-0e5ed10ed34b"))
+  (symbol (lib_id "Device:C") (at 245.11 129.54 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "1ffae08e-6b17-4177-b9fc-92230d4c7264")
+    (property "Reference" "C61" (at 248.11 121.23 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100n" (at 248.11 123.73 0) (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "Capacitor_SMD:C_0603_1608Metric" (at 245.11 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Datasheet" "" (at 245.11 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (property "Description" "" (at 245.11 129.54 0) (effects (font (size 1.27 1.27)) (justify left) (hide yes)))
+    (pin "1" (uuid "4e7461e3-46fa-48ed-b661-aba3d2904b82"))
+    (pin "2" (uuid "55005444-65d0-4c4a-91ea-6f470af34de4"))
+    (instances (project "tspico-v3" (path "/9088d141-8624-4d5c-91a9-7a3a7a90b3cc/d28d46ae-5d37-4c4f-b909-43ed531db596" (reference "C61") (unit 1))))
+  )
+  (global_label "+3V3_WIFI" (shape input) (at 245.11 125.73 90) (effects (font (size 1.27 1.27)) (justify left)) (uuid "1a76c998-adaf-4d98-9a81-17e59deed9e6"))
+  (label "GND" (at 245.11 133.35 270) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "02d2431b-560f-4861-b8d1-8d3adbcb2824"))
+  (text "R40: IO8 must be high during a download-mode boot. IO9 low = download mode (driven by nWIFI_BOOT)." (exclude_from_sim no) (at 130 180 0) (effects (font (size 1.5 1.5)) (justify left bottom)) (uuid "be348f29-0e96-47f7-80df-c2fec41c78e1"))
+  (text "Zimodem's modem-status pins (DCD, RI, DSR, DTR, RTS/CTS) are not routed; XON/XOFF flow control." (exclude_from_sim no) (at 130 183 0) (effects (font (size 1.5 1.5)) (justify left bottom)) (uuid "c7905282-39b5-416f-9a0c-38cb8ea2d7ef"))
   (embedded_fonts no)
 )
