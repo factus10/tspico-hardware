@@ -5,14 +5,14 @@ Contents (see docs/v3-architecture.md sections 2, 3, 5):
   P1   TS2068 edge connector
   U1   74LVC245  Z80 A0-A7   <-> MA0-MA7        DIR=DMA_EN, always enabled
   U2   74LVC245  Z80 A8-A15  <-> MA8-MA15
-  U3   74LVC245  Z80 D0-D7   <-> MD0-MD7        DIR=DATA_DIR (nRD xor DMA_EN), /OE=nDATA_OE
+  U3   74LVC245  Z80 D0-D7 (B) <-> MD0-MD7 (A)  DIR=DATA_DIR (nRD xor nDMA_EN), /OE=nDATA_OE
   U4   74LVC245  Z80 control inputs -> 3.3 V copies for the MCU (fixed B->A)
   U5   74LVC04   inverters for the gating below, one spare
   U6   74LVC08   nMREQ_V = /(MREQ & /RFSH), nIORQ_V = /(IORQ & /M1),
                  nDMA_MREQ = nMRD & nMWR, one spare
   U7   74LVC06   open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT, nBUSRQ, nNMI, nRESET
   U8   74LVC126  DMA bus drivers for nMREQ, nRD, nWR (OE = DMA_EN)
-  U9   74LVC1G86 DATA_DIR = nRD xor DMA_EN
+  U9   74LVC1G86 DATA_DIR = nRD xor nDMA_EN
   SW1/SW2 TS reset and NMI buttons; R1 RESET_HOLD pull-up; R2/R3 EAR divider
   C1-C8 decoupling
 Net naming: n<NAME> = active low. Signals with suffix _L are 3.3 V copies of
@@ -76,42 +76,48 @@ def main():
     def transceiver(ref, x, y, value="74LVC245APW"):
         return s.place("74xx:74LS245", ref, value, TSSOP20, x, y)
 
+    # Pin assignments follow the connector's finger order so the tracks from
+    # the fingers to the transceivers do not cross (at rot 270 on the board
+    # B7 is the leftmost pin, B0 the rightmost; Ai sits directly above Bi).
+    # Z80-side finger order, left to right: D7 D0 D1 D2 D6 D5 D3 D4 (A side);
+    # A0 A1 A2 A3 A15 A14 A13 A12 A11 A10 A9 A8 A7 A6 A5 A4 (B side).
     U1 = transceiver("U1", 150, 50)
-    for i in range(8):
-        s.label(f"A{i}", U1.pin(f"B{i}"))          # Z80 side (B)
-        s.glabel(f"MA{i}", U1.pin(f"A{i}"), BI)    # local side (A); driven by ALO in DMA mode
+    for b, idx in zip(range(7, -1, -1), [0, 1, 2, 3, 15, 14, 13, 12]):
+        s.label(f"A{idx}", U1.pin(f"B{b}"))
+        s.glabel(f"MA{idx}", U1.pin(f"A{b}"), BI)
     s.glabel("DMA_EN", U1.pin("1"), IN)
     s.label("GND", U1.pin("19"))
     s.label("+3V3", U1.pin("20"))
     s.label("GND", U1.pin("10"))
 
     U2 = transceiver("U2", 150, 110)
-    for i in range(8):
-        s.label(f"A{8 + i}", U2.pin(f"B{i}"))
-    for i in range(8):
-        s.glabel(f"MA{8 + i}", U2.pin(f"A{i}"), BI)
+    for b, idx in zip(range(7, -1, -1), [11, 10, 9, 8, 7, 6, 5, 4]):
+        s.label(f"A{idx}", U2.pin(f"B{b}"))
+        s.glabel(f"MA{idx}", U2.pin(f"A{b}"), BI)
     s.glabel("DMA_EN", U2.pin("1"), IN)
     s.label("GND", U2.pin("19"))
     s.label("+3V3", U2.pin("20"))
     s.label("GND", U2.pin("10"))
 
-    # ---- U3 data transceiver: A side = Z80, B side = local (DIR = nRD in Z80 mode)
+    # ---- U3 data transceiver: B side = Z80 (faces the fingers), A side = local MD.
+    # DIR = 1 means A->B (local -> Z80): high on a Z80 read in Z80 mode, high on
+    # a write in DMA mode: DATA_DIR = nRD xor nDMA_EN (U9).
     U3 = transceiver("U3", 150, 170)
-    for i in range(8):
-        s.label(f"D{i}", U3.pin(f"A{i}"))
-        s.glabel(f"MD{i}", U3.pin(f"B{i}"), BI)
+    for b, idx in zip(range(7, -1, -1), [7, 0, 1, 2, 6, 5, 3, 4]):
+        s.label(f"D{idx}", U3.pin(f"B{b}"))
+        s.glabel(f"MD{idx}", U3.pin(f"A{b}"), BI)
     s.label("DATA_DIR", U3.pin("1"))
     s.glabel("nDATA_OE", U3.pin("19"), IN)
     s.label("+3V3", U3.pin("20"))
     s.label("GND", U3.pin("10"))
 
-    # ---- U4 control inputs, fixed B (Z80) -> A (MCU) -------------------------
+    # ---- U4 control inputs, fixed B (Z80) -> A (MCU), in finger order ----------
     U4 = transceiver("U4", 150, 230)
-    ctl = [("nRD", "nRD_L"), ("nWR", "nWR_L"), ("nROSCS", "nROSCS_L"), ("nEXROM", "nEXROM_L"),
-           ("nINT", "nINT_L"), ("A14", "Z80_A14"), ("A15", "Z80_A15"), ("SPKR_TAPE", "TAPE_IN")]
-    for i, (src, dst) in enumerate(ctl):
-        s.label(src, U4.pin(f"B{i}"))
-        s.glabel(dst, U4.pin(f"A{i}"), OUT)
+    ctl = [("SPKR_TAPE", "TAPE_IN"), ("nINT", "nINT_L"), ("A15", "Z80_A15"), ("A14", "Z80_A14"),
+           ("nRD", "nRD_L"), ("nWR", "nWR_L"), ("nEXROM", "nEXROM_L"), ("nROSCS", "nROSCS_L")]
+    for b, (src, dst) in zip(range(7, -1, -1), ctl):
+        s.label(src, U4.pin(f"B{b}"))
+        s.glabel(dst, U4.pin(f"A{b}"), OUT)
     s.label("GND", U4.pin("1"))     # DIR low: B -> A
     s.label("GND", U4.pin("19"))    # always enabled
     s.label("+3V3", U4.pin("20"))
@@ -171,7 +177,7 @@ def main():
 
     # ---- U9 XOR: DATA_DIR = nRD xor DMA_EN -------------------------------------
     U9 = s.place("74xGxx:74LVC1G86", "U9", "74LVC1G86", SOT23_5, 260, 250)
-    s.label("nRD", U9.pin("1")); s.glabel("DMA_EN", U9.pin("2"), IN); s.label("DATA_DIR", U9.pin("4"))
+    s.label("nRD", U9.pin("1")); s.glabel("nDMA_EN", U9.pin("2"), IN); s.label("DATA_DIR", U9.pin("4"))
     s.label("+3V3", U9.pin("5")); s.label("GND", U9.pin("3"))
 
     # ---- reset / NMI buttons, pull-down, tape divider --------------------------

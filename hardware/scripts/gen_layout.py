@@ -40,33 +40,34 @@ def row(refs, x0, y, dx, rot=0):
 
 # Body is 130 x 64 mm (tongue below y = 64). Rows above the fingers at 8 mm pitch.
 # Left edge: ESP32 antenna (top corner), USB-C, micro SD. Right edge: audio jack, DE-9.
-# Z80 transceivers above the fingers, B side (Z80) facing the connector
-row(["U1", "U2", "U3", "U4"], 30, 58.5, 18, 270)
-row(["C1", "C2", "C3", "C4"], 38, 58.5, 18, 90)
-# gating, open-drain, DMA drivers, XOR, address muxes
-row(["U5", "U6", "U7", "U8"], 25, 50.5, 12, 270)
-P["U9"] = (73, 50.5, 0)
-row(["C5", "C6", "C7", "C8"], 31, 50.5, 12, 90)
-row(["U10", "U11"], 84, 50.5, 12, 270)
-row(["C10", "C11"], 90, 50.5, 12, 90)
-# registers, power-on-reset parts and the joystick jumper near the bottom right
-row(["U12", "U13", "U14", "U15", "U16"], 28, 42.5, 16, 270)
-row(["C12", "C13", "C14", "C15"], 35, 42.5, 16, 90)
-P["C16"] = (98, 42.5, 90)
-P["R4"], P["C9"], P["D1"] = (95.5, 60, 0), (99, 60, 0), (103, 60, 0)
-P["JP10"] = (92, 62.5, 0)
-# RP2350B core (bottom-layer keepout is added under U20 by the script)
-P["U20"] = (62, 26, 0)
+# Row 3 (y 58.5): transceivers in finger order: data (fingers x 29-52), address low
+# (44-62), address high (64-82), control (54-92). Bit order inside each is set in the schematic.
+P["U3"], P["C3"] = (40, 58.5, 270), (48, 58.5, 90)
+P["U1"], P["C1"] = (56, 58.5, 270), (64, 58.5, 90)
+P["U2"], P["C2"] = (74, 58.5, 270), (82, 58.5, 90)
+P["U4"], P["C4"] = (92, 58.5, 270), (100, 58.5, 90)
+# Row 2 (y 50.5): XOR, DMA drivers, inverters, ANDs, open-drain drivers
+P["U9"] = (30, 50.5, 0)
+row(["U8", "U5", "U6", "U7"], 42, 50.5, 12, 270)
+row(["C8", "C5", "C6", "C7"], 48, 50.5, 12, 90)
+# Row 1 (y 42.5): address muxes and the registers, the MD bus block
+row(["U10", "U11", "U12", "U13", "U14", "U15", "U16"], 26, 42.5, 12, 270)
+row(["C10", "C11", "C12", "C13", "C14", "C15", "C16"], 32.5, 42.5, 12, 90)
+P["R4"], P["C9"], P["D1"] = (98, 62, 0), (101.5, 62, 0), (105.5, 62, 0)
+P["JP10"] = (85, 62.5, 0)
+# RP2350B core, rotated so GPIO0-7 (MD bus) sit at the bottom-left corner, the
+# control GPIOs along the bottom, QSPI/USB on the left, crystal on the right
+P["U20"] = (62, 26, 90)
 for i, r in enumerate(["C23", "C24", "C25", "C26", "C27"]):
     P[r] = (52.5, 19 + 3.5 * i, 0)
 for i, r in enumerate(["C28", "C29", "C30", "C31", "C32"]):
     P[r] = (71.5, 19 + 3.5 * i, 0)
 P["C33"], P["C34"] = (58, 17, 90), (66, 17, 90)
-row(["L1", "C20", "C21", "C22"], 54, 37.5, 4.5, 0)
-P["Y1"], P["C35"], P["C36"], P["R20"] = (76.2, 31, 0), (72.5, 35, 0), (79.5, 35, 0), (76.2, 27, 90)
-P["U21"], P["C37"], P["R21"] = (46, 13, 0), (44, 8, 0), (40, 17, 0)
-P["U22"], P["C38"] = (80, 13, 0), (76, 17, 90)
-P["TP1"], P["TP2"], P["TP3"] = (46, 30, 0), (46, 33.5, 0), (46, 37, 0)
+row(["L1", "C20", "C21", "C22"], 52, 37, 4.5, 0)
+P["Y1"], P["C35"], P["C36"], P["R20"] = (77, 26, 0), (77, 21.5, 0), (77, 30.5, 0), (81, 26, 90)
+P["U21"], P["C37"], P["R21"] = (46, 20, 0), (40, 20, 90), (40, 25, 0)
+P["U22"], P["C38"] = (46, 30, 0), (40, 30, 90)
+P["TP1"], P["TP2"], P["TP3"] = (6, 46, 0), (9.5, 46, 0), (13, 46, 0)
 # top edge: ESP32-C3 (antenna over the edge), LED, buttons on 0.5 in centres, OLED header
 P["U40"] = (20, 8, 0)
 P["C60"], P["C61"], P["R40"] = (36, 19, 0), (36, 23, 0), (36, 27, 0)
@@ -83,29 +84,30 @@ for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
     P[r] = (28.5, 27 + 2.5 * i, 0)
 P["C50"], P["C51"] = (32, 30, 0), (32, 34, 0)
-# power block, top right, below the OLED header
+# power block, top right, below the OLED header; LDOs right of the crystal
 P["D2"], P["D3"] = (98, 12, 0), (98, 17, 0)
 P["C40"], P["C41"] = (106.5, 14, 0), (117, 14, 0)
-P["U30"], P["C42"], P["C43"] = (86.5, 23, 0), (80, 23, 0), (93, 23, 0)
-P["U31"], P["C44"], P["C45"], P["C46"] = (86.5, 31, 0), (80, 31, 0), (93, 31, 0), (107.5, 23, 0)
+P["U30"], P["C42"], P["C43"] = (86.5, 23, 0), (82, 15, 0), (91, 15, 0)
+P["U31"], P["C44"], P["C45"], P["C46"] = (86.5, 31, 0), (82, 36, 0), (91, 36, 0), (107.5, 23, 0)
 # right edge: audio jack, then the DE-9 (face 7.7 mm beyond the pin-1 row)
 P["J4"] = (121.9, 24, 270)
 P["J5"] = (122.3, 41, 90)
-# audio: op-amp below the LDO caps, passives in signal order in three rows of six
-P["U50"], P["C79"] = (99.5, 30, 0), (105, 30, 0)
+# audio: op-amp below the power caps, passives in signal order in three rows of six
+P["U50"], P["C79"] = (99.5, 27, 0), (105, 28, 0)
 for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):
-    P[r] = (97 + 3.4 * i, 35, 0)
+    P[r] = (97 + 3.4 * i, 32, 0)
 for i, r in enumerate(["R75", "C75", "R76", "C76", "R77", "R78"]):
-    P[r] = (97 + 3.4 * i, 38, 0)
-for i, r in enumerate(["C70", "R70", "C80", "R80", "C81", "R81"]):
-    P[r] = (101.5 + 3.4 * i, 41, 0)
+    P[r] = (97 + 3.4 * i, 35, 0)
+for i, r in enumerate(["C70", "R70", "C80", "R80", "C81"]):
+    P[r] = (103 + 3.4 * i, 38, 0)
+P["R81"] = (92, 38.5, 0)
 # joystick: one row per line beside the DE-9 pins
 for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
                                     ["R96", "R97", "R98", "R99", "R100", "R101"],
                                     ["C90", "C91", "C92", "C93", "C94", "C95"])):
-    P[rs], P[rp], P[c] = (106, 44 + 2.5 * i, 0), (110, 44 + 2.5 * i, 0), (114, 44 + 2.5 * i, 0)
+    P[rs], P[rp], P[c] = (108, 45.5 + 2.5 * i, 0), (112, 45.5 + 2.5 * i, 0), (116, 45.5 + 2.5 * i, 0)
 # misc interface passives in the left margin below the SD
-P["R1"], P["R2"], P["R3"] = (10, 56, 0), (10, 51, 0), (10, 46, 0)
+P["R1"], P["R2"], P["R3"] = (10, 59, 0), (10, 55, 0), (10, 51, 0)
 
 # ---------------------------------------------------------------------------
 
@@ -219,7 +221,7 @@ def main():
     ko = pcbnew.ZONE(board)
     ko.SetIsRuleArea(True)
     ko.SetDoNotAllowTracks(True)
-    ko.SetDoNotAllowVias(True)
+    ko.SetDoNotAllowVias(False)      # decoupling vias are fine; keep tracks off the bottom
     ko.SetLayer(pcbnew.B_Cu)
     ko.SetZoneName("U20_keepout_B")
     ux, uy = P["U20"][0], P["U20"][1]
