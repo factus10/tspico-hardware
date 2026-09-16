@@ -39,9 +39,9 @@ def main():
     s.glabel("+5V_EDGE", D2.pin("A"), IN); s.label("+5V", D2.pin("K"))
     D3 = s.place("Device:D_Schottky", "D3", "SS34", D_SMA, 80, 110, rot=0)
     s.glabel("VBUS", D3.pin("A"), IN); s.label("+5V", D3.pin("K"))
-    F1 = s.place("power:PWR_FLAG", "#FLG10", "PWR_FLAG", "", 50, 90)
+    F1 = s.place("power:PWR_FLAG", "#FLG13", "PWR_FLAG", "", 50, 90)
     s.glabel("+5V_EDGE", F1.pin("1"), IN)
-    F2 = s.place("power:PWR_FLAG", "#FLG11", "PWR_FLAG", "", 50, 110)
+    F2 = s.place("power:PWR_FLAG", "#FLG14", "PWR_FLAG", "", 50, 110)
     s.glabel("VBUS", F2.pin("1"), IN)
     s.text("D2/D3: SS34 (3 A, SMA). About 0.35 V drop at 0.5 A; the 1117-LV LDOs need only 0.35 V headroom.", 40, 125, 1.5)
 

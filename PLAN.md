@@ -70,7 +70,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - Sheets: 2068 interface (fingers, transceivers, gating, open-drain drivers, DMA drivers, reset, buttons, tape divider), local bus and registers, RP2350B core, power (diode-OR, two LDOs, bulk), SD and OLED, WiFi module, audio (PWM filters, mixer, jack), joystick. All drawn 2026-09-16; ERC clean.
 - ERC clean; export netlist and a GPIO cross-reference table for the firmware.
 
-### Phase 3: Layout
+### Phase 3: Layout (placement done 2026-09-16; routing pending)
 - Keep 130 x 100 mm and the connector position unless the group wants a smaller card; four mounting holes.
 - 4 layers. RP2350B and its QSPI flash/PSRAM tightly placed per the RP2350 hardware design guide; crystal and USB per the same; ESP32-C3 antenna at a board edge with keep-out; SD slot and 3.5 mm jack on a side edge; DE-9 and OLED header where they are reachable with the card plugged in; buttons along the right edge; audio section away from the switching regulator.
 - JLCPCB PCBA rules: 0603 minimum, one side, fiducials, no parts within 3 mm of the fingers.
