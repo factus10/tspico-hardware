@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "6686e776-3c28-4d9e-a674-294d9041be67")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: Power") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "5V input OR-ing (edge +5V, USB VBUS), 3.3V LDOs, optional +15V buck (DNP), bulk capacitance" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "00cc1277-ed48-4090-bcc4-13ecd6c6c7a1"))
+  (embedded_fonts no)
+)

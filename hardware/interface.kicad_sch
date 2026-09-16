@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "01d86db7-145c-4712-840a-73d64642c89b")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: 2068 Interface") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "Edge connector, address/data/control transceivers, open-drain drivers, reset, buttons, tape EAR/MIC dividers" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "60839686-b1fe-4a62-9a30-d3d9657134c5"))
+  (embedded_fonts no)
+)

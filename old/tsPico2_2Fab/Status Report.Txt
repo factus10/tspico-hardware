@@ -1,0 +1,14 @@
+Project Outputs Generation Report
+---------------------------------
+Start Output Generation At 10:55:14 AM On 9/11/2023
+
+Output: Pick Place
+Type  : Pick Place
+From  : Variant [[No Variations]] of PCB Document [tsPico.CSPCBDoc]
+   Generated File[Pick Place for tsPico.txt]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 10:55:14 AM On 9/11/2023

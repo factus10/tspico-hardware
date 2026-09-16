@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "f402a3cb-1ac5-4806-a07a-515415a2061a")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: Memory Bus") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "Flash (TSOP-32), SRAM (SOP-32), ALO/AHI/CTL/STAT registers, 74LVC139, 74LVC157, 74LVC125 DMA drivers" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "5b19c470-c860-4e2f-b137-872fc8541eef"))
+  (embedded_fonts no)
+)

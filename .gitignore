@@ -1,0 +1,17 @@
+# KiCad
+*-backups/
+*.kicad_prl
+*.lck
+~*.lck
+_autosave-*
+fp-info-cache
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.bak
+hardware/fab/
+hardware/*.rpt
+hardware/*.json
+!hardware/tspico-v3.kicad_pro
+# OS / editors
+.DS_Store
+__pycache__/

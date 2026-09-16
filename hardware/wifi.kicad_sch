@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "41ad5754-742c-43eb-8624-fcc17de46ace")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: WiFi") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "ESP32-C3 module on UART, enable from CTL, antenna keep-out" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "46eac35e-23a9-4dc3-b62e-406ea23ae38d"))
+  (embedded_fonts no)
+)

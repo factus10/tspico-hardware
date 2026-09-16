@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "86144d1c-74ab-4505-bfdd-4de2a126796d")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: Joystick") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "DE-9 Kempston into STAT buffer, ESD array" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "a1b8c92b-e0f7-4b80-a015-ee69d9776fda"))
+  (embedded_fonts no)
+)

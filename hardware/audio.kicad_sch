@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "90d631f6-e6d9-451f-9d39-ff4a79b9db46")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: Audio") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "PWM stereo RC filters, op-amp mixer with 2068 SOUND, 3.5 mm jack" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "4d98a329-1bde-4a5f-8b71-1c893c069799"))
+  (embedded_fonts no)
+)

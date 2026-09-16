@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "d95b5ab1-178f-4c98-bb3f-b02ec4b74db0")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: SD and Display") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "Micro SD socket on SPI0, 128x96 SSD1351 OLED header on SPI1" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "cb267dcb-4cbe-4286-a1e7-714517acb046"))
+  (embedded_fonts no)
+)

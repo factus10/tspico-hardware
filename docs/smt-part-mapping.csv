@@ -1,0 +1,29 @@
+Designator,Function,v2.2 part (through-hole),v2.2 footprint,Proposed SMT part,Proposed footprint,Notes
+U1,Hex inverter (5V TTL),SN74LS04N,DIP-14,SN74LS04D,SOIC-14,Keep LS or HCT. Do NOT use plain HC: several inputs are driven at 3.3V by the Pico and need TTL thresholds.
+U9,Quad AND open-collector,SN74LS09N,DIP-14,SN74LS09D,SOIC-14,Open-collector is functional (wire-AND on /BE_DRV with R3/R7/R8 pull-ups). Alternative must also be open-collector/open-drain.
+U5,Triple 3-input NOR,SN74LS27N,DIP-14,SN74LS27D,SOIC-14,
+U4,Quad OR,SN74LS32N,DIP-14,SN74LS32D,SOIC-14,
+U8,Quad 2:1 mux,SN74LS157N,DIP-16,SN74LS157D,SOIC-16,
+U6,Data bus level shifter,SN74LVC245AN,DIP-20,SN74LVC245ADW,SOIC-20W (7.5mm),TSSOP-20 (SN74LVC245APW) if using assembly service and want smaller.
+U7,Control bus level shifter,SN74LVC245AN,DIP-20,SN74LVC245ADW,SOIC-20W (7.5mm),Same as U6.
+U10,4Mbit flash,SST39SF040-70-4C-PHE,DIP-32,SST39SF040-70-4C-NHE,PLCC-32 (in SMD PLCC socket),Socket keeps flash removable/programmable off-board. Option B: SST39SF040-70-4I-WHE in TSOP-32 soldered (smaller; in-circuit programming only).
+U13,512Kx8 SRAM,AS6C4008-55PCN,DIP-32,AS6C4008-55SIN,SOP-32 (525 mil),Runs at 5V as before (part is 2.7-5.5V). Option: AS6C4008-55STIN in TSOP-I 32.
+U11,555 timer (reset pulse),TLC555IP,DIP-8,TLC555CD or TLC555ID,SOIC-8,
+U2,Raspberry Pi Pico,SC0915 on socket headers,RPIPICO (2x20 TH),Raspberry Pi Pico (SC0915) soldered by castellations,Pico SMD castellated footprint,Same footprint accepts Pico 2 (RP2350). Keep USB at a board edge; keep BOOTSEL and SWD pads reachable.
+U3,Micro SD socket,6-pin SD breakout module (BOM lists TE 2041021-4),SDMODULE1_FLIPPED,Molex 104031-0811 or Hirose DM3AT-SF-PEJM5,Push-push micro SD SMD,3.3V SPI direct from Pico as before. Add 0.1uF + 10uF at socket VDD. Card-detect pin optional.
+Q1,Reset driver NPN,2N3904,TO-92,MMBT3904,SOT-23,
+D2,5V bus to Pico VSYS Schottky,SB260 (60V 2A),DO-15,SS24 or B5819W,SMA or SOD-123,Current is small (Pico + SD). SOD-123 is fine; SMA gives margin.
+"C1,C3-C11,C13,C15",0.1uF decoupling (12 pcs),K104K10X7RF5UH5,CAPH5 radial,0.1uF 50V X7R,0805 (0603 if PCBA),
+"C2,C12,C16",10uF bulk,ECE-A1CKA100 electrolytic,CAP10EL radial,10uF 16V X5R/X7R ceramic,0805 or 1206,C12 is the 555 timing cap (RC with R5 220k). Ceramic is OK but use X7R and note tolerance; or keep it as a small SMD electrolytic if the reset pulse width matters.
+"R2,R4,R6,R7,R8,R9,R10",4K7 pull-ups/base,CF18 axial,CF18,4K7 1%,0805 (0603 if PCBA),
+R1,1M (555 reset),CF18 axial,CF18,1M,0805,
+R3,2K7 pull-up (/BE_DRV to 5V),CF18 axial,CF18,2K7,0805,
+R5,220k (555 timing),CF18 axial,CF18,220k,0805,
+R11,2k2 (Q1 base pulldown),CF18 axial,CF18,2k2,0805,
+"SW1,SW2,SW3",NMI / TS reset / Pico reset,JTP1230A,TACSW_6.5x4.5 TH,6mm SMD tactile (e.g. C&K PTS645 SMT or Alps SKQG),SMD tactile,Consider right-angle side-actuated so they can be pressed with the card plugged in.
+"JP2,JP3,JP5",Enable each switch,2-pin header + shunt,HDR2,Keep 2.54mm TH header OR 2-pad solder jumper,,User-config option; decide per assembly method.
+JP1,/BE_OUT to /BE_DRV link,2-pin header + shunt,HDR2,Keep 2.54mm TH header OR solder jumper,,
+P10,Flash write enable (/WR to nWE),2-pin header + shunt,HDR2,Keep 2.54mm TH header OR solder jumper,,Field-programming of flash depends on this; a header is friendlier.
+JP4,I/O address select ($00-0F / $10-1F),3-pin header + shunt,SIP3,Keep 2.54mm TH header (or SMD slide switch),,User-facing option; keep a header.
+P1,TS2068 expansion edge connector,PCB edge fingers,TS2068A,Unchanged PCB edge fingers,Copy geometry exactly,"32 positions at 0.100 in, 31 fingers/side, key slot at position 6, fingers 65 x 325 mil, both sides, 1.6mm board, hard gold + bevel."
+"OH0,OH1",OSHW logos,silkscreen,-,Unchanged,,

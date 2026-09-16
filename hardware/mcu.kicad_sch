@@ -1,0 +1,8 @@
+(kicad_sch (version 20250114) (generator "gen_board.py") (generator_version "1")
+  (uuid "e17ef6cb-e888-4216-8fba-9650209c7e34")
+  (paper "A3")
+  (title_block (title "TS-Pico v3: RP2350B Core") (rev "0.1") (company "Timex/Sinclair Online User Group"))
+  (lib_symbols)
+  (text "RP2350B, W25Q128 QSPI flash, APS6404L PSRAM (CS1=GP47), 12 MHz crystal, USB-C, BOOTSEL/RUN, SWD pads" (exclude_from_sim no) (at 30 30 0) (effects (font (size 2 2)) (justify left bottom)) (uuid "0ac97702-7df1-4fd2-8864-94150416349b"))
+  (embedded_fonts no)
+)
