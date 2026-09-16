@@ -175,6 +175,15 @@ class Sheet:
                  ("Description", "", (x, y), True)]
         for k, v in (fields or {}).items():
             props.append((k, v, (x, y), True))
+        try:
+            from parts import lookup
+            hit = lookup(value, footprint)
+        except ImportError:
+            hit = None
+        if hit and not any(k == "LCSC" for k, *_ in props):
+            mpn, lcsc, note = hit
+            props.append(("MPN", mpn, (x, y), True))
+            props.append(("LCSC", lcsc, (x, y), True))
         lines = [f'(symbol (lib_id "{lib_id}") (at {x} {y} {rot}) (unit {unit})',
                  f'  (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp {"yes" if dnp else "no"})',
                  f'  (uuid "{u()}")']

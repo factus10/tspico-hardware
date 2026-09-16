@@ -57,11 +57,11 @@ def main():
     mixR = channel(s, "R", 170, 75)
 
     # U50 buffers
-    U50a = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002-E/SN", SOIC8, 200, 110, unit=1)
+    U50a = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002", SOIC8, 200, 110, unit=1)
     s.label(mixL, U50a.pin("+")); s.label("L_OUT", U50a.pin("-")); s.label("L_OUT", U50a.pin("1"))
-    U50b = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002-E/SN", SOIC8, 200, 170, unit=2)
+    U50b = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002", SOIC8, 200, 170, unit=2)
     s.label(mixR, U50b.pin("+")); s.label("R_OUT", U50b.pin("-")); s.label("R_OUT", U50b.pin("7"))
-    U50p = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002-E/SN", SOIC8, 200, 230, unit=3)
+    U50p = s.place("Amplifier_Operational:MCP6002-xSN", "U50", "MCP6002", SOIC8, 200, 230, unit=3)
     s.label("+5V", U50p.pin("V+")); s.label("GND", U50p.pin("V-"))
     C79 = s.place("Device:C", "C79", "100n", C0603, 230, 230)
     s.label("+5V", C79.pin("1")); s.label("GND", C79.pin("2"))

@@ -21,7 +21,7 @@ R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
 L_FP = "Inductor_SMD:L_1008_2520Metric"
-SW_FP = "Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92"
+SW_FP = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
 TP_FP = "TestPoint:TestPoint_Pad_1.5x1.5mm"
 
 OUT, IN, BI = "output", "input", "bidirectional"
@@ -146,12 +146,12 @@ def main():
     s.label("CC1", R24.pin("1")); s.label("GND", R24.pin("2"))
     R25 = s.place("Device:R", "R25", "5k1", R0603, 95, 40)
     s.label("CC2", R25.pin("1")); s.label("GND", R25.pin("2"))
-    R26 = s.place("Device:R", "R26", "27", R0603, 80, 85)
+    R26 = s.place("Device:R", "R26", "33", R0603, 80, 85)
     s.label("USB_DP_C", R26.pin("1")); s.label("USB_DP", R26.pin("2"))
-    R27 = s.place("Device:R", "R27", "27", R0603, 95, 85)
+    R27 = s.place("Device:R", "R27", "33", R0603, 95, 85)
     s.label("USB_DM_C", R27.pin("1")); s.label("USB_DM", R27.pin("2"))
     s.text("J1: USB 2.0. VBUS -> power sheet. SBU unconnected.", 20, 100, 1.5)
-    s.text("R24/R25 5.1 k Rd. R26/R27 27 R series.", 20, 103, 1.5)
+    s.text("R24/R25 5.1 k Rd. R26/R27 33 R series (JLC basic; 27 R is not).", 20, 103, 1.5)
 
     # ---- SWD pads ---------------------------------------------------------------------
     for k, (ref, net) in enumerate([("TP1", "SWCLK"), ("TP2", "SWDIO"), ("TP3", "GND")]):

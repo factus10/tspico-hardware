@@ -17,7 +17,7 @@ from schlib import Sheet  # noqa: E402
 
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-CP_FP = "Capacitor_SMD:CP_Elec_6.3x7.7"
+CP_FP = "Capacitor_SMD:CP_Elec_6.3x5.9"
 D_SMA = "Diode_SMD:D_SMA"
 SOT223 = "Package_TO_SOT_SMD:SOT-223-3_TabPin2"
 
@@ -51,17 +51,17 @@ def main():
     s.text("C40/C41: bulk for WiFi transmit bursts, low-ESR polymer.", 120, 105, 1.5)
 
     # ---- U30 logic LDO -----------------------------------------------------------
-    U30 = s.place("Regulator_Linear:TLV1117-33", "U30", "TLV1117LV33DCY", SOT223, 230, 90)
+    U30 = s.place("Regulator_Linear:TLV1117-33", "U30", "TLV1117LV33", SOT223, 230, 90)
     s.label("+5V", U30.pin("VI")); s.label("+3V3", U30.pin("VO")); s.label("GND", U30.pin("GND"))
     for k, (ref, net) in enumerate((("C42", "+5V"), ("C43", "+3V3"))):
         C = s.place("Device:C", ref, "10u", C0805, 210 + 40 * k, 110)
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
 
     # ---- U31 WiFi LDO ------------------------------------------------------------
-    U31 = s.place("Regulator_Linear:TLV1117-33", "U31", "TLV1117LV33DCY", SOT223, 230, 160)
+    U31 = s.place("Regulator_Linear:TLV1117-33", "U31", "TLV1117LV33", SOT223, 230, 160)
     s.label("+5V", U31.pin("VI")); s.glabel("+3V3_WIFI", U31.pin("VO"), OUT); s.label("GND", U31.pin("GND"))
-    for k, (ref, net, val, fp) in enumerate((("C44", "+5V", "10u", C0805), ("C45", "+3V3_WIFI", "10u", C0805), ("C46", "+3V3_WIFI", "100u", CP_FP))):
-        C = s.place("Device:C" if val != "100u" else "Device:C_Polarized", ref, val, fp, 210 + 30 * k, 180)
+    for k, (ref, net, val, fp) in enumerate((("C44", "+5V", "10u", C0805), ("C45", "+3V3_WIFI", "10u", C0805), ("C46", "+3V3_WIFI", "220u", CP_FP))):
+        C = s.place("Device:C" if val != "220u" else "Device:C_Polarized", ref, val, fp, 210 + 30 * k, 180)
         (s.glabel(net, C.pin("1"), IN) if net == "+3V3_WIFI" else s.label(net, C.pin("1"))); s.label("GND", C.pin("2"))
     s.text("U30/U31: TLV1117LV33 (SOT-223, 1 A, 0.35 V dropout, 1117 pinout). Alternate: AMS1117-3.3 (1.1 V dropout, marginal).", 195, 200, 1.5)
     s.text("Input current budget: about 250 mA average, 600 mA peak with WiFi transmit. Do not exceed 1 A from the 2068's own rail.", 195, 204, 1.5)

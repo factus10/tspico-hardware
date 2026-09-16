@@ -30,7 +30,7 @@ TSSOP14 = "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
 SOT23_5 = "Package_TO_SOT_SMD:SOT-23-5"
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
-SW_FP = "Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92"
+SW_FP = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
 
 OUT, IN, BI = "output", "input", "bidirectional"
 

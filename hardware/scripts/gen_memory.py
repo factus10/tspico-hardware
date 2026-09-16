@@ -55,7 +55,7 @@ def main():
         s.label("+3V3", U.pin("20")); s.label("GND", U.pin("10"))
 
     # ---- U14 CTL register --------------------------------------------------------
-    U14 = s.place("74xx:74LS273", "U14", "74LVC273APW", TSSOP20, 290, 80)
+    U14 = s.place("74xx:74LS273", "U14", "74HC273PW", TSSOP20, 290, 80)
     ctl_bits = ["DMA_EN", "BUSRQ", "NMI_REQ", "nOLED_RST", "WIFI_EN", "WIFI_DL", "LED", None]
     for bit in range(8):
         s.glabel(f"MD{bit}", U14.pin(f"D{bit}"), BI)
@@ -78,18 +78,18 @@ def main():
     s.label("+3V3", U15.pin("VCC")); s.label("GND", U15.pin("GND"))
 
     # ---- U16 register select ---------------------------------------------------------
-    U16a = s.place("74xx:74LS139", "U16", "74LVC139APW", TSSOP16, 190, 170, unit=1)
+    U16a = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 170, unit=1)
     s.glabel("REG_SEL0", U16a.pin("A0"), IN)
     s.glabel("REG_SEL1", U16a.pin("A1"), IN)
     s.glabel("nREG_STB", U16a.pin("E"), IN)
     for n, net in enumerate(["nWR_ALO", "nWR_AHI", "nWR_CTL", "nRD_STAT"]):
         s.label(net, U16a.pin(f"O{n}"))
-    U16b = s.place("74xx:74LS139", "U16", "74LVC139APW", TSSOP16, 190, 200, unit=2)
+    U16b = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 200, unit=2)
     s.label("+3V3", U16b.pin("E"))      # second decoder disabled
     s.label("GND", U16b.pin("A0")); s.label("GND", U16b.pin("A1"))
     for n in range(4):
         s.nc(U16b.pin(f"O{n}"))
-    U16p = s.place("74xx:74LS139", "U16", "74LVC139APW", TSSOP16, 190, 230, unit=3)
+    U16p = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 230, unit=3)
     s.label("+3V3", U16p.pin("VCC")); s.label("GND", U16p.pin("GND"))
 
     # ---- power-on reset for CTL: 10k up, 1u down, Schottky for fast discharge -------
@@ -97,7 +97,7 @@ def main():
     s.label("+3V3", R4.pin("1")); s.label("nPOR", R4.pin("2"))
     C9 = s.place("Device:C", "C9", "1u", C0603, 370, 100)
     s.label("nPOR", C9.pin("1")); s.label("GND", C9.pin("2"))
-    D1 = s.place("Device:D_Schottky", "D1", "BAT54", SOD123, 395, 90, rot=90)
+    D1 = s.place("Device:D_Schottky", "D1", "B5819W", SOD123, 395, 90, rot=90)
     s.label("nPOR", D1.pin("A")); s.label("+3V3", D1.pin("K"))
     s.text("R4/C9/D1: ~10 ms power-on clear of CTL,", 355, 118, 1.5)
     s.text("so all control bits start at 0.", 355, 121, 1.5)
