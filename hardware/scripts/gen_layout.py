@@ -217,19 +217,23 @@ def main():
                 pad.SetNet(netinfo[name])
     print("nets assigned; missing pads:", missing)
 
-    # keepout: no tracks or vias on B.Cu under the RP2350B (QSPI, crystal, USB stay clean)
-    ko = pcbnew.ZONE(board)
-    ko.SetIsRuleArea(True)
-    ko.SetDoNotAllowTracks(True)
-    ko.SetDoNotAllowVias(False)      # decoupling vias are fine; keep tracks off the bottom
-    ko.SetLayer(pcbnew.B_Cu)
-    ko.SetZoneName("U20_keepout_B")
+    # keepout: no tracks or vias on B.Cu under the RP2350B, as four rectangles
+    # around a 4 x 4 mm centre window that leaves the thermal-pad via legal
+    # (Freerouting crashes on KiCad's tracks-only "wire_keepout", so this is a full keepout)
     ux, uy = P["U20"][0], P["U20"][1]
-    kop = ko.Outline()
-    kop.NewOutline()
-    for x, y in ((ux - 7.5, uy - 7.5), (ux + 7.5, uy - 7.5), (ux + 7.5, uy + 7.5), (ux - 7.5, uy + 7.5)):
-        kop.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
-    board.Add(ko)
+    for name, (x0, y0, x1, y1) in {"L": (-7.5, -7.5, -2.0, 7.5), "R": (2.0, -7.5, 7.5, 7.5),
+                                   "T": (-2.0, -7.5, 2.0, -2.0), "B": (-2.0, 2.0, 2.0, 7.5)}.items():
+        ko = pcbnew.ZONE(board)
+        ko.SetIsRuleArea(True)
+        ko.SetDoNotAllowTracks(True)
+        ko.SetDoNotAllowVias(True)
+        ko.SetLayer(pcbnew.B_Cu)
+        ko.SetZoneName("U20_keepout_B_" + name)
+        kop = ko.Outline()
+        kop.NewOutline()
+        for x, y in ((ux + x0, uy + y0), (ux + x1, uy + y0), (ux + x1, uy + y1), (ux + x0, uy + y1)):
+            kop.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
+        board.Add(ko)
 
     # zones: GND on In1.Cu, +3V3 on In2.Cu, covering the body and the tongue
     body_h = 64.0
