@@ -67,7 +67,7 @@ Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 7
 
 ## Routing state and hand-finish list
 
-Autorouted with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, single-threaded optimizer). The default net class is 0.2 mm track / 0.15 mm clearance / 0.6-0.3 via; a final continuation pass used 0.15 mm / 0.127 mm / 0.5-0.25 for the last nets, so a few tracks are at those sizes (within JLCPCB's process).
+Autorouted with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, single-threaded optimizer). The default net class is 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6-0.3 via; a final continuation pass used 0.15 mm tracks and 0.5-0.25 vias for the last nets.
 
 Still unrouted (KiCad DRC "unconnected items"):
 
