@@ -47,10 +47,10 @@ P["U9"] = (73, 73, 0)
 row(["C5", "C6", "C7", "C8"], 31, 73, 12, 90)
 row(["U10", "U11"], 84, 73, 12, 270)
 row(["C10", "C11"], 90, 73, 12, 90)
-# registers
+# registers, power-on-reset parts to the right of them
 row(["U12", "U13", "U14", "U15", "U16"], 24, 63, 16, 270)
 row(["C12", "C13", "C14", "C15", "C16"], 31, 63, 16, 90)
-P["R4"], P["C9"], P["D1"] = (104, 77, 0), (107.5, 77, 0), (112, 77, 0)
+P["R4"], P["C9"], P["D1"] = (96, 78, 0), (99.5, 78, 0), (104, 78, 0)
 # RP2350B core
 P["U20"] = (62, 38, 0)
 for i, r in enumerate(["C23", "C24", "C25", "C26", "C27"]):
@@ -62,47 +62,47 @@ row(["L1", "C20", "C21", "C22"], 54, 48, 4.5, 0)
 P["Y1"], P["C35"], P["C36"], P["R20"] = (76, 45, 0), (72.5, 49, 0), (79.5, 49, 0), (76, 41, 90)
 P["U21"], P["C37"], P["R21"] = (46, 24, 0), (46, 19, 90), (39, 24, 0)
 P["U22"], P["C38"] = (80, 24, 0), (80, 19, 90)
-P["TP1"], P["TP2"], P["TP3"] = (86, 31, 0), (86, 34.5, 0), (86, 38, 0)
-# USB-C at the top edge (opening outward), series/CC resistors below it
-P["J1"] = (46, 3.2, 180)
-row(["R24", "R25", "R26", "R27"], 40, 12, 3, 0)
-# ESP32-C3 module, antenna over the top edge; its caps below it
+row(["TP1", "TP2", "TP3"], 74, 52, 3.5, 0)
+# switches along the top edge on 0.5 in centres: TS Reset, NMI, RUN, BOOTSEL
+row(["SW1", "SW2", "SW3", "SW4"], 45, 4, 12.7, 0)
+P["R22"], P["R23"] = (70.4, 9.5, 0), (83.1, 9.5, 0)
+# ESP32-C3 module top-left, antenna over the edge; its caps below it
 P["U40"] = (20, 8, 0)
 P["C60"], P["C61"], P["R40"] = (12, 19, 0), (16, 19, 0), (20, 19, 0)
-# SD socket on the left edge (card out to the left), resistors and caps beside it
-P["J2"] = (9.6, 38, 90)
+# OLED header at the top edge, right of the switches; LED beside it
+P["J3"] = (93, 4, 90)
+P["D4"], P["R5"] = (112, 9, 0), (116, 9, 0)
+# power block below the header
+P["D2"], P["D3"] = (96, 12, 0), (96, 17, 0)
+P["C40"], P["C41"] = (105.5, 14, 0), (115.5, 14, 0)
+P["U30"], P["C42"], P["C43"] = (95, 23, 0), (88.5, 23, 0), (101.5, 23, 0)
+P["U31"], P["C44"], P["C45"], P["C46"] = (95, 31, 0), (88.5, 31, 0), (101.5, 31, 0), (92, 39.5, 0)
+# right edge, top to bottom: USB-C, micro SD, 3.5 mm jack, DE-9
+P["J1"] = (126.8, 15, 90)
+row(["R24", "R25", "R26", "R27"], 112, 22, 3, 0)
+P["J2"] = (117.2, 33, 90)
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
-    P[r] = (26, 26 + 2.5 * i, 0)
+    P[r] = (98 + 3 * i, 43, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
-    P[r] = (29.5, 26 + 2.5 * i, 0)
-P["C50"], P["C51"] = (26, 42, 0), (29.5, 42, 0)
-# OLED header at the top edge
-P["J3"] = (76, 4, 90)
-# power block, top right, left of the D-sub
-P["D2"], P["D3"] = (97.5, 5, 0), (97.5, 10, 0)
-P["C40"], P["C41"] = (107, 7, 0), (116.8, 7, 0)
-P["U30"], P["C42"], P["C43"] = (110, 16, 0), (103, 16, 0), (117, 16, 0)
-P["U31"], P["C44"], P["C45"], P["C46"] = (110, 24, 0), (103, 24, 0), (117, 24, 0), (94, 30, 0)
-# joystick: DE-9 face at the right edge (edge is 7.7 mm from the pin-1 row), passives to its left
-P["J5"] = (122.3, 25, 90)
-for i, r in enumerate(["R90", "R91", "R92", "R93", "R94", "R95"]):
-    P[r] = (105, 33 + 2.5 * i, 0)
-for i, r in enumerate(["R96", "R97", "R98", "R99", "R100", "R101"]):
-    P[r] = (109, 33 + 2.5 * i, 0)
-for i, r in enumerate(["C90", "C91", "C92", "C93", "C94", "C95"]):
-    P[r] = (113, 33 + 2.5 * i, 0)
-P["JP10"] = (117, 34, 0)
-# audio: op-amp and passives left of the jack on the right edge (rows of 4, 3.5 mm pitch)
-P["U50"], P["C79"] = (101, 51, 0), (95, 51, 0)
-audio = ["R70", "R71", "R72", "R73", "R74", "R75", "R76", "R77", "R78", "R80",
-         "C70", "C71", "C72", "C75", "C76", "C80", "C81", "R81"]
-for i, r in enumerate(audio):
-    P[r] = (98 + 3.5 * (i % 4), 55.5 + 3 * (i // 4), 0)
-P["J4"] = (121.9, 58, 270)
-# buttons along the right edge, LED, misc interface passives
-P["SW3"], P["SW4"], P["SW1"], P["SW2"] = (122, 68, 0), (122, 74, 0), (122, 80, 0), (114, 86, 0)
-P["R22"], P["R23"] = (116, 68, 0), (116, 74, 0)
-P["D4"], P["R5"] = (106, 82, 0), (102, 82, 0)
+    P[r] = (98 + 3 * i, 45.5, 0)
+P["C50"], P["C51"] = (98, 48, 0), (101.5, 48, 0)
+P["J4"] = (121.9, 48, 270)
+P["J5"] = (122.3, 66, 90)
+# audio in signal order: row L, row R, then common/output parts; op-amp to their left
+P["U50"], P["C79"] = (88, 55, 0), (86, 51, 0)
+for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):
+    P[r] = (94 + 3.4 * i, 52, 0)
+for i, r in enumerate(["R75", "C75", "R76", "C76", "R77", "R78"]):
+    P[r] = (94 + 3.4 * i, 55.5, 0)
+for i, r in enumerate(["C70", "R70", "C80", "R80", "C81", "R81"]):
+    P[r] = (94 + 3.4 * i, 59, 0)
+# joystick: one row per line (series R, pull-up, cap) beside the DE-9 pins
+for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
+                                    ["R96", "R97", "R98", "R99", "R100", "R101"],
+                                    ["C90", "C91", "C92", "C93", "C94", "C95"])):
+    P[rs], P[rp], P[c] = (106, 62 + 2.5 * i, 0), (110, 62 + 2.5 * i, 0), (114, 62 + 2.5 * i, 0)
+P["JP10"] = (110, 78, 0)
+# misc interface passives in the left margin
 P["R1"], P["R2"], P["R3"] = (10, 84, 0), (10, 79, 0), (10, 74, 0)
 
 # ---------------------------------------------------------------------------

@@ -200,9 +200,9 @@ def board():
     for (x0, y0), (x1, y1) in edge:
         out.append(f'  (gr_line (start {x0:.4f} {y0:.4f}) (end {x1:.4f} {y1:.4f}) (stroke (width 0.05) (type solid)) (layer "Edge.Cuts") (uuid "{u()}"))')
     out.append('  ' + edge_connector_footprint(embedded=True, at=(tx0 + TONGUE_W / 2, body_h)).replace("\n", "\n  "))
-    for i, at in enumerate([(5, 5), (BOARD_W - 5, 5), (5, body_h - 5), (BOARD_W - 5, body_h - 5)], 1):
+    for i, at in enumerate([(5, 5), (BOARD_W - 5, 5), (5, body_h - 5), (112, body_h - 5)], 1):
         out.append('  ' + mounting_hole(f"H{i}", at).replace("\n", "\n  "))
-    for i, at in enumerate([(8, 24), (60, 8), (100, 88)], 1):
+    for i, at in enumerate([(8, 24), (60, 12), (60, 89)], 1):
         out.append('  ' + fiducial(f"FID{i}", at).replace("\n", "\n  "))
     out.append(f'  (gr_text "TS-Pico v3 skeleton: outline and edge connector from v2.2 Gerbers" (at 65 45 0) (layer "Cmts.User") (uuid "{u()}") (effects (font (size 2 2) (thickness 0.3))))')
     out.append(')')
