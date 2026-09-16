@@ -57,6 +57,10 @@ $KC sch export bom --output bom/tspico-v3-jlcpcb-bom.csv --fields "Value,Referen
 
 Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 74LVC273 stocked; HC is fine at 3.3 V), 74LVC139PW (non-A), TI parts for the LVC04/08/126/574/1G86, 33 R instead of 27 R on USB D+/D- (basic part), XKB TS-1187A-B-A-B tactile switches (basic), Panasonic 6SVPC220MV polymer for the bulk and WiFi caps. The 3.3 uH inductor (Sunlord SWPA252012S3R3MT) has no confirmed LCSC number yet.
 
+## Fab outputs
+
+`python3 scripts/gen_fab.py` writes `fab/jlcpcb/`: `tspico-v3-gerbers.zip` (4-layer Gerbers + Excellon drill), `tspico-v3-bom.csv` and `tspico-v3-cpl.csv` (JLCPCB assembly format), and refreshes the two BOMs in `bom/`. `fab/NOTES.md` lists what to check on upload (L1 has no LCSC number yet; rotations of QFN/SOT/connector parts need checking in JLC's placement preview; J3 and J5 are through-hole).
+
 ## Layout notes (placement pass)
 
 - Buttons left to right: TS Reset, NMI, RUN, BOOTSEL. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
