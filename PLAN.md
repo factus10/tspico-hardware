@@ -29,7 +29,7 @@ Companion files:
 | Reset | 555 removed. Pico-controlled /RESET line that defaults to asserted while the Pico boots. |
 | Power | The card's 5 V rail is a Schottky diode-OR of the edge connector +5 V (B4) and USB-C VBUS. It runs from the 2068 or expansion bus, from USB alone on the bench (programming), or both at once while debugging, with no back-feed either way. Two 3.3 V LDOs (logic, WiFi). +15 V unused. |
 | Jumpers | /BE_OUT and flash write-protect eliminated. Anything remaining is a solder jumper with a parallel through-hole header. |
-| DMA | Stuffing option, not fitted on the prototype: footprints for a 74LVC245 driver and two 74LVC574 address latches give the Pico access to the 2068's own memory after a bus grant, for snapshots. `DMA_OPTION` in `hardware/scripts/config.py` removes them. |
+| DMA | Dropped 2026-09-17 (snapshots are a low priority and the option cost six RP2350B pins in the tightest part of the fan-out). `DMA_OPTION = True` in `hardware/scripts/config.py` restores the schematic side. |
 | Tape | EAR out and SPK/TAP in wired to GPIO through dividers for TZX playback and SAVE capture. |
 
 ## 2. What the current firmware needs from the hardware
@@ -106,7 +106,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 
 ## Relayout done 2026-09-17
 
-Board relaid at 130 x 64.25 mm with the cheaper BOM, the consolidated logic, the RP2350 design guide's regulator layout and a short crystal path; see hardware/README.md ("Routing flow and state"). Open: two DMA-option nets (nMRD, nWR_ALO) are unrouted; decide whether to drop the DMA option (`DMA_OPTION = False`) or spend another placement pass on the east side of the RP2350B. Original notes follow.
+Board relaid at 130 x 64.25 mm with the cheaper BOM, the consolidated logic, the RP2350 design guide's regulator layout and a short crystal path; see hardware/README.md ("Routing flow and state"). With the DMA option two of its nets could not be routed; it was dropped the same day and the board is now fully routed with zero DRC errors and fresh fab outputs. Next: check the two custom footprints, the TF-01A card-detect polarity and the DE-9 footprint against their drawings, then order. Original notes follow.
 
 ## Rework notes (historical)
 

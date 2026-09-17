@@ -20,6 +20,9 @@ import sys
 
 import pcbnew
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config import DMA_OPTION  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 HW = os.path.dirname(HERE)
 KICAD_FP = "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"
@@ -45,7 +48,7 @@ R3Y, R2Y = BODY_H - 5.5, BODY_H - 13.5      # transceiver row, glue/DMA row
 # micro SD (shell flush with the edge). Right edge: audio jack, DE-9.
 # Row 3: transceivers in finger order: data (fingers x 29-52), address group X
 # (44-62), address group Y (64-82), control (54-92).
-P["U3"], P["C3"] = (40, R3Y, 270), (48, R3Y, 90)
+P["U3"], P["C3"] = (40, R3Y, 270 if DMA_OPTION else 90), (48, R3Y, 90)      # without the DMA option U3's A side is the Z80 side
 P["U1"], P["C1"] = (56, R3Y, 270), (64, R3Y, 90)
 P["U2"], P["C2"] = (74, R3Y, 270), (82, R3Y, 90)
 P["U4"], P["C4"] = (92, R3Y, 270), (100, R3Y, 90)

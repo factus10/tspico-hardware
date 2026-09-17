@@ -36,8 +36,9 @@ def main():
     pcbnew.SaveBoard(PCB, b)
     print("widened", n, "necked segments")
     B = Board(PCB)
-    for net, plane in (("+3V3", True), ("GND", True), ("DVDD", False)):
-        print(net, join_islands(B, net, plane=plane))
+    # DVDD first: the +3V3 links the joiner adds under the package can fence in the regulator's feedback pin
+    for net, plane in (("DVDD", False), ("+3V3", True), ("GND", True)):
+        print(net, join_islands(B, net, plane=plane, reach=12.0, margin=5.0))
     B.save()
     kinds, open_nets = drc()
     print("after supply nets:", kinds, sorted(open_nets))

@@ -8,7 +8,7 @@ The card is an RP2350B on the TS2068 rear connector. The RP2350B serves the card
 
 Everything between the Z80 bus and the RP2350B travels over one 8-bit local bus, MD0 to MD7: the Z80 address (in two bytes through a pair of muxes), the Z80 data (through a transceiver), and the card's four registers. That is what keeps the design inside 48 GPIOs with room to spare.
 
-Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset, a DMA mode onto the 2068's own memory after a bus grant (a stuffing option, not fitted on the prototype), tape EAR out and SPK/TAP in, a 128x96 SPI OLED, a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
+Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset,  tape EAR out and SPK/TAP in, a 128x96 SPI OLED, a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
 
 ## 2. Block diagram
 
@@ -16,15 +16,13 @@ Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist p
 TS2068 edge connector (5 V)                                        RP2350B (3.3 V)
   A0-A3, A12-A15 -> 74LVC245 (/OE = nAEN_X) --+
   A4-A11         -> 74LVC245 (/OE = nAEN_Y) --+--> MD0-MD7 <--> GP0-GP7     nAEN_X, nAEN_Y <-- GP8, GP9
-  D0-D7  <-> 74LVC245 (DIR = nRD xor nDMA_EN, /OE = nDATA_OE) <--> MD0-MD7
+  D0-D7  <-> 74LVC245 (DIR = /RD, /OE = nDATA_OE) <--> MD0-MD7
   control -> 74LVC245 -> nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN nBUSAK_L -> GPIO / expander
   /MREQ, /IORQ, /RD, /WR -> 74LVC32 -> nMEMRD, nMEMWR, nIORD, nIOWR -> GPIO
   /BE /WAIT /BUSRQ /NMI /RESET <-- 74LVC06 open-drain <-- BE_REQ, WAIT_REQ (PIO), BUSRQ, NMI_REQ (expander), RESET_HOLD (GPIO, pull-up)
   EAR <-- divider <-- TAPE_OUT ; SOUND -> audio mixer
 Slow I/O: XL9555 16-bit I2C expander (I2C0 on GP24/GP25, /INT on GP35)
   out: BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED      in: joystick x6, nBUSAK_L, SD_CD
-DMA stuffing option (footprints, not fitted): 74LVC574 x2 ALO/AHI driving A0-A15 directly,
-  74LVC245 driving /MREQ /RD /WR, both enabled by nDMA_EN (GP33, pulled high)
 RP2350B support: GD25Q128E QSPI (16 MB, W25Q128 pinout), APS6404L PSRAM footprint (CS1 = GP47, not fitted on the prototype), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
 SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> expander
 ```
@@ -74,9 +72,9 @@ PIO waits for nIORD or nIOWR (/IORQ ORed with /RD and /WR; an interrupt acknowle
 
 Which ports are enabled is a firmware setting; there is no port jumper. WAIT_REQ is a PIO side-set: asserted as soon as a served read is recognised, released once data is on the bus, so blocking FIFO pulls are safe. Whether to use it is a firmware flag.
 
-### 3.3 DMA mode (stuffing option, not fitted on the prototype)
+### 3.3 DMA mode (removed)
 
-With U8, U12 and U13 fitted: set BUSRQ through the expander and wait for nBUSAK_L. Write ALO and AHI (strobes nWR_ALO, nWR_AHI latch MD), drive nDMA_EN low. The 74LVC574 latches drive A0-A15 directly and the DMA driver puts nDMA_MREQ, nMRD and nMWR onto /MREQ, /RD and /WR. The data transceiver direction follows nRD xor nDMA_EN, so a read arrives on MD and a write leaves from it. nDMA_EN has a pull-up, so with the parts absent or the RP2350 in reset the data direction is simply the inverse of /RD. `DMA_OPTION = False` in `hardware/scripts/config.py` removes the DMA parts and the XOR entirely.
+An earlier revision could take the 2068's bus after BUSRQ and read or write its memory (for snapshots) through two address latches and a bus-driver chip. It cost six RP2350B pins in the most congested part of the fan-out and was dropped on 2026-09-17. `DMA_OPTION = True` in `hardware/scripts/config.py` restores the schematic side; the board would then need a new layout. BUSRQ and nBUSAK stay wired (expander bits), so the firmware can still halt the Z80 cleanly.
 
 ## 4. Slow I/O: the I2C expander
 
@@ -120,13 +118,10 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 22 | TAPE_IN | in | SPK/TAP from the 2068 (through the control transceiver). |
 | 23 | TAPE_OUT | out | To EAR via divider. |
 | 24, 25 | I2C_SDA, I2C_SCL | | I2C0 to the XL9555 expander, 4.7 k pull-ups. |
-| 26, 31 | nWR_ALO, nWR_AHI | out | DMA option: address latch strobes. |
-| 27, 28 | nMRD, nMWR | out | DMA option: read and write strobes. |
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
-| 33, 34 | nDMA_EN, nDMA_MREQ | out | DMA option. nDMA_EN has a 10 k pull-up. |
 | 35 | nIOX_INT | in | Expander change interrupt, 10 k pull-up. |
-| 36 | spare | | |
+| 26-28, 31, 33, 34, 36 | spare | | Seven spares. |
 | 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
 | 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
 | 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from the expander. |
@@ -134,7 +129,7 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 46 | AUDIO_L (PWM) | out | |
 | 47 | PSRAM CS1 | | QMI CS1n (options GP0, 8, 19, 47). |
 
-47 used with the DMA option, 41 without. Slow signals go through the expander, which has two spare bits.
+41 used, 7 spare. Slow signals go through the expander, which has two spare bits.
 
 ## 8. Chip list (interface and local bus)
 
@@ -145,11 +140,9 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 1 | 74LVC245 | Control inputs, 5 V tolerant |
 | 1 | 74LVC32 | nMEMRD, nMEMWR, nIORD, nIOWR strobes |
 | 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET, ESP32 IO9 |
-| 1 | 74LVC1G86 | Data direction = nRD xor nDMA_EN (goes away with `DMA_OPTION = False`) |
 | 1 | XL9555 | I2C expander: control outputs, joystick, status |
-| not fitted | 2 x 74LVC574, 1 x 74LVC245 | DMA option: ALO/AHI onto A0-A15, drivers for /MREQ, /RD, /WR |
 
-Eight fitted packages, five part numbers (down from 16 packages in the first v3 schematic), all 74LVC because every one of them touches the 5 V bus. No memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock Zimodem firmware).
+Seven packages, four part numbers (down from 16 packages in the first v3 schematic), all 74LVC because every one of them touches the 5 V bus. The data transceiver takes its direction straight from /RD. No memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock Zimodem firmware).
 
 ## 9. Firmware impact
 
@@ -162,7 +155,7 @@ Eight fitted packages, five part numbers (down from 16 packages in the first v3 
 
 - **Emulated-memory timing** is the one hardware risk. It is proven on RP2040-class ROM emulators, but validate on a breadboard (Pico 2 plus three 74LVC245s on a 2068, serve a 16 KB ROM, scope the fetch) before layout is final.
 - **SRAM budget**: about 100 KB for the active set plus buffers must coexist with MicroPython's heap. Fine on 520 KB, but the firmware build has to reserve it explicitly.
-- **DMA onto 2068 RAM** depends on SCLD behaviour during bus grant; prototype-validated, one chip of cost.
+- **DMA onto 2068 RAM** was dropped from the hardware (section 3.3).
 - **Edge connector fit**, **JLC stock** (RP2350B, ESP32-C3 module, SD socket), **chip-down MCU layout**: as before.
 
 ## 11. Open questions for review

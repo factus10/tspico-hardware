@@ -405,10 +405,10 @@ def escape(B, p, net, radius=3.5, tries=80):
         if vn == net and math.hypot(vx - p[0], vy - p[1]) < 0.06:
             return (vx, vy)
     cands = []
-    n = int(radius / 0.25)
+    n = int(radius / 0.1)          # 0.1 mm candidates: the legal window between two lanes can be under 0.2 mm wide
     for i in range(-n, n + 1):
         for j in range(-n, n + 1):
-            x, y = p[0] + i * 0.25, p[1] + j * 0.25
+            x, y = p[0] + i * 0.1, p[1] + j * 0.1
             d = math.hypot(x - p[0], y - p[1])
             if 0.5 <= d <= radius:
                 cands.append((d, x, y))
@@ -456,7 +456,7 @@ def route2(B, a, b, net, margin=5.0, step=0.1, w=0.15, via_cost=12, a_layers=(pc
     nx, ny = int((x1 - x0) / step) + 2, int((y1 - y0) / step) + 2
     blockT = {L: set() for L in LAYERS}
     blockV = set()
-    slack = step * 0.71
+    slack = step * 0.5        # a little under the grid's half-diagonal: 0.4 mm pad lanes stay open; every segment is re-checked exactly before it is committed
 
     def cells_rect(rx0, ry0, rx1, ry1, R):
         for i in range(max(0, int((rx0 - R - x0) / step)), min(nx, int((rx1 + R - x0) / step) + 2)):
@@ -646,6 +646,12 @@ def join_islands(B, netname, plane=False, reach=9.0, tries=200, margin=3.5):
             r = route2(B, (a[0], a[1]), (b[0], b[1]), net, margin=margin, a_layers=al, b_layers=bl)
             if r:
                 ok = (round(a[0], 2), round(a[1], 2), round(b[0], 2), round(b[1], 2), r); break
+        if ok is None and plane:            # last resort for a plane net: give one of the island's pads its own via
+            for x, y, l in o["pts"]:
+                if l == pcbnew.F_Cu:
+                    v = escape(B, (x, y), net, radius=3.0, tries=60)
+                    if v:
+                        ok = ("escape", round(x, 2), round(y, 2), v); break
         done.append(ok or ("FAILED", round(o["pts"][0][0], 2), round(o["pts"][0][1], 2), len(pairs)))
         if ok is None:
             failed.add((round(o["pts"][0][0], 2), round(o["pts"][0][1], 2)))

@@ -102,7 +102,7 @@ def main():
         f.write("- BOM lines with no LCSC number (pick at upload): " + ("; ".join(f"{c} ({r})" for c, r in missing) or "none") + ".\n")
         f.write("- J3 (OLED header) and J5 (DE-9) are through-hole and hand-soldered: they are not in the BOM or CPL.\n")
         f.write("- L1 is polarised. The footprint copies LCSC's land pattern and pad numbering, so no rotation offset should be needed, but check the preview: the dot on L1 must be at the end away from the top edge of the board (pad 2, net DVDD).\n")
-        f.write("- DNP (footprints only): U22 PSRAM, and the DMA option U8, U12, U13, C7-C9. Two DMA-option nets (nMRD, nWR_ALO) are not routed; see hardware/README.md.\n")
+        f.write("- DNP (footprint only): U22 PSRAM.\n")
         f.write("- All drills are 0.3 mm or larger; all vias 0.6/0.3 mm.\n")
         f.write("- Check rotations in JLCPCB's placement preview: JLC's part orientation differs from KiCad's for many footprints (QFN, SOT-223, SOIC, connectors); fix there, not here.\n")
         f.write("- Upload order: PCB first (4 layers, 1.6 mm, ENIG recommended for the edge fingers, chamfered gold fingers optional), then assembly with the BOM and CPL.\n")

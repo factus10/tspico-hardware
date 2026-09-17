@@ -108,7 +108,9 @@ def main():
     # ---- U3 data transceiver ---------------------------------------------------------
     U3 = transceiver("U3", 150, 170)
     z80_side, md_side = ("B", "A") if DMA_OPTION else ("A", "B")
-    for b_, idx in zip(range(7, -1, -1), [7, 0, 1, 2, 6, 5, 3, 4]):
+    # The Z80 side faces the fingers. With B facing them (rot 270) B7 is the leftmost pin; with A
+    # facing them (rot 90, no DMA option) A0 is, so the pin order runs the other way.
+    for b_, idx in zip(range(7, -1, -1) if DMA_OPTION else range(8), [7, 0, 1, 2, 6, 5, 3, 4]):
         s.label(f"D{idx}", U3.pin(f"{z80_side}{b_}"))
         s.glabel(f"MD{idx}", U3.pin(f"{md_side}{b_}"), BI)
     if DMA_OPTION:

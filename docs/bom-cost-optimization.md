@@ -5,12 +5,12 @@ Prices and stock come from JLCPCB's parts API (`hardware/scripts/jlc_price.py`),
 basic and preferred parts have none. TSSOP logic is never basic, so the levers were unit price,
 out-of-stock parts, and the number of distinct part numbers.
 
-|  | first v3 BOM | part substitutions | logic consolidation |
-|---|---|---|---|
-| parts per board | $25.75 | $11.79 | $10.43 |
-| extended part numbers (fee) | 24 ($72) | 18 ($54) | 15 ($45) |
-| parts + fees per board, 10 boards | $32.95 | $17.19 | $14.93 |
-| fitted logic packages | 16 | 15 | 8 |
+|  | first v3 BOM | part substitutions | logic consolidation | DMA dropped |
+|---|---|---|---|---|
+| parts per board | $25.75 | $11.79 | $10.43 | $10.28 |
+| extended part numbers (fee) | 24 ($72) | 18 ($54) | 15 ($45) | 14 ($42) |
+| parts + fees per board, 10 boards | $32.95 | $17.19 | $14.93 | $14.48 |
+| fitted logic packages | 16 | 15 | 8 | 7 |
 
 Rerun `python3 scripts/gen_fab.py --bom-only && python3 scripts/jlc_price.py --boards 10` from
 `hardware/` to refresh the numbers.
@@ -49,7 +49,7 @@ the unsourced Sunlord part), 33 R + 4.7 uF VREG_AVDD filter (both basic).
 | The two address 74LVC245s go straight onto MD; their output enables are the byte mux | 2 x 74LVC257, the 16-line MA bus | nothing (GP8/GP9 change role) |
 | Strobes nMEMRD, nMEMWR, nIORD, nIOWR from one OR package; refresh and INTACK never assert /RD or /WR, so /RFSH and /M1 qualification is unnecessary | 74LVC04, 74LVC08 | 74LVC32 C6087 $0.14 |
 | XL9555 I2C expander for the slow I/O | 74HC273, STAT 74LVC245, power-on clear (R, C, Schottky) | XL9555 C609791 $0.41, three pull-ups, five 10 k pull-downs |
-| DMA becomes a stuffing option (`DMA_OPTION` in `hardware/scripts/config.py`) | 2 x 574, DMA-driver 245 and three caps from the BOM | footprints stay; the latches must be 74LVC574 if fitted because they drive the 5 V address bus |
+| DMA dropped (`DMA_OPTION = False` in `hardware/scripts/config.py`) | 2 x 574, DMA-driver 245, the direction XOR (74LVC1G86, one extended part number) and three caps | nothing; the data transceiver's DIR is /RD |
 
 The address groups follow the connector's finger order, so the firmware stores images indexed by
 the PIO's address word (nibble order 3, 0, 2, 1); see docs/v3-architecture.md section 2.

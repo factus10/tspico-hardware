@@ -60,8 +60,9 @@ def plane_fanout(board):
                    for ax, ay, bx, by, hw, tn, tl in B.tracks):
                 continue                                  # already wired (pre-route or an earlier pass)
             px, py = pcbnew.ToMM(pad.GetPosition().x), pcbnew.ToMM(pad.GetPosition().y)
-            if min(x1 - x0, y1 - y0) >= 1.4:              # big pad (thermal pad): via inside it
-                B.add_via(px, py, net); added += 1
+            if min(x1 - x0, y1 - y0) >= 1.4:              # big pad (thermal pad): via inside it,
+                if not any(q.GetNumber() == pad.GetNumber() and q.GetDrillSize().x > 0 for q in pads):     # unless the footprint brings its own thermal vias
+                    B.add_via(px, py, net); added += 1
                 continue
             dx, dy = px - pcbnew.ToMM(fc.x), py - pcbnew.ToMM(fc.y)
             if len(pads) == 2:                            # R, C, D, L: sideways first, then outward along the axis
