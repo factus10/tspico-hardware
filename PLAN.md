@@ -103,3 +103,18 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - **AY emulation load.** Core 1 in C is required; MicroPython cannot do it. Plan the C user-module build into the existing docker firmware build.
 - **Edge connector fit** remains the hard mechanical constraint; verify the footprint against the old Gerbers and test-fit the first prototype.
 - **Part stock at JLC**: 3.3 V flash, SD socket, ESP32-C3 module, RP2350B. Keep alternates in the BOM.
+
+## Pending rework before ordering: RP2350B regulator and crystal (JLCPCB review, 2026-09-16)
+
+JLCPCB's RP2350 review flagged the core regulator and crystal circuitry. Checked against
+"Hardware design with RP2350" (release 3):
+
+- Crystal parts already match (ABM8-272-T3, 2 x 15 pF, 1 k series on XOUT) but Y1/R20/C35/C36
+  sit 10 mm from pins 30/31 with ~18 mm nets, and R20 is on the far side of the crystal.
+  Move them within ~3 mm of the pins, R20 between chip and crystal.
+- Inductor: use the polarised Abracon AOTA-B201610S3R3-101-T (0806/2016 metric, LCSC C42411119),
+  pin 1 (dot) on the +1V1/DVDD side, pin 2 on VREG_LX. Add a silkscreen dot.
+- Add the VREG_AVDD RC filter: 33 R + 4.7 uF (guide R3/C9); VREG_AVDD is a separate net, not +3V3.
+- Copy the guide's figure 4 layout: L1, output 4.7 uF and input 4.7 uF against the regulator pins,
+  VREG_PGND returned directly; VREG_LX net a few mm, not 18 mm.
+- Then rip up the two pockets, reroute, DRC, regenerate fab outputs (scripts/gen_fab.py).
