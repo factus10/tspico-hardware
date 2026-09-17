@@ -29,7 +29,7 @@ Companion files:
 | Reset | 555 removed. Pico-controlled /RESET line that defaults to asserted while the Pico boots. |
 | Power | The card's 5 V rail is a Schottky diode-OR of the edge connector +5 V (B4) and USB-C VBUS. It runs from the 2068 or expansion bus, from USB alone on the bench (programming), or both at once while debugging, with no back-feed either way. Two 3.3 V LDOs (logic, WiFi). +15 V unused. |
 | Jumpers | /BE_OUT and flash write-protect eliminated. Anything remaining is a solder jumper with a parallel through-hole header. |
-| DMA | Hardware provision (74LVC126 drivers, ALO/AHI latches, bidirectional address transceivers) for Pico access to the 2068's own memory after a bus grant, for snapshots. Validated on the prototype. |
+| DMA | Stuffing option, not fitted on the prototype: footprints for a 74LVC245 driver and two 74LVC574 address latches give the Pico access to the 2068's own memory after a bus grant, for snapshots. `DMA_OPTION` in `hardware/scripts/config.py` removes them. |
 | Tape | EAR out and SPK/TAP in wired to GPIO through dividers for TZX playback and SAVE capture. |
 
 ## 2. What the current firmware needs from the hardware
