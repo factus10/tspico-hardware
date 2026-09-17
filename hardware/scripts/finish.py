@@ -81,6 +81,20 @@ def main():
         pcbnew.ZONE_FILLER(b).Fill(b.Zones()); pcbnew.SaveBoard(PCB, b)
         print("removed", len(gone), "unused vias")
         kinds, open_nets = drc()
+    # ...and the stubs that led to them, peeled back a segment at a time (one board load: repeated
+    # LoadBoard calls in one process eventually hand back an unwrapped pointer)
+    b = pcbnew.LoadBoard(PCB); peeled = 0
+    for _ in range(20):
+        b.BuildConnectivity(); conn = b.GetConnectivity()
+        gone = [t for t in b.GetTracks() if t.GetClass() == "PCB_TRACK" and conn.TestTrackEndpointDangling(t, True)]
+        if not gone:
+            break
+        for t in gone: b.Remove(t)
+        peeled += len(gone)
+    if peeled:
+        pcbnew.ZONE_FILLER(b).Fill(b.Zones()); pcbnew.SaveBoard(PCB, b)
+        print("removed", peeled, "dangling stub segments")
+        kinds, open_nets = drc()
     print("final DRC:", kinds or "clean", sorted(open_nets))
 
 

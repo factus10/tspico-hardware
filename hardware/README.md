@@ -78,7 +78,8 @@ PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/C
 $PY scripts/gen_layout.py     # placement, keepouts, planes (discards all routing)
 $PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD spine, inner supply links, bottom-row fan
 $PY scripts/autoroute.py --jar <freerouting-2.4.1.jar> --passes 100     # about 25 minutes
-$PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets
+$PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets, drop unused vias and stubs
+$PY scripts/silk.py           # place reference designators clear of pads, silk and the edge; trim outlines at the edge
 ```
 
 Rules: 0.15 mm signal tracks (the router may neck down to 0.11 mm in a squeeze; board minimum 0.1 mm, JLCPCB's is 0.09), 0.4 mm on the 5 V rails and +3V3_WIFI, 0.127 mm clearance, every via 0.6/0.3 mm (JLCPCB's no-surcharge size; the ESP32 footprint's 0.2 mm thermal vias are opened to 0.3 mm by `gen_layout.py`). The pre-stitch step skips the RP2350B's pins: a via 0.9 mm out of a 0.4 mm pitch pin blocks both neighbours' escape lanes. Its exposed pad gets five ground vias.
@@ -90,6 +91,8 @@ What `preroute.py` fixes in place before the autorouter runs, because the router
 - the 3.3 V supply pins linked in groups under the package, each group with one via: 50 to corner pin 41, 68/69 to 76 to pin 5, 24 to 29;
 - the **bottom pad row** (pins 1-20, all used) as a deterministic fan: straight out to a staggered depth, a 45 degree turn, and a via on a common line at 0.75 mm spacing, which is the tightest legal pattern for 0.6 mm vias at 0.4 mm pitch.
 
-State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes): **fully routed, zero DRC errors, zero unconnected items**, no tracks on either plane layer. About 2080 track segments and 390 vias. The scripted flow gets there by itself except for one step done by hand this time: joining the USB-C receptacle's second VBUS pad pair (now handled: the joiner treats overlapping pads as one node). Remaining DRC warnings are silkscreen overlaps in the dense rows and three short copper stubs left where unused pre-routed vias were removed.
+State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes): **fully routed, DRC clean at every severity (no errors, no warnings, no unconnected items)**, no tracks on either plane layer. About 2080 track segments and 390 vias. The scripted flow gets there with no hand edits.
+
+Silkscreen: `silk.py` sets designators to 0.8 mm text and tries positions around each part until one clears pads, other silk, other parts and the board edge. Of 140 it places 103; the rest sit in rows too dense for any label (mainly the audio/joystick passives by U15 and J5, and the SD pull-ups, which get a group legend) and are hidden on silk. Every designator is still on F.Fab, so use the fab drawing or the interactive BOM when probing those parts. Outlines of edge connectors that overhang the board are trimmed where they cross the edge.
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.
