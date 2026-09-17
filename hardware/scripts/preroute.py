@@ -8,6 +8,9 @@ Regulator: VIN cap C22 and output cap C20 (0402) straddle the VREG_LX pin, so LX
 runs under both to L1 (3.7 mm); VIN and PGND go straight into C22; FB senses at
 C20; the cap grounds return to PGND with one via beside them; AVDD goes up to
 its RC filter. USB D-/D+ get their first jog so they clear the FB track.
+
+Also fixed here: the DVDD spine and supply links under the RP2350B, the fan of its
+bottom pad row, and the via fan of U1's Z80-side address pins.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -101,6 +104,23 @@ def main():
     # drops into their lanes to a via (clear of XIN above and I2C_SCL below)
     route("+3V3", [(66.95, 26.6), (67.35, 26.6), (67.85, 27.1), (68.7, 27.2)], 0.15)
     via("+3V3", 68.7, 27.2)
+    # ---- U1's Z80-side pins (A0-A7): a via fan under its own body ---------------------------
+    # U1's bottom pad row faces U2's top row across a 0.8 mm gap, so these pins can only leave
+    # under U1, and all of them have to change layer (their fingers are bottom copper). Left to
+    # itself the router puts the first few vias right at the pads and now and then seals a
+    # neighbour in behind them (A5 one run, A3 another). Two staggered rows: neighbours are
+    # 1.03 mm apart centre to centre, and a track (top or bottom) still passes between two vias
+    # of the near row, so every via can be left downwards on the bottom layer.
+    u1 = B.b.FindFootprintByReference("U1")
+    cy = pcbnew.ToMM(u1.GetPosition().y)
+    zside = sorted((p for p in u1.Pads() if p.GetNumber().isdigit() and 11 <= int(p.GetNumber()) <= 18), key=lambda p: p.GetPosition().x)
+    for k, pad in enumerate(zside):
+        x, y = pcbnew.ToMM(pad.GetPosition().x), pcbnew.ToMM(pad.GetPosition().y)
+        inward = -1 if cy < y else 1
+        yv = round(y + inward * (1.26 if k % 2 == 0 else 2.06), 3)
+        name = pad.GetNetname().split("/")[-1]
+        route(name, [(x, y), (x, yv)], 0.15)
+        via(name, x, yv)
     B.save()
     print("pre-routes added:", len(B.tracks), "tracks,", len(B.vias), "vias; failed:", fails or "none")
     return 1 if fails else 0
