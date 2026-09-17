@@ -537,6 +537,7 @@ def route2(B, a, b, net, margin=5.0, step=0.1, w=0.15, via_cost=12, a_layers=(pc
     if end is None:
         if getattr(B, "debug", False):
             vis = [(x0 + n[1][0] * step, y0 + n[1][1] * step) for n in cost]
+            B.dbg = {'visited': [(n[0], x0 + n[1][0] * step, y0 + n[1][1] * step) for n in cost], 'blockV': [(x0 + i * step, y0 + j * step) for i, j in blockV]}
             print(f"   route2 dbg: visited {len(cost)} nodes, x {min(v[0] for v in vis):.1f}..{max(v[0] for v in vis):.1f}, y {min(v[1] for v in vis):.1f}..{max(v[1] for v in vis):.1f}; goal blocked F/B: {g in blockT[pcbnew.F_Cu]}/{g in blockT[pcbnew.B_Cu]}; grid {nx}x{ny}")
         return None
     path = []; c = end

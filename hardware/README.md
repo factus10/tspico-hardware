@@ -82,6 +82,14 @@ $PY scripts/finish.py         # widen necked tracks, join orphan supply islands,
 $PY scripts/silk.py           # place reference designators clear of pads, silk and the edge; trim outlines at the edge
 ```
 
+Or all five in one command, which is the way to run it:
+
+```bash
+$PY scripts/flow.py --jar <freerouting-2.4.1.jar>      # 10 to 15 minutes per attempt, up to 3 attempts
+```
+
+Freerouting does not give the same result twice from the same input. Roughly one run in three it leaves one of U1's low address pins (A3, A5) sealed in behind its neighbours' vias. `finish.py` then tries lifting the neighbours' copper around the pin, routing the open net and putting the neighbours back, but refuses a result that needs more than three vias per net (the only way out of such a pocket has been a 9-via, 70 mm detour). If the board still is not clean `finish.py` exits non-zero and `flow.py` routes again from the placement, keeping the failed board as `fab/route/attempt-N.kicad_pcb`.
+
 Rules: 0.15 mm signal tracks (the router may neck down to 0.11 mm in a squeeze; board minimum 0.1 mm, JLCPCB's is 0.09), 0.4 mm on the 5 V rails and +3V3_WIFI, 0.127 mm clearance, every via 0.6/0.3 mm (JLCPCB's no-surcharge size; the ESP32 footprint's 0.2 mm thermal vias are opened to 0.3 mm by `gen_layout.py`). The pre-stitch step skips the RP2350B's pins: a via 0.9 mm out of a 0.4 mm pitch pin blocks both neighbours' escape lanes. Its exposed pad gets five ground vias.
 
 What `preroute.py` fixes in place before the autorouter runs, because the router handles a fully used 0.4 mm pitch QFN badly (whichever pins it leaves for last end up sealed behind its own vias):
@@ -91,7 +99,7 @@ What `preroute.py` fixes in place before the autorouter runs, because the router
 - the 3.3 V supply pins linked in groups under the package, each group with one via: 50 to corner pin 41, 68/69 to 76 to pin 5, 24 to 29;
 - the **bottom pad row** (pins 1-20, all used) as a deterministic fan: straight out to a staggered depth, a 45 degree turn, and a via on a common line at 0.75 mm spacing, which is the tightest legal pattern for 0.6 mm vias at 0.4 mm pitch.
 
-State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes, audio and joystick passives respaced for silkscreen): **fully routed, DRC clean at every severity (no errors, no warnings, no unconnected items)**, no tracks on either plane layer. 2025 track segments, 384 vias, all 0.6/0.3 mm. Two segments stay at the router's 0.112 mm neck where widening would break clearance. The scripted flow gets there with no hand edits.
+State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes, audio and joystick passives respaced for silkscreen): **fully routed, DRC clean at every severity (no errors, no warnings, no unconnected items)**, no tracks on either plane layer. 2077 track segments, 379 vias, all 0.6/0.3 mm, no track under 0.13 mm. Produced by `flow.py` with no hand edits, closing on its second attempt (the first left A3 open at U1).
 
 Silkscreen: `silk.py` sets designators to 0.8 mm text and tries positions around each part until one clears pads, other silk, other parts and the board edge; rows of equal parts all get the label on the same side (above a flat part, to the right of an upright one), and a hidden designator gets a second chance by moving a neighbour's. The layout leaves room for this: passive rows are 3.2 mm apart in the audio block, 2.7 mm in the SD pull-ups, and the joystick RC columns are 2.6 mm apart. 139 of 140 designators are on silk; only C39 (the VREG_AVDD capacitor, boxed in by the design guide's regulator layout) is hidden, and it is on F.Fab with all the others. Outlines of edge connectors that overhang the board are trimmed where they cross the edge.
 

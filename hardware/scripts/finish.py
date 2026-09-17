@@ -8,9 +8,9 @@
   4. refill zones, run DRC, print a summary.
 All routing is clearance-checked (finish_route.py); nothing is forced.
 """
-import collections, os, re, subprocess, sys
+import collections, math, os, re, shutil, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from finish_route import Board, join_islands, pcbnew, MM, T
+from finish_route import Board, join_islands, seg_dist, pcbnew, MM, T
 
 HW = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PCB = os.path.join(HW, "tspico-v3.kicad_pcb")
@@ -69,6 +69,28 @@ def main():
             print(net, join_islands(B, net, reach=90.0, margin=10.0, tries=60))
         B.save()
         kinds, open_nets = drc()
+    # still open: the pin is boxed in by a neighbour's via or track. Lift that neighbour's copper
+    # around the pin, route the open net, then route the neighbour again; keep it only if DRC agrees.
+    # (Each stage in its own interpreter: pcbnew does not survive removals followed by more work.)
+    def stage(*a):
+        return subprocess.run([sys.executable, os.path.abspath(__file__), *a], capture_output=True, text=True).stdout
+    for net in sorted(open_nets - SUPPLY):
+        cands = (re.findall(r"VICTIMS (.*)", stage("--victims", net)) or [""])[0].split()
+        # one neighbour at a time, then pairs, then the whole neighbourhood
+        import itertools
+        sets = [(v,) for v in cands[:6]] + list(itertools.combinations(cands[:4], 2)) + [tuple(cands[:6])]
+        for vs in sets:
+            bak = PCB + ".ripup"; shutil.copy(PCB, bak)
+            stage("--rip", net, *vs)
+            ok = "JOINED" in stage("--rejoin", net, *vs)
+            if ok:
+                k2, o2 = drc()
+                ok = not (set(k2) - {"unconnected_items"}) and not ({net, *vs} & o2) and len(o2) < len(open_nets)
+            if ok:
+                print(net, "routed after lifting", *vs); kinds, open_nets = k2, o2; os.remove(bak); break
+            shutil.move(bak, PCB)
+        else:
+            print(net, "still open; tried lifting", cands[:6])
     # pre-routed vias the router did not end up using are just holes: drop them
     full = os.path.join(HW, "drc-all.rpt")
     subprocess.run([KICAD_CLI, "pcb", "drc", "--output", full, PCB], capture_output=True)
@@ -95,6 +117,63 @@ def main():
         print("removed", peeled, "dangling stub segments")
         kinds, open_nets = drc()
     print("final DRC:", kinds or "clean", sorted(open_nets))
+    if kinds or open_nets:
+        sys.exit(2)          # flow.py routes the board again; the router does not give the same result twice
+
+
+SUPPLY = {"GND", "+3V3", "DVDD", "+5V", "+5V_EDGE", "VBUS", "+3V3_WIFI"}
+
+
+def _orphan_pts(B, netname):
+    from finish_route import islands_geo
+    net = next(code for code, ni in B.b.GetNetsByNetcode().items() if ni.GetNetname().split("/")[-1] == netname)
+    isl = sorted(islands_geo(B, net), key=lambda i: -len(i["pts"]))
+    return [pt for i in (isl if len(isl[0]["pts"]) == 1 else isl[1:]) for pt in i["pts"]]
+
+
+def victims(netname, radius=2.0):
+    """Nets whose unlocked copper crowds the unconnected ends of `netname`, nearest first."""
+    B = Board(PCB)
+    pts = _orphan_pts(B, netname)
+    best = {}
+    for t in B.b.GetTracks():
+        v = t.GetNetname().split("/")[-1]
+        if t.IsLocked() or v == netname or v in SUPPLY or not v:
+            continue
+        a, e = (t.GetPosition(), t.GetPosition()) if t.GetClass() == "PCB_VIA" else (t.GetStart(), t.GetEnd())
+        d = min(seg_dist(T(a.x), T(a.y), T(e.x), T(e.y), x, y) for x, y, _ in pts)
+        if d < radius:
+            best[v] = min(d, best.get(v, 9))
+    print("VICTIMS", " ".join(sorted(best, key=best.get)))
+
+
+def rip(netname, lifted, radius=2.2):
+    """Remove the lifted nets' unlocked copper around the unconnected ends of `netname`."""
+    B = Board(PCB)
+    pts = _orphan_pts(B, netname)
+    gone = []
+    for t in B.b.GetTracks():
+        if t.IsLocked() or t.GetNetname().split("/")[-1] not in lifted:
+            continue
+        a, e = (t.GetPosition(), t.GetPosition()) if t.GetClass() == "PCB_VIA" else (t.GetStart(), t.GetEnd())
+        if any(seg_dist(T(a.x), T(a.y), T(e.x), T(e.y), x, y) < radius for x, y, _ in pts):
+            gone.append(t)
+    for t in gone: B.b.Remove(t)
+    pcbnew.SaveBoard(PCB, B.b)
+    print("RIPPED", len(gone))
+
+
+def rejoin(netname, lifted):
+    """Route the open net first, now that there is room, then put the lifted nets back."""
+    B = Board(PCB)
+    before = len(B.vias)
+    res = [join_islands(B, n, reach=90.0, margin=10.0, tries=60) for n in (netname, *lifted)]
+    if any(r and r[0] == "FAILED" for rs in res for r in rs):
+        print("NOJOIN", res)
+    elif len(B.vias) - before > 3 * (1 + len(lifted)):
+        print("NOJOIN: would take", len(B.vias) - before, "vias; a detour like that is worse than routing the board again")
+    else:
+        B.save(); print("JOINED", res)
 
 
 def peel():
@@ -112,4 +191,9 @@ def peel():
 
 
 if __name__ == "__main__":
-    peel() if "--peel" in sys.argv else main()
+    a = sys.argv[1:]
+    if not a: main()
+    elif a[0] == "--peel": peel()
+    elif a[0] == "--victims": victims(a[1])
+    elif a[0] == "--rip": rip(a[1], a[2:])
+    elif a[0] == "--rejoin": rejoin(a[1], a[2:])
