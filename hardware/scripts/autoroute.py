@@ -47,7 +47,15 @@ def plane_fanout(board):
     for fp in board.GetFootprints():
         fc = fp.GetPosition()
         pads = list(fp.Pads())
-        if len(pads) > 60:        # the 0.4 mm pitch QFN: a via 0.9 mm out of a supply pin blocks both neighbours' lanes; leave it to the router
+        if len(pads) > 60:        # the 0.4 mm pitch QFN: a via 0.9 mm out of a supply pin blocks both neighbours' lanes; leave
+            # those to the pre-routes and the router. Its exposed pad still gets its ground vias (five, inside the keepout's centre window).
+            for pad in pads:
+                bb = pad.GetBoundingBox()
+                if pad.GetNetname() == "GND" and min(bb.GetWidth(), bb.GetHeight()) >= pcbnew.FromMM(3.0):
+                    cx, cy = pcbnew.ToMM(pad.GetPosition().x), pcbnew.ToMM(pad.GetPosition().y)
+                    for dx, dy in ((0, 0), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+                        if B.via_ok(cx + dx, cy + dy, pad.GetNetCode()):
+                            B.add_via(cx + dx, cy + dy, pad.GetNetCode()); added += 1
             continue
         for pad in pads:
             name = pad.GetNetname()

@@ -31,20 +31,21 @@ OUT, IN, BI = "output", "input", "bidirectional"
 # GPIO number -> (net, shape)
 GPIO = {
     **{i: (f"MD{i}", BI) for i in range(8)},
-    8: ("nAEN_X", OUT), 9: ("nAEN_Y", OUT), 10: ("nDATA_OE", OUT), 11: ("BE_REQ", OUT), 12: ("WAIT_REQ", OUT),
+    8: ("nAEN_LO", OUT), 9: ("nAEN_HI", OUT), 10: ("nDATA_OE", OUT), 11: ("BE_REQ", OUT), 12: ("WAIT_REQ", OUT),
     13: ("Z80_A14", IN), 14: ("Z80_A15", IN), 15: ("nMEMRD", IN), 16: ("nMEMWR", IN),
     17: ("nIORD", IN), 18: ("nIOWR", IN), 19: ("nROSCS_L", IN), 20: ("nEXROM_L", IN),
     21: ("nINT_L", IN), 22: ("TAPE_IN", IN), 23: ("TAPE_OUT", OUT),
     24: ("I2C_SDA", BI), 25: ("I2C_SCL", OUT),
     29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
     32: ("SD_MISO", IN), 35: ("nIOX_INT", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
-    40: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),
+    34: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),      # DC is a plain GPIO: GP34 sits in the open corner of the fan-out, GP40 is boxed in
     44: ("WIFI_TX", OUT), 45: ("WIFI_RX", IN), 46: ("AUDIO_L", OUT),
 }
 DMA_GPIO = {26: ("nWR_ALO", OUT), 27: ("nMRD", OUT), 28: ("nMWR", OUT), 31: ("nWR_AHI", OUT), 33: ("nDMA_EN", OUT), 34: ("nDMA_MREQ", OUT)}
 if DMA_OPTION:
     GPIO.update(DMA_GPIO)
-SPARE = [36] if DMA_OPTION else [36] + sorted(DMA_GPIO)
+SPARE = ([36] if DMA_OPTION else [36] + sorted(DMA_GPIO)) + [40]
+SPARE = [g for g in SPARE if g not in GPIO]
 
 
 def main():

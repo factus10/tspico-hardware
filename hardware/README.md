@@ -65,7 +65,7 @@ Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price
 
 - Body 130 x 56 mm (the register row of the first layout is gone). Left edge, top to bottom: ESP32-C3 antenna, USB-C, micro SD. The TF-01A socket's shell is flush with the board edge (its shield pads sit 3 mm back, so nothing needs edge clearance). Right edge: 3.5 mm jack in the corner, DE-9 below it.
 - Top edge: buttons on 0.5 in centres, left to right TS Reset, NMI, RUN, BOOTSEL, then the OLED header. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
-- Row above the fingers: data, address group X, address group Y and control 74LVC245s in finger order (U3 is turned 180 degrees from the others: its A side is the Z80 side so DIR can be /RD itself). Above that: strobe OR gates U6 and open-drain drivers U7. I2C expander U15 and the joystick conditioning network sit beside the DE-9; audio and the two LDOs above them.
+- Row above the fingers: data U3, high address byte U2 directly over fingers A15-A8, control U4 (U3 is turned 180 degrees from the others: its A side is the Z80 side so DIR can be /RD itself). Row above that: low address byte U1 over U2, fed from fingers A0-A3 on the left and A7-A4 on the right along the bottom layer, then strobe OR gates U6 and open-drain drivers U7. Both address buffers put plain bytes on MD0-MD7, so the firmware sees ordinary addresses. I2C expander U15 and the joystick conditioning network sit beside the DE-9; audio and the two LDOs above them.
 - RP2350B core regulator copied from "Hardware design with RP2350" figure 4: input cap C22 and output cap C20 (0402) straddle the VREG_LX pin, LX runs 3.7 mm under both to L1, VIN and PGND go straight into C22, feedback senses at C20, the AVDD filter R28/C39 sits above. L1 is the polarised Abracon part: pad 2 (dot) is the DVDD end, away from the top edge of the board.
 - Crystal 6.5 mm from its pins with R20 between chip and crystal; XOUT_R runs under the crystal to pad 3. XIN and XOUT drop one pad lane after leaving the chip so DVDD pin 32 has room for its via.
 - Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, check `lib/tspico.pretty/microSD_TF-01A` and `L_Abracon_AOTA-B201610` against the parts' drawings (both were generated from LCSC's land patterns), confirm the TF-01A card-detect polarity.
@@ -76,15 +76,20 @@ Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price
 cd hardware
 PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
 $PY scripts/gen_layout.py     # placement, keepouts, planes (discards all routing)
-$PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD pin 32, corner supply pins
+$PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD spine, inner supply links, bottom-row fan
 $PY scripts/autoroute.py --jar <freerouting-2.4.1.jar> --passes 100     # about 25 minutes
 $PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets
 ```
 
-Rules: 0.15 mm signal tracks, 0.4 mm on the 5 V rails and +3V3_WIFI, 0.127 mm clearance, every via 0.6/0.3 mm (JLCPCB's no-surcharge size; the ESP32 footprint's 0.2 mm thermal vias are opened to 0.3 mm by `gen_layout.py`). The pre-stitch step skips the RP2350B: a via 0.9 mm out of a 0.4 mm pitch pin blocks both neighbours' escape lanes.
+Rules: 0.15 mm signal tracks (the router may neck down to 0.11 mm in a squeeze; board minimum 0.1 mm, JLCPCB's is 0.09), 0.4 mm on the 5 V rails and +3V3_WIFI, 0.127 mm clearance, every via 0.6/0.3 mm (JLCPCB's no-surcharge size; the ESP32 footprint's 0.2 mm thermal vias are opened to 0.3 mm by `gen_layout.py`). The pre-stitch step skips the RP2350B's pins: a via 0.9 mm out of a 0.4 mm pitch pin blocks both neighbours' escape lanes. Its exposed pad gets five ground vias.
 
-State on 2026-09-17, after dropping the DMA option: **fully routed, zero DRC errors, zero unconnected items**, nothing on either plane layer except the planes. 2127 track segments, 387 vias. The remaining DRC warnings are silkscreen only (reference designators overlapping in the dense rows); JLCPCB clips silk off pads by itself.
+What `preroute.py` fixes in place before the autorouter runs, because the router handles a fully used 0.4 mm pitch QFN badly (whichever pins it leaves for last end up sealed behind its own vias):
 
-After the autorouter, `finish.py` and three hand edits (all clearance-checked with `scripts/finish_route.py`): the regulator's feedback pin was joined to the DVDD net under the package and the DVDD tracks widened to 0.25 mm where there was room; RP2350B supply pins the router had linked under the package without a via were joined to connected copper; supply pin 29 got its own via in the two pad lanes the DMA pins freed; one +5V segment beside U30 was narrowed from 0.40 to 0.38 mm to clear a 2 um clearance miss. With the DMA option present the same flow left two of its nets unroutable, which is why it was dropped (`scripts/config.py`).
+- the regulator and crystal, as above;
+- the **DVDD spine**: 0.25 mm track under the package from the regulator's pin 65 to DVDD pins 51, 10 and 32 (10, 15 and 22 mm from the output capacitor; only the first 3 mm at the pins is 0.15 mm), and pin 51's 100 nF 2 mm from its pin;
+- the 3.3 V supply pins linked in groups under the package, each group with one via: 50 to corner pin 41, 68/69 to 76 to pin 5, 24 to 29;
+- the **bottom pad row** (pins 1-20, all used) as a deterministic fan: straight out to a staggered depth, a 45 degree turn, and a via on a common line at 0.75 mm spacing, which is the tightest legal pattern for 0.6 mm vias at 0.4 mm pitch.
+
+State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes): **fully routed, zero DRC errors, zero unconnected items**, no tracks on either plane layer. About 2080 track segments and 390 vias. The scripted flow gets there by itself except for one step done by hand this time: joining the USB-C receptacle's second VBUS pad pair (now handled: the joiner treats overlapping pads as one node). Remaining DRC warnings are silkscreen overlaps in the dense rows and three short copper stubs left where unused pre-routed vias were removed.
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.

@@ -51,8 +51,7 @@ the unsourced Sunlord part), 33 R + 4.7 uF VREG_AVDD filter (both basic).
 | XL9555 I2C expander for the slow I/O | 74HC273, STAT 74LVC245, power-on clear (R, C, Schottky) | XL9555 C609791 $0.41, three pull-ups, five 10 k pull-downs |
 | DMA dropped (`DMA_OPTION = False` in `hardware/scripts/config.py`) | 2 x 574, DMA-driver 245, the direction XOR (74LVC1G86, one extended part number) and three caps | nothing; the data transceiver's DIR is /RD |
 
-The address groups follow the connector's finger order, so the firmware stores images indexed by
-the PIO's address word (nibble order 3, 0, 2, 1); see docs/v3-architecture.md section 2.
+Each address buffer delivers one plain byte (A0-A7, A8-A15); the connector's split finger order is handled in the board routing.
 
 ## Kept on purpose
 

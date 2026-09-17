@@ -41,6 +41,8 @@ class Board:
         self.pads = []      # (x0, y0, x1, y1, net, through)
         for f in b.GetFootprints():
             for p in f.Pads():
+                if not (p.GetLayerSet().Contains(pcbnew.F_Cu) or p.GetLayerSet().Contains(pcbnew.B_Cu)):
+                    continue                      # paste-only sub-pads (the QFN's exposed-pad paste pattern) are not copper
                 bb = p.GetBoundingBox()
                 self.pads.append((T(bb.GetLeft()), T(bb.GetTop()), T(bb.GetRight()), T(bb.GetBottom()),
                                   p.GetNetCode(), p.GetAttribute() != pcbnew.PAD_ATTRIB_SMD))
@@ -598,6 +600,14 @@ def islands_geo(B, net):
         for x, y in pts:
             for j, jt in enumerate(items):
                 if j != i and touch(jt, x, y, it[2]): par[find(i)] = find(j)
+    # pads that overlap (the USB-C receptacle's paired A/B pads) are one node
+    pad_idx = [i for i, it in enumerate(items) if it[0] == "pad"]
+    for a_ in pad_idx:
+        for b_ in pad_idx:
+            if a_ < b_:
+                ga, gb = items[a_][1], items[b_][1]
+                if ga[0] < gb[2] and gb[0] < ga[2] and ga[1] < gb[3] and gb[1] < ga[3] and (items[a_][2] == items[b_][2] or None in (items[a_][2], items[b_][2])):
+                    par[find(a_)] = find(b_)
     groups = {}
     for i, it in enumerate(items): groups.setdefault(find(i), []).append(it)
     out = []

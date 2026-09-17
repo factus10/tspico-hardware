@@ -14,8 +14,8 @@ Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist p
 
 ```
 TS2068 edge connector (5 V)                                        RP2350B (3.3 V)
-  A0-A3, A12-A15 -> 74LVC245 (/OE = nAEN_X) --+
-  A4-A11         -> 74LVC245 (/OE = nAEN_Y) --+--> MD0-MD7 <--> GP0-GP7     nAEN_X, nAEN_Y <-- GP8, GP9
+  A0-A7  -> 74LVC245 (/OE = nAEN_LO) --+
+  A8-A15 -> 74LVC245 (/OE = nAEN_HI) --+--> MD0-MD7 <--> GP0-GP7     nAEN_LO, nAEN_HI <-- GP8, GP9
   D0-D7  <-> 74LVC245 (DIR = /RD, /OE = nDATA_OE) <--> MD0-MD7
   control -> 74LVC245 -> nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN nBUSAK_L -> GPIO / expander
   /MREQ, /IORQ, /RD, /WR -> 74LVC32 -> nMEMRD, nMEMWR, nIORD, nIOWR -> GPIO
@@ -27,21 +27,14 @@ RP2350B support: GD25Q128E QSPI (16 MB, W25Q128 pinout), APS6404L PSRAM footprin
 SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> expander
 ```
 
-The two address buffers are the byte mux: their output enables put one address group at a time on MD. The groups follow the edge connector's finger order, so each carries two nibbles:
-
-| Group | MD7-MD4 | MD3-MD0 |
-|---|---|---|
-| X (nAEN_X) | A15-A12 | A3-A0 |
-| Y (nAEN_Y) | A11-A8 | A7-A4 |
-
-The PIO's 16-bit word {X, Y} is therefore the Z80 address with its nibbles in the order 3, 0, 2, 1. The firmware stores each image in SRAM indexed by that word (a one-off shuffle when an image is loaded), so the PIO and DMA path needs no bit manipulation.
+The two address buffers are the byte mux: their output enables put one address byte at a time on MD. U1 delivers A0-A7 on MD0-MD7 and U2 delivers A8-A15 on MD0-MD7, so the PIO's two reads are the plain low and high byte and its 16-bit word is the Z80 address as it is. (The edge connector's finger order splits the low byte's fingers either side of the high byte's; that is absorbed in the board routing, not in the firmware.)
 
 ## 3. Bus cycles
 
 ### 3.1 Z80 memory cycle (served by PIO and DMA)
 
 1. PIO waits for nMEMRD or nMEMWR low. These are /MREQ ORed with /RD and /WR, so refresh cycles, which assert neither, never trigger it.
-2. It drives nAEN_X low and samples MD0-MD7 (address group X), then nAEN_X high, nAEN_Y low, sample again (group Y), nAEN_Y high. One PIO cycle separates the two enables so the buffers never drive MD together. About 40 ns.
+2. It drives nAEN_HI low and samples MD0-MD7 (A15-A8), then nAEN_HI high, nAEN_LO low, sample again (A7-A0), nAEN_LO high. One PIO cycle separates the two enables so the buffers never drive MD together. About 40 ns.
 3. It decides the class from nROSCS_L, nEXROM_L, Z80_A15/A14 and which strobe fired, exactly the rule the shipped `set_ctrl` state machine applies:
 
 | nROSCS | nEXROM | A15 = A14 = 0 and read | Class | Served from | /BE |
@@ -52,7 +45,7 @@ The PIO's 16-bit word {X, Y} is therefore the Z80 address with its nibbles in th
 | otherwise | | | not ours | nothing | released |
 
    HOME is the first 16 KB of a 32 KB ROM slot, EXROM the second, as today.
-4. For a read: the PIO shifts the chosen image base (held in a scratch register per class) in front of the 16-bit address word to form a 32-bit SRAM pointer, pushes it, and a two-channel DMA chain fetches the byte into the PIO TX FIFO. The PIO sets MD0-MD7 as outputs, drives the byte, asserts nDATA_OE and BE_REQ, and holds until nMEMRD rises. About 100 to 150 ns from the strobe to data on the Z80 bus.
+4. For a read: the PIO shifts the chosen image base (held in a scratch register per class) in front of the 16-bit address to form a 32-bit SRAM pointer, pushes it, and a two-channel DMA chain fetches the byte into the PIO TX FIFO. The PIO sets MD0-MD7 as outputs, drives the byte, asserts nDATA_OE and BE_REQ, and holds until nMEMRD rises. About 100 to 150 ns from the strobe to data on the Z80 bus.
 5. For a write: the PIO enables the data transceiver inward, captures MD0-MD7 on nMEMWR rising, and pushes address plus data; a DMA channel stores the byte into the image. Writes to a DCK slot are the "DCK RAM" of today; writes to a ROM slot are what the existing update TAPs do, and the firmware decides whether to persist them (section 5).
 
 Timing budget: the tightest case is an opcode fetch, about 375 ns from /MREQ low to data valid at the Z80 after transceiver delays. The path above uses well under half of it. Regular reads allow about 550 ns.
@@ -105,8 +98,8 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | GPIO | Signal | Dir | Notes |
 |---|---|---|---|
 | 0-7 | MD0-MD7 | bidir | Local bus. PIO in/out base. |
-| 8 | nAEN_X | out | Address group X buffer enable (PIO side-set). |
-| 9 | nAEN_Y | out | Address group Y buffer enable (PIO side-set). |
+| 8 | nAEN_LO | out | Low address byte (A0-A7) buffer enable (PIO side-set). |
+| 9 | nAEN_HI | out | High address byte (A8-A15) buffer enable (PIO side-set). |
 | 10 | nDATA_OE | out | Data transceiver enable (PIO side-set). |
 | 11 | BE_REQ | out | Asserts /BE through the 74LVC06 (PIO). |
 | 12 | WAIT_REQ | out | Asserts /WAIT (PIO side-set). |
@@ -121,10 +114,11 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
 | 35 | nIOX_INT | in | Expander change interrupt, 10 k pull-up. |
-| 26-28, 31, 33, 34, 36 | spare | | Seven spares. |
+| 26-28, 31, 33, 36, 40 | spare | | Seven spares. |
 | 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
 | 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
-| 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from the expander. |
+| 34 | OLED DC | out | Plain GPIO; moved from GP40, whose pad is boxed in on the board. |
+| 41-43 | OLED CS, SCK, MOSI | out | SPI1 pin group; OLED reset from the expander. |
 | 44, 45 | WIFI_TX, WIFI_RX | | ESP32-C3 UART0 (module GPIO20/21). XON/XOFF flow control; EN and IO9 from the expander. |
 | 46 | AUDIO_L (PWM) | out | |
 | 47 | PSRAM CS1 | | QMI CS1n (options GP0, 8, 19, 47). |
@@ -135,7 +129,7 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 
 | Qty | Part | Role |
 |---|---|---|
-| 2 | 74LVC245 | Z80 address groups X and Y onto MD; the output enables are the byte mux |
+| 2 | 74LVC245 | Z80 address low byte and high byte onto MD; the output enables are the byte mux |
 | 1 | 74LVC245 | Z80 D0-D7 to MD0-MD7 |
 | 1 | 74LVC245 | Control inputs, 5 V tolerant |
 | 1 | 74LVC32 | nMEMRD, nMEMWR, nIORD, nIOWR strobes |
@@ -148,7 +142,6 @@ Seven packages, four part numbers (down from 16 packages in the first v3 schemat
 
 - Memory: the `sel_bank`/`set_ctrl` state machines become one PIO program that reads the address bytes, picks a base pointer, and hands off to a DMA chain. PIO and DMA are configurable from MicroPython; the cycle itself needs no CPU. The image-load, slot-map and persistence logic replaces the flash-bank commands' hardware side while keeping their names.
 - Ports: `TS_IO` becomes a classifier over the address byte plus A14/A15, with WAIT side-set; the 8251 and AY emulations are new responders. AY audio generation runs in C on core 1.
-- Images are stored in SRAM indexed by the address word the PIO reads (nibble order 3, 0, 2, 1); the loader does the shuffle, and Z80 writes land at the same index.
 - SD on its own SPI; reset is RESET_HOLD; ESP32 control, LED, OLED reset and joystick through the I2C expander, joystick reads driven by its /INT line.
 
 ## 10. Risks

@@ -3,9 +3,9 @@
 
 Contents (see docs/v3-architecture.md sections 2, 3, 5):
   P1   TS2068 edge connector
-  U1   74LVC245  Z80 A0-A3, A12-A15 -> MD   address group X, /OE = nAEN_X (fixed B->A)
-  U2   74LVC245  Z80 A4-A11         -> MD   address group Y, /OE = nAEN_Y
-       The two output enables are the byte mux: the PIO enables X, reads MD, enables Y, reads MD.
+  U1   74LVC245  Z80 A0-A7  -> MD0-MD7   low address byte,  /OE = nAEN_LO (fixed B->A)
+  U2   74LVC245  Z80 A8-A15 -> MD0-MD7   high address byte, /OE = nAEN_HI
+       The two output enables are the byte mux: the PIO enables one, reads MD, enables the other, reads MD.
   U3   74LVC245  Z80 D0-D7 <-> MD0-MD7      DIR from U9 (or straight from /RD without the DMA option), /OE = nDATA_OE
   U4   74LVC245  Z80 control inputs -> 3.3 V copies for the MCU (fixed B->A)
   U6   74LVC32   bus strobes: nMEMRD, nMEMWR, nIORD, nIOWR (refresh and INTACK never assert /RD or /WR,
@@ -81,28 +81,27 @@ def main():
     def transceiver(ref, x, y, value="74LVC245APW", dnp=False):
         return s.place("74xx:74LS245", ref, value, TSSOP20, x, y, dnp=dnp)
 
-    # The B side follows the connector's finger order so the tracks from the
-    # fingers do not cross (at rot 270 on the board B7 is the leftmost pin).
-    # Finger order, left to right: A0 A1 A2 A3 A15 A14 A13 A12 | A11 ... A4.
-    # Each chip puts two address nibbles on MD:
-    #   group X (U1): MD3-0 = A3-A0,  MD7-4 = A15-A12
-    #   group Y (U2): MD3-0 = A7-A4,  MD7-4 = A11-A8
-    # so the PIO's 16-bit word {X, Y} is the address with its nibbles in the
-    # order 3,0,2,1. The firmware stores images indexed by that word.
+    # Each buffer delivers one plain address byte: U1 puts A0-A7 on MD0-MD7, U2 puts
+    # A8-A15 on MD0-MD7, so the PIO's two reads are the low and high byte as they are.
+    # Finger order on the connector (left to right): A0 A1 A2 A3 | A15 ... A8 | A7 A6 A5 A4.
+    # U2 sits over the middle eight fingers, which are A15-A8 in pin order. U1 sits in
+    # the row above it; its B pins follow the fingers (A0-A3 from the left, A7-A4 from
+    # the right) so those tracks do not cross, and its A side is wired to MD by bit.
+    # (At rot 270 on the board B7 is the leftmost pin and Ai sits directly above Bi.)
     U1 = transceiver("U1", 150, 50)
-    for b_, idx in zip(range(7, -1, -1), [0, 1, 2, 3, 15, 14, 13, 12]):
+    for b_, idx in zip(range(7, -1, -1), [0, 1, 2, 3, 7, 6, 5, 4]):
         s.label(f"A{idx}", U1.pin(f"B{b_}"))
-        s.glabel(f"MD{idx if idx < 4 else idx - 8}", U1.pin(f"A{b_}"), BI)
+        s.glabel(f"MD{idx}", U1.pin(f"A{b_}"), BI)
     s.label("GND", U1.pin("1"))                      # DIR low: B -> A
-    s.glabel("nAEN_X", U1.pin("19"), IN)
+    s.glabel("nAEN_LO", U1.pin("19"), IN)
     s.label("+3V3", U1.pin("20")); s.label("GND", U1.pin("10"))
 
     U2 = transceiver("U2", 150, 110)
-    for b_, idx in zip(range(7, -1, -1), [11, 10, 9, 8, 7, 6, 5, 4]):
+    for b_, idx in zip(range(7, -1, -1), [15, 14, 13, 12, 11, 10, 9, 8]):
         s.label(f"A{idx}", U2.pin(f"B{b_}"))
-        s.glabel(f"MD{idx - 4}", U2.pin(f"A{b_}"), BI)
+        s.glabel(f"MD{idx - 8}", U2.pin(f"A{b_}"), BI)
     s.label("GND", U2.pin("1"))
-    s.glabel("nAEN_Y", U2.pin("19"), IN)
+    s.glabel("nAEN_HI", U2.pin("19"), IN)
     s.label("+3V3", U2.pin("20")); s.label("GND", U2.pin("10"))
 
     # ---- U3 data transceiver ---------------------------------------------------------

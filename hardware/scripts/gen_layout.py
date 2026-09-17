@@ -46,19 +46,17 @@ R3Y, R2Y = BODY_H - 5.5, BODY_H - 13.5      # transceiver row, glue/DMA row
 
 # Body is 130 x 56 mm (tongue below). Left edge: ESP32 antenna (top corner), USB-C,
 # micro SD (shell flush with the edge). Right edge: audio jack, DE-9.
-# Row 3: transceivers in finger order: data (fingers x 29-52), address group X
-# (44-62), address group Y (64-82), control (54-92).
+# Row 3, nearest the fingers: data U3 (fingers x 29-52, top copper), high address byte U2
+# directly over its fingers A15-A8 (x 54-72, bottom copper), control U4 (x 54-92).
+# Row 2: low address byte U1 above U2; its fingers are split (A0-A3 at x 44-52, A7-A4 at
+# x 74-82) and come in from both sides on the bottom layer. Then strobes U6, drivers U7.
 P["U3"], P["C3"] = (40, R3Y, 270 if DMA_OPTION else 90), (48, R3Y, 90)      # without the DMA option U3's A side is the Z80 side
-P["U1"], P["C1"] = (56, R3Y, 270), (64, R3Y, 90)
-P["U2"], P["C2"] = (74, R3Y, 270), (82, R3Y, 90)
+P["U2"], P["C2"] = (63, R3Y, 270), (69, R3Y, 90)
 P["U4"], P["C4"] = (92, R3Y, 270), (100, R3Y, 90)
-# Row 2: DMA option (U12, U13, U8: DNP) then strobes U6 and open-drain drivers U7
-P["U12"], P["C8"] = (42, R2Y, 270), (47.7, R2Y, 90)
-P["U13"], P["C9"] = (53, R2Y, 270), (58.7, R2Y, 90)
-P["U8"], P["C7"] = (64, R2Y, 270), (69.4, R2Y, 90)
-P["U6"], P["C5"] = (74.5, R2Y, 270), (78.6, R2Y, 90)
-P["U7"], P["C6"] = (85.5, R2Y, 270), (92.3, R2Y - 1.5, 90)
-P["R1"] = (92.3, R2Y + 3.2, 0)
+P["U1"], P["C1"] = (63, R2Y, 270), (68.4, R2Y, 90)
+P["U6"], P["C5"] = (76, R2Y, 270), (80.1, R2Y, 90)
+P["U7"], P["C6"] = (87, R2Y, 270), (93.8, R2Y - 1.5, 90)
+P["R1"] = (93.8, R2Y + 3.2, 0)
 P["U9"], P["R4"] = (32, R2Y + 4, 0), (32, R2Y + 1, 0)
 P["R9"], P["R10"] = (94.6, 37.2, 0), (94.6, 34.6, 0)          # BUSRQ / NMI_REQ pull-downs by U7 and the expander
 # I2C expander and the joystick network beside the DE-9
@@ -81,9 +79,9 @@ P["C39"], P["R28"] = (55.1, 21.2, 180), (55.6, 19.2, 270)
 P["Y1"], P["R20"], P["C35"], P["C36"] = (75.5, 26.0, 0), (71.7, 25.2, 0), (74.4, 29.3, 270), (76.6, 22.7, 90)
 # decoupling: left 68/69, 76; bottom 5, DVDD 10, 15; right 29, 24, DVDD 32; top 41, 50, DVDD 51, 59/60
 P["C23"], P["C24"] = (51.2, 26.4, 0), (51.2, 29.4, 0)
-P["C25"], P["C48"], P["C26"] = (56.4, 33.2, 90), (56.4, 36.4, 90), (67.6, 33.2, 90)      # clear of the bottom-row fan-out
-P["C28"], P["C29"], P["C47"] = (69.4, 30.6, 0), (71.0, 33.4, 0), (70.6, 19.8, 0)
-P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (60.6, 14.0, 0), (57.4, 16.4, 0)     # clear of the top-row fan-out
+P["C25"], P["C48"], P["C26"] = (57.6, 37.0, 270), (61.35, 37.0, 270), (66.0, 37.0, 270)      # under the fan vias of pins 5, 10 (DVDD) and 15
+P["C28"], P["C29"], P["C47"] = (69.4, 30.6, 0), (72.6, 33.0, 0), (70.6, 19.8, 0)
+P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (62.3, 18.2, 90), (57.4, 16.4, 0)     # C21 straight above DVDD pin 51 (pin 50 beside it connects under the package, so its lane is free)
 P["U21"], P["C37"], P["R21"] = (44, 20, 0), (38, 20, 90), (38, 25, 0)
 P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
 P["R27"], P["R26"] = (47.6, 24.0, 0), (47.6, 26.0, 0)          # USB series resistors on the way out to J1
@@ -109,8 +107,8 @@ P["C50"], P["C51"] = (30.5, 30, 0), (30.5, 34, 0)
 # power block, top right below the OLED header
 P["D2"], P["D3"] = (84, 11, 0), (84, 15.5, 0)
 P["C40"], P["C41"] = (93.5, 13.5, 0), (104, 13.5, 0)
-P["U30"], P["C42"], P["C43"] = (88, 23.5, 0), (82.2, 21, 90), (82.2, 25.5, 90)
-P["U31"], P["C44"], P["C45"] = (88, 32.5, 0), (82.2, 30, 90), (82.2, 34.5, 90)
+P["U30"], P["C42"], P["C43"] = (88, 23.5, 0), (81.6, 21, 90), (81.6, 25.5, 90)
+P["U31"], P["C44"], P["C45"] = (88, 32.5, 0), (81.6, 30, 90), (81.6, 34.5, 90)
 # right edge: audio jack in the corner (opening to the right), DE-9 below it
 P["J4"] = (123.7, 7, 180)
 P["J5"] = (122.3, 34, 90)

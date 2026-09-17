@@ -106,7 +106,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 
 ## Relayout done 2026-09-17
 
-Board relaid at 130 x 64.25 mm with the cheaper BOM, the consolidated logic, the RP2350 design guide's regulator layout and a short crystal path; see hardware/README.md ("Routing flow and state"). With the DMA option two of its nets could not be routed; it was dropped the same day and the board is now fully routed with zero DRC errors and fresh fab outputs. Next: check the two custom footprints, the TF-01A card-detect polarity and the DE-9 footprint against their drawings, then order. Original notes follow.
+Board relaid at 130 x 64.25 mm with the cheaper BOM, the consolidated logic, the RP2350 design guide's regulator layout and a short crystal path; see hardware/README.md ("Routing flow and state"). With the DMA option two of its nets could not be routed; it was dropped the same day. The address buffers were then rewired to deliver plain low and high bytes (no address shuffle in firmware), OLED_DC moved to GP34, and the RP2350B's supply spine and bottom-row fan-out became locked pre-routes. The board is fully routed with zero DRC errors and fresh fab outputs. Next: check the two custom footprints, the TF-01A card-detect polarity and the DE-9 footprint against their drawings, then order. Original notes follow.
 
 ## Rework notes (historical)
 
