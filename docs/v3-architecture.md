@@ -8,36 +8,43 @@ The card is an RP2350B on the TS2068 rear connector. The RP2350B serves the card
 
 Everything between the Z80 bus and the RP2350B travels over one 8-bit local bus, MD0 to MD7: the Z80 address (in two bytes through a pair of muxes), the Z80 data (through a transceiver), and the card's four registers. That is what keeps the design inside 48 GPIOs with room to spare.
 
-Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset, a DMA mode onto the 2068's own memory after a bus grant, tape EAR out and SPK/TAP in, a 128x96 SPI OLED, a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
+Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset, a DMA mode onto the 2068's own memory after a bus grant (a stuffing option, not fitted on the prototype), tape EAR out and SPK/TAP in, a 128x96 SPI OLED, a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
 
 ## 2. Block diagram
 
 ```
 TS2068 edge connector (5 V)                                        RP2350B (3.3 V)
-  A0-A15 <-> 74LVC245 x2 -> MA0-MA15 -+-> 74LVC257 x2 (byte mux) -> MD0-MD7 <--> GP0-GP7
-             (DIR = DMA_EN)            |       ASEL, nAOE <----------------------- GP8, GP9
-                                       +-< 74HC574 x2 ALO/AHI (DMA address, /OE = nDMA_EN)
-  D0-D7  <-> 74LVC245 (DIR = nRD xor DMA_EN, /OE = nDATA_OE) <--> MD0-MD7
-  control -> 74LVC245 -> nRD_L nWR_L nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN -> GPIO
-  /MREQ&/RFSH, /IORQ&/M1 -> 74LVC04/08 -> nMREQ_V, nIORQ_V -> GPIO
-  /BE /WAIT /BUSRQ /NMI /RESET <-- 74LVC06 open-drain <-- BE_REQ, WAIT_REQ (PIO), BUSRQ, NMI_REQ (CTL), RESET_HOLD (GPIO, pull-up)
-  /MREQ /RD /WR <-- 74LVC245 (DMA mode, /OE = nDMA_EN) <-- nMRD, nMWR
+  A0-A3, A12-A15 -> 74LVC245 (/OE = nAEN_X) --+
+  A4-A11         -> 74LVC245 (/OE = nAEN_Y) --+--> MD0-MD7 <--> GP0-GP7     nAEN_X, nAEN_Y <-- GP8, GP9
+  D0-D7  <-> 74LVC245 (DIR = nRD xor nDMA_EN, /OE = nDATA_OE) <--> MD0-MD7
+  control -> 74LVC245 -> nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN nBUSAK_L -> GPIO / expander
+  /MREQ, /IORQ, /RD, /WR -> 74LVC32 -> nMEMRD, nMEMWR, nIORD, nIOWR -> GPIO
+  /BE /WAIT /BUSRQ /NMI /RESET <-- 74LVC06 open-drain <-- BE_REQ, WAIT_REQ (PIO), BUSRQ, NMI_REQ (expander), RESET_HOLD (GPIO, pull-up)
   EAR <-- divider <-- TAPE_OUT ; SOUND -> audio mixer
-Registers on MD0-MD7, strobed directly by four GPIOs (nWR_ALO, nWR_AHI, nWR_CTL, nRD_STAT):
-  ALO, AHI  74HC574   DMA-mode address
-  CTL       74LVC273  DMA_EN, BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, LED, spare (cleared at power-up)
-  STAT      74LVC245  joystick x6, nBUSAK, SD_CD
+Slow I/O: XL9555 16-bit I2C expander (I2C0 on GP24/GP25, /INT on GP35)
+  out: BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED      in: joystick x6, nBUSAK_L, SD_CD
+DMA stuffing option (footprints, not fitted): 74LVC574 x2 ALO/AHI driving A0-A15 directly,
+  74LVC245 driving /MREQ /RD /WR, both enabled by nDMA_EN (GP33, pulled high)
 RP2350B support: GD25Q128E QSPI (16 MB, W25Q128 pinout), APS6404L PSRAM footprint (CS1 = GP47, not fitted on the prototype), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
-SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> STAT
+SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> expander
 ```
+
+The two address buffers are the byte mux: their output enables put one address group at a time on MD. The groups follow the edge connector's finger order, so each carries two nibbles:
+
+| Group | MD7-MD4 | MD3-MD0 |
+|---|---|---|
+| X (nAEN_X) | A15-A12 | A3-A0 |
+| Y (nAEN_Y) | A11-A8 | A7-A4 |
+
+The PIO's 16-bit word {X, Y} is therefore the Z80 address with its nibbles in the order 3, 0, 2, 1. The firmware stores each image in SRAM indexed by that word (a one-off shuffle when an image is loaded), so the PIO and DMA path needs no bit manipulation.
 
 ## 3. Bus cycles
 
 ### 3.1 Z80 memory cycle (served by PIO and DMA)
 
-1. PIO waits for nMREQ_V low (memory request, not refresh).
-2. It drives nAOE low with ASEL = 0 and samples MD0-MD7: the low address byte. Then ASEL = 1, sample again: the high byte. nAOE high. About 30 ns.
-3. It decides the class from nROSCS_L, nEXROM_L, Z80_A15/A14 and nRD_L, exactly the rule the shipped `set_ctrl` state machine applies:
+1. PIO waits for nMEMRD or nMEMWR low. These are /MREQ ORed with /RD and /WR, so refresh cycles, which assert neither, never trigger it.
+2. It drives nAEN_X low and samples MD0-MD7 (address group X), then nAEN_X high, nAEN_Y low, sample again (group Y), nAEN_Y high. One PIO cycle separates the two enables so the buffers never drive MD together. About 40 ns.
+3. It decides the class from nROSCS_L, nEXROM_L, Z80_A15/A14 and which strobe fired, exactly the rule the shipped `set_ctrl` state machine applies:
 
 | nROSCS | nEXROM | A15 = A14 = 0 and read | Class | Served from | /BE |
 |---|---|---|---|---|---|
@@ -47,42 +54,40 @@ SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-
 | otherwise | | | not ours | nothing | released |
 
    HOME is the first 16 KB of a 32 KB ROM slot, EXROM the second, as today.
-4. For a read: the PIO shifts the chosen image base (held in a scratch register per class) in front of the 16-bit address to form a 32-bit SRAM pointer, pushes it, and a two-channel DMA chain fetches the byte into the PIO TX FIFO. The PIO sets MD0-MD7 as outputs, drives the byte, asserts nDATA_OE and BE_REQ, and holds until nMREQ_V rises. About 100 to 150 ns from nMREQ_V to data on the Z80 bus.
-5. For a write: the PIO enables the data transceiver inward, captures MD0-MD7 on nWR_L rising, and pushes address plus data; a DMA channel stores the byte into the image. Writes to a DCK slot are the "DCK RAM" of today; writes to a ROM slot are what the existing update TAPs do, and the firmware decides whether to persist them (section 5).
+4. For a read: the PIO shifts the chosen image base (held in a scratch register per class) in front of the 16-bit address word to form a 32-bit SRAM pointer, pushes it, and a two-channel DMA chain fetches the byte into the PIO TX FIFO. The PIO sets MD0-MD7 as outputs, drives the byte, asserts nDATA_OE and BE_REQ, and holds until nMEMRD rises. About 100 to 150 ns from the strobe to data on the Z80 bus.
+5. For a write: the PIO enables the data transceiver inward, captures MD0-MD7 on nMEMWR rising, and pushes address plus data; a DMA channel stores the byte into the image. Writes to a DCK slot are the "DCK RAM" of today; writes to a ROM slot are what the existing update TAPs do, and the firmware decides whether to persist them (section 5).
 
 Timing budget: the tightest case is an opcode fetch, about 375 ns from /MREQ low to data valid at the Z80 after transceiver delays. The path above uses well under half of it. Regular reads allow about 550 ns.
 
 ### 3.2 Z80 I/O cycle
 
-PIO waits for nIORQ_V (I/O request with /M1 high), reads the address the same way, and classifies:
+PIO waits for nIORD or nIOWR (/IORQ ORed with /RD and /WR; an interrupt acknowledge asserts neither), reads the address the same way, and classifies:
 
 | Port | Function |
 |---|---|
 | $0E / $0F | TS-Pico data / status (legacy pair; current ROMs) |
 | $1C / $1D / $1E | TS-Pico data / command / memory control (firmware wishlist; optional) |
-| $1F | Kempston joystick, answered from a byte the main loop refreshes from STAT every 1 to 2 ms |
+| $1F | Kempston joystick, answered from a byte the main loop refreshes from the expander when its /INT line reports a change |
 | $73 / $77 | Intel 8251 data / status (TS2050 layout), bridged to the ESP32-C3 UART running Zimodem |
 | $FFFD / $BFFD | AY-3-8910 register select / data (Spectrum 128 layout, A15 and A14 decoded); the low byte $FD does not collide with the 2068's $F5/$F6 PSG |
 | anything else | ignored |
 
 Which ports are enabled is a firmware setting; there is no port jumper. WAIT_REQ is a PIO side-set: asserted as soon as a served read is recognised, released once data is on the bus, so blocking FIFO pulls are safe. Whether to use it is a firmware flag.
 
-### 3.3 DMA mode (onto the 2068's own memory)
+### 3.3 DMA mode (stuffing option, not fitted on the prototype)
 
-Write ALO and AHI with the target address, set DMA_EN in CTL. The address latches drive MA0-MA15 and the address transceivers turn outward. Pulse nMRD to read (the DMA-driver 74LVC245 drives /MREQ and /RD; the data transceiver direction follows nRD xor DMA_EN, so the byte arrives on MD) or put data on MD and pulse nMWR. Only after BUSRQ in CTL has been set and nBUSAK is seen low in STAT. This gives snapshot load and save, screen capture and pokes with no ROM support; the SCLD's DRAM handling during bus grant is validated on the prototype.
+With U8, U12 and U13 fitted: set BUSRQ through the expander and wait for nBUSAK_L. Write ALO and AHI (strobes nWR_ALO, nWR_AHI latch MD), drive nDMA_EN low. The 74LVC574 latches drive A0-A15 directly and the DMA driver puts nDMA_MREQ, nMRD and nMWR onto /MREQ, /RD and /WR. The data transceiver direction follows nRD xor nDMA_EN, so a read arrives on MD and a write leaves from it. nDMA_EN has a pull-up, so with the parts absent or the RP2350 in reset the data direction is simply the inverse of /RD. `DMA_OPTION = False` in `hardware/scripts/config.py` removes the DMA parts and the XOR entirely.
 
-## 4. Registers
+## 4. Slow I/O: the I2C expander
 
-Each register has its own strobe GPIO (no decoder). Writes clock on the strobe's rising edge; the read buffer is enabled while nRD_STAT is low.
+One XL9555 (PCA9555 pinout, address 0x20) replaces the CTL register, its power-on clear and the STAT buffer.
 
-| Sel | Name | Chip | Bits |
-|---|---|---|---|
-| 0 | ALO (write) | 74HC574, /OE = nDMA_EN | MA0-MA7 in DMA mode |
-| 1 | AHI (write) | 74HC574, /OE = nDMA_EN | MA8-MA15 in DMA mode |
-| 2 | CTL (write) | 74LVC273, cleared by a power-on RC | 0 DMA_EN, 1 BUSRQ, 2 NMI_REQ, 3 nOLED_RST, 4 WIFI_EN, 5 WIFI_DL (1 = ESP32 download mode; inverted onto IO9), 6 LED, 7 spare |
-| 3 | STAT (read) | 74LVC245, DIR low | 0-4 joystick up/down/left/right/fire, 5 fire 2, 6 nBUSAK, 7 SD card detect |
+| Port | Bits |
+|---|---|
+| 0 (outputs) | 0 BUSRQ, 1 NMI_REQ, 2 nOLED_RST, 3 WIFI_EN, 4 WIFI_DL (1 = ESP32 download mode; an open-drain gate pulls IO9 low), 5 nLED (low = on), 6-7 spare |
+| 1 (inputs) | 0-3 joystick up/down/left/right, 4 fire, 5 fire 2, 6 nBUSAK_L, 7 SD card detect |
 
-All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA, no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot selected, LED off.
+The expander powers up with every pin an input and weak pull-ups. 10 k pull-downs on the five active-high outputs give the same safe start the cleared CTL register did: no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot, LED off. /INT (GP35) fires on any input change, so the firmware reads the joystick only when it moves. A read takes about 100 us at 400 kHz.
 
 ## 5. Images, slots and persistence
 
@@ -102,58 +107,56 @@ All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA,
 | GPIO | Signal | Dir | Notes |
 |---|---|---|---|
 | 0-7 | MD0-MD7 | bidir | Local bus. PIO in/out base. |
-| 8 | ASEL | out | Address byte select for the muxes (PIO side-set). |
-| 9 | nAOE | out | Mux output enable (PIO side-set). |
+| 8 | nAEN_X | out | Address group X buffer enable (PIO side-set). |
+| 9 | nAEN_Y | out | Address group Y buffer enable (PIO side-set). |
 | 10 | nDATA_OE | out | Data transceiver enable (PIO side-set). |
 | 11 | BE_REQ | out | Asserts /BE through the 74LVC06 (PIO). |
 | 12 | WAIT_REQ | out | Asserts /WAIT (PIO side-set). |
 | 13, 14 | Z80_A14, Z80_A15 | in | Direct copies for the class decision before the byte read completes. |
-| 15 | nMREQ_V | in | /MREQ gated with /RFSH. |
-| 16 | nIORQ_V | in | /IORQ gated with /M1. |
-| 17, 18 | nRD_L, nWR_L | in | |
+| 15, 16 | nMEMRD, nMEMWR | in | /MREQ ORed with /RD, /WR. PIO wait pins. |
+| 17, 18 | nIORD, nIOWR | in | /IORQ ORed with /RD, /WR. |
 | 19, 20 | nROSCS_L, nEXROM_L | in | GP13-GP20 contiguous for `in pins`. |
 | 21 | nINT_L | in | 2068 frame interrupt, AY timing. |
 | 22 | TAPE_IN | in | SPK/TAP from the 2068 (through the control transceiver). |
 | 23 | TAPE_OUT | out | To EAR via divider. |
-| 24, 25, 26 | nWR_ALO, nWR_AHI, nWR_CTL | out | Register write strobes (rising edge clocks). |
-| 27 | nMRD | out | DMA read strobe. |
-| 28 | nMWR | out | DMA write strobe. |
+| 24, 25 | I2C_SDA, I2C_SCL | | I2C0 to the XL9555 expander, 4.7 k pull-ups. |
+| 26, 31 | nWR_ALO, nWR_AHI | out | DMA option: address latch strobes. |
+| 27, 28 | nMRD, nMWR | out | DMA option: read and write strobes. |
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
-| 31 | nRD_STAT | out | STAT read-buffer enable. |
-| 33-36 | spare | | Four spares. |
+| 33, 34 | nDMA_EN, nDMA_MREQ | out | DMA option. nDMA_EN has a 10 k pull-up. |
+| 35 | nIOX_INT | in | Expander change interrupt, 10 k pull-up. |
+| 36 | spare | | |
 | 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
 | 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
-| 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from CTL. |
-| 44, 45 | WIFI_TX, WIFI_RX | | ESP32-C3 UART0 (module GPIO20/21). XON/XOFF flow control; EN and IO9 from CTL. |
+| 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from the expander. |
+| 44, 45 | WIFI_TX, WIFI_RX | | ESP32-C3 UART0 (module GPIO20/21). XON/XOFF flow control; EN and IO9 from the expander. |
 | 46 | AUDIO_L (PWM) | out | |
 | 47 | PSRAM CS1 | | QMI CS1n (options GP0, 8, 19, 47). |
 
-43 used, 5 spare. Slow signals go through CTL/STAT, so later features cost register bits, not pins.
+47 used with the DMA option, 41 without. Slow signals go through the expander, which has two spare bits.
 
 ## 8. Chip list (interface and local bus)
 
 | Qty | Part | Role |
 |---|---|---|
-| 2 | 74LVC245 | Z80 A0-A15 to MA0-MA15, turned outward in DMA mode |
+| 2 | 74LVC245 | Z80 address groups X and Y onto MD; the output enables are the byte mux |
 | 1 | 74LVC245 | Z80 D0-D7 to MD0-MD7 |
 | 1 | 74LVC245 | Control inputs, 5 V tolerant |
-| 2 | 74LVC257 | MA byte mux onto MD |
-| 2 | 74HC574 | ALO, AHI |
-| 1 | 74HC273 | CTL |
-| 1 | 74LVC245 | STAT read buffer (DIR low) |
-| 1 | 74LVC245 | DMA drivers for /MREQ, /RD, /WR (DIR high, /OE = nDMA_EN) |
-| 1 | 74LVC04, 1 74LVC08 | /MREQ and /IORQ qualification, DMA /MREQ, DMA_EN inversion, WIFI_DL inversion |
-| 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET |
-| 1 | 74LVC1G86 | Data direction = nRD xor DMA_EN |
+| 1 | 74LVC32 | nMEMRD, nMEMWR, nIORD, nIOWR strobes |
+| 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET, ESP32 IO9 |
+| 1 | 74LVC1G86 | Data direction = nRD xor nDMA_EN (goes away with `DMA_OPTION = False`) |
+| 1 | XL9555 | I2C expander: control outputs, joystick, status |
+| not fitted | 2 x 74LVC574, 1 x 74LVC245 | DMA option: ALO/AHI onto A0-A15, drivers for /MREQ, /RD, /WR |
 
-15 packages and eight part numbers: 74LVC on everything that touches the 5 V bus, 74HC for the 3.3 V-only registers, no memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock KiCad symbol and footprint) running Zimodem, which has a native ESP32-C3 4 MB target; flashed through the card's USB-C with the RP2350 as a UART bridge. Audio: dual op-amp, RC filters, 3.5 mm jack. Joystick: DE-9 with ESD array. Display: 7-pin header for the Waveshare 1.27" 128x96 SSD1351 module.
+Eight fitted packages, five part numbers (down from 16 packages in the first v3 schematic), all 74LVC because every one of them touches the 5 V bus. No memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock Zimodem firmware).
 
 ## 9. Firmware impact
 
 - Memory: the `sel_bank`/`set_ctrl` state machines become one PIO program that reads the address bytes, picks a base pointer, and hands off to a DMA chain. PIO and DMA are configurable from MicroPython; the cycle itself needs no CPU. The image-load, slot-map and persistence logic replaces the flash-bank commands' hardware side while keeping their names.
 - Ports: `TS_IO` becomes a classifier over the address byte plus A14/A15, with WAIT side-set; the 8251 and AY emulations are new responders. AY audio generation runs in C on core 1.
-- SD on its own SPI; reset is RESET_HOLD; ESP32 control and joystick through CTL/STAT.
+- Images are stored in SRAM indexed by the address word the PIO reads (nibble order 3, 0, 2, 1); the loader does the shuffle, and Z80 writes land at the same index.
+- SD on its own SPI; reset is RESET_HOLD; ESP32 control, LED, OLED reset and joystick through the I2C expander, joystick reads driven by its /INT line.
 
 ## 10. Risks
 

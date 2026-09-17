@@ -38,10 +38,12 @@ def main():
         s.nc(U40.pin(pin))
     R40 = s.place("Device:R", "R40", "10k", R0603, 230, 90)
     s.glabel("+3V3_WIFI", R40.pin("1"), IN); s.label("ESP_IO8", R40.pin("2"))
+    R41 = s.place("Device:R", "R41", "10k", R0603, 245, 90)
+    s.glabel("+3V3_WIFI", R41.pin("1"), IN); s.glabel("nWIFI_BOOT", R41.pin("2"), IN)
     for k, (ref, val, fp) in enumerate((("C60", "10u", C0603), ("C61", "100n", C0603))):
         C = s.place("Device:C", ref, val, fp, 230 + 15 * k, 130)
         s.glabel("+3V3_WIFI", C.pin("1"), IN); s.label("GND", C.pin("2"))
-    s.text("R40: IO8 must be high during a download-mode boot. IO9 low = download mode (driven by nWIFI_BOOT).", 130, 180, 1.5)
+    s.text("R40: IO8 must be high during a download-mode boot. IO9 low = download mode: R41 pulls it up, the open-drain gate in U7 pulls it down when WIFI_DL is set.", 130, 180, 1.5)
     s.text("Zimodem's modem-status pins (DCD, RI, DSR, DTR, RTS/CTS) are not routed; XON/XOFF flow control.", 130, 183, 1.5)
 
     s.write()

@@ -5,11 +5,12 @@ Prices and stock come from JLCPCB's parts API (`hardware/scripts/jlc_price.py`),
 basic and preferred parts have none. TSSOP logic is never basic, so the levers were unit price,
 out-of-stock parts, and the number of distinct part numbers.
 
-|  | before | after |
-|---|---|---|
-| parts per board | $25.75 | $11.79 |
-| extended part numbers (fee) | 24 ($72) | 18 ($54) |
-| parts + fees per board, 10 boards | $32.95 | $17.19 |
+|  | first v3 BOM | part substitutions | logic consolidation |
+|---|---|---|---|
+| parts per board | $25.75 | $11.79 | $10.43 |
+| extended part numbers (fee) | 24 ($72) | 18 ($54) | 15 ($45) |
+| parts + fees per board, 10 boards | $32.95 | $17.19 | $14.93 |
+| fitted logic packages | 16 | 15 | 8 |
 
 Rerun `python3 scripts/gen_fab.py --bom-only && python3 scripts/jlc_price.py --boards 10` from
 `hardware/` to refresh the numbers.
@@ -41,11 +42,22 @@ of stock or $0.41, now EnergyMath EM74LVC06AD in SOIC-14, C49188178).
 Added by the RP2350 regulator rework: Abracon AOTA-B201610S3R3-101-T C42411119 ($0.28, replaces
 the unsourced Sunlord part), 33 R + 4.7 uF VREG_AVDD filter (both basic).
 
+## Logic consolidation (2026-09-17, second pass)
+
+| Change | Removes | Adds |
+|---|---|---|
+| The two address 74LVC245s go straight onto MD; their output enables are the byte mux | 2 x 74LVC257, the 16-line MA bus | nothing (GP8/GP9 change role) |
+| Strobes nMEMRD, nMEMWR, nIORD, nIOWR from one OR package; refresh and INTACK never assert /RD or /WR, so /RFSH and /M1 qualification is unnecessary | 74LVC04, 74LVC08 | 74LVC32 C6087 $0.14 |
+| XL9555 I2C expander for the slow I/O | 74HC273, STAT 74LVC245, power-on clear (R, C, Schottky) | XL9555 C609791 $0.41, three pull-ups, five 10 k pull-downs |
+| DMA becomes a stuffing option (`DMA_OPTION` in `hardware/scripts/config.py`) | 2 x 574, DMA-driver 245 and three caps from the BOM | footprints stay; the latches must be 74LVC574 if fitted because they drive the 5 V address bus |
+
+The address groups follow the connector's finger order, so the firmware stores images indexed by
+the PIO's address word (nibble order 3, 0, 2, 1); see docs/v3-architecture.md section 2.
+
 ## Kept on purpose
 
-- **74LVC on the 5 V side** (U1-U9): 5 V tolerant inputs and 24 mA drive are needed on the 2068
-  bus. 74HC/AHC is used only where everything is 3.3 V and the RP2350 owns the timing (574, 273).
-  The 257 address muxes stay LVC because they sit in the Z80 address path.
+- **74LVC everywhere in the logic**: every remaining package touches the 5 V bus and needs 5 V
+  tolerant inputs and 24 mA drive.
 - **TI TLV1117LV33** ($0.29): the $0.11 clones list 1.2 V dropout, which would not hold 3.3 V
   from USB power after the OR-ing diode. A cheap alternative if the rails are split further:
   ME6211C33 (C82942, $0.06, 500 mA).

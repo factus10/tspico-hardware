@@ -106,7 +106,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 
 ## Pending rework before ordering: relayout (regulator/crystal fix + cheaper BOM)
 
-Schematic side is done as of 2026-09-17 (AOTA inductor with pin 1 on DVDD, VREG_AVDD 33 R + 4.7 uF filter, BOM substitutions in docs/bom-cost-optimization.md). Remaining: draw the TF-01A footprint, update gen_layout.py for the new/removed parts, place the regulator and crystal per the notes below, reroute, DRC, regenerate fab outputs.
+Schematic side is done as of 2026-09-17 (AOTA inductor with pin 1 on DVDD, VREG_AVDD 33 R + 4.7 uF filter, BOM substitutions in docs/bom-cost-optimization.md). The logic was consolidated the same day (byte mux through the address buffers' enables, 74LVC32 strobes, XL9555 expander, DMA as a DNP option; docs/v3-architecture.md). Remaining: draw the TF-01A footprint, update gen_layout.py for the new/removed parts, place the regulator and crystal per the notes below, reroute, DRC, regenerate fab outputs.
 
 ### RP2350B regulator and crystal (JLCPCB review, 2026-09-16)
 

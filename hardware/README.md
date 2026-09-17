@@ -55,7 +55,7 @@ KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
 $KC sch export bom --output bom/tspico-v3-jlcpcb-bom.csv --fields "Value,Reference,Footprint,LCSC" --labels "Comment,Designator,Footprint,LCSC Part #" --group-by "Value,Footprint" --exclude-dnp tspico-v3.kicad_sch
 ```
 
-Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price.py --boards 10`; the reasoning for each substitution is in `docs/bom-cost-optimization.md` (2026-09-17: parts + fees per board went from $32.95 to $17.19 on a 10-board run). **The PCB file predates these substitutions** (new footprints for J2, J4, D4, C40/C41/C46, the 10 uF caps, L1, U7, U8; U16 deleted; C34 gone; R28/C39 added) and must be laid out again before new fab outputs are generated; `fab/` is stale.
+Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price.py --boards 10`; the reasoning for each substitution is in `docs/bom-cost-optimization.md` (2026-09-17: parts + fees per board went from $32.95 to $14.93 on a 10-board run, fitted logic packages from 16 to 8). **The PCB file predates these substitutions** (new footprints for J2, J4, D4, C40/C41/C46, the 10 uF caps, L1, U7; U5, U10, U11, U14, U16, R4-as-POR, C9-as-POR, D1 and C11-C16 deleted; U15 is now a TSSOP-24 I2C expander; U8, U12, U13, C7-C9 are DNP DMA-option footprints; R6-R13, R28, R41, C39 added) and must be laid out again before new fab outputs are generated; `fab/` is stale.
 
 ## Fab outputs
 

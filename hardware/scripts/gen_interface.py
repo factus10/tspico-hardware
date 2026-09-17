@@ -3,18 +3,20 @@
 
 Contents (see docs/v3-architecture.md sections 2, 3, 5):
   P1   TS2068 edge connector
-  U1   74LVC245  Z80 A0-A7   <-> MA0-MA7        DIR=DMA_EN, always enabled
-  U2   74LVC245  Z80 A8-A15  <-> MA8-MA15
-  U3   74LVC245  Z80 D0-D7 (B) <-> MD0-MD7 (A)  DIR=DATA_DIR (nRD xor nDMA_EN), /OE=nDATA_OE
+  U1   74LVC245  Z80 A0-A3, A12-A15 -> MD   address group X, /OE = nAEN_X (fixed B->A)
+  U2   74LVC245  Z80 A4-A11         -> MD   address group Y, /OE = nAEN_Y
+       The two output enables are the byte mux: the PIO enables X, reads MD, enables Y, reads MD.
+  U3   74LVC245  Z80 D0-D7 <-> MD0-MD7      DIR from U9 (or straight from /RD without the DMA option), /OE = nDATA_OE
   U4   74LVC245  Z80 control inputs -> 3.3 V copies for the MCU (fixed B->A)
-  U5   74LVC04   inverters for the gating below, one spare
-  U6   74LVC08   nMREQ_V = /(MREQ & /RFSH), nIORQ_V = /(IORQ & /M1),
-                 nDMA_MREQ = nMRD & nMWR, one spare
-  U7   74LVC06   (SOIC-14) open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT, nBUSRQ, nNMI, nRESET
-  U8   74LVC245  DMA bus drivers for nMREQ, nRD, nWR (DIR fixed A->B, /OE = nDMA_EN; same part as U1-U4)
-  U9   74LVC1G86 DATA_DIR = nRD xor nDMA_EN
+  U6   74LVC32   bus strobes: nMEMRD, nMEMWR, nIORD, nIOWR (refresh and INTACK never assert /RD or /WR,
+                 so no /RFSH or /M1 qualification is needed)
+  U7   74LVC06   (SOIC-14) open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT,
+                 nBUSRQ, nNMI, nRESET; sixth gate WIFI_DL -> nWIFI_BOOT (ESP32 IO9)
+  DMA stuffing option (config.DMA_OPTION), all DNP except U9:
+  U8   74LVC245  DMA bus drivers for nMREQ, nRD, nWR (DIR fixed A->B, /OE = nDMA_EN)
+  U9   74LVC1G86 DATA_DIR = nRD xor nDMA_EN (fitted; nDMA_EN is pulled high by R4)
+  U12/U13 74LVC574 ALO / AHI address latches, outputs straight onto Z80 A0-A15 (/OE = nDMA_EN)
   SW1/SW2 TS reset and NMI buttons; R1 RESET_HOLD pull-up; R2/R3 EAR divider
-  C1-C8 decoupling
 Net naming: n<NAME> = active low. Signals with suffix _L are 3.3 V copies of
 5 V bus signals; *_REQ / BUSRQ / RESET_HOLD are active-high requests that the
 open-drain inverting drivers turn into active-low bus signals.
@@ -24,6 +26,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from schlib import Sheet  # noqa: E402
+from config import DMA_OPTION  # noqa: E402
 
 TSSOP20 = "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm"
 TSSOP14 = "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
@@ -51,7 +54,7 @@ def main():
         "A10": ("D6", "loc"), "A11": ("D5", "loc"), "A12": ("D3", "loc"), "A13": ("D4", "loc"),
         "A14": ("nINT", "loc"), "A15": ("nNMI", "loc"), "A17": ("nMREQ", "loc"), "A18": ("nIORQ", "loc"),
         "A19": ("nRD", "loc"), "A20": ("nWR", "loc"), "A22": ("nWAIT", "loc"), "A23": ("nBUSRQ", "loc"),
-        "A24": ("nRESET", "loc"), "A25": ("nM1", "loc"), "A26": ("nRFSH", "loc"), "A27": ("nEXROM", "loc"),
+        "A24": ("nRESET", "loc"), "A27": ("nEXROM", "loc"),
         "A28": ("nROSCS", "loc"), "A29": ("nBE", "loc"),
         "A21": ("nBUSAK", OUT), "A31": ("SOUND_2068", OUT),
         "B10": ("A0", "loc"), "B11": ("A1", "loc"), "B12": ("A2", "loc"), "B13": ("A3", "loc"),
@@ -59,7 +62,8 @@ def main():
         "B18": ("A11", "loc"), "B19": ("A10", "loc"), "B20": ("A9", "loc"), "B21": ("A8", "loc"),
         "B22": ("A7", "loc"), "B23": ("A6", "loc"), "B24": ("A5", "loc"), "B25": ("A4", "loc"),
     }
-    nc_pins = ["A3", "A5", "A16", "A30", "B3", "B5", "B9", "B26", "B27", "B28", "B29", "B30", "B31"]
+    nc_pins = ["A25", "A26",    # /M1, /RFSH: not needed with the /RD-/WR qualified strobes
+               "A3", "A5", "A16", "A30", "B3", "B5", "B9", "B26", "B27", "B28", "B29", "B30", "B31"]
     for pin, (net, kind) in bus_out.items():
         at = P1.pin(pin)
         if kind in ("loc", "pwr"):
@@ -73,81 +77,75 @@ def main():
     s.power("+3V3", 330, 30, "#PWR02", flag=False)
     s.power("GND", 360, 40, "#PWR03", flag=False)
 
-    # ---- U1/U2 address transceivers ------------------------------------------
-    def transceiver(ref, x, y, value="74LVC245APW"):
-        return s.place("74xx:74LS245", ref, value, TSSOP20, x, y)
+    # ---- U1/U2 address buffers; their output enables are the byte mux ------------
+    def transceiver(ref, x, y, value="74LVC245APW", dnp=False):
+        return s.place("74xx:74LS245", ref, value, TSSOP20, x, y, dnp=dnp)
 
-    # Pin assignments follow the connector's finger order so the tracks from
-    # the fingers to the transceivers do not cross (at rot 270 on the board
-    # B7 is the leftmost pin, B0 the rightmost; Ai sits directly above Bi).
-    # Z80-side finger order, left to right: D7 D0 D1 D2 D6 D5 D3 D4 (A side);
-    # A0 A1 A2 A3 A15 A14 A13 A12 A11 A10 A9 A8 A7 A6 A5 A4 (B side).
+    # The B side follows the connector's finger order so the tracks from the
+    # fingers do not cross (at rot 270 on the board B7 is the leftmost pin).
+    # Finger order, left to right: A0 A1 A2 A3 A15 A14 A13 A12 | A11 ... A4.
+    # Each chip puts two address nibbles on MD:
+    #   group X (U1): MD3-0 = A3-A0,  MD7-4 = A15-A12
+    #   group Y (U2): MD3-0 = A7-A4,  MD7-4 = A11-A8
+    # so the PIO's 16-bit word {X, Y} is the address with its nibbles in the
+    # order 3,0,2,1. The firmware stores images indexed by that word.
     U1 = transceiver("U1", 150, 50)
-    for b, idx in zip(range(7, -1, -1), [0, 1, 2, 3, 15, 14, 13, 12]):
-        s.label(f"A{idx}", U1.pin(f"B{b}"))
-        s.glabel(f"MA{idx}", U1.pin(f"A{b}"), BI)
-    s.glabel("DMA_EN", U1.pin("1"), IN)
-    s.label("GND", U1.pin("19"))
-    s.label("+3V3", U1.pin("20"))
-    s.label("GND", U1.pin("10"))
+    for b_, idx in zip(range(7, -1, -1), [0, 1, 2, 3, 15, 14, 13, 12]):
+        s.label(f"A{idx}", U1.pin(f"B{b_}"))
+        s.glabel(f"MD{idx if idx < 4 else idx - 8}", U1.pin(f"A{b_}"), BI)
+    s.label("GND", U1.pin("1"))                      # DIR low: B -> A
+    s.glabel("nAEN_X", U1.pin("19"), IN)
+    s.label("+3V3", U1.pin("20")); s.label("GND", U1.pin("10"))
 
     U2 = transceiver("U2", 150, 110)
-    for b, idx in zip(range(7, -1, -1), [11, 10, 9, 8, 7, 6, 5, 4]):
-        s.label(f"A{idx}", U2.pin(f"B{b}"))
-        s.glabel(f"MA{idx}", U2.pin(f"A{b}"), BI)
-    s.glabel("DMA_EN", U2.pin("1"), IN)
-    s.label("GND", U2.pin("19"))
-    s.label("+3V3", U2.pin("20"))
-    s.label("GND", U2.pin("10"))
+    for b_, idx in zip(range(7, -1, -1), [11, 10, 9, 8, 7, 6, 5, 4]):
+        s.label(f"A{idx}", U2.pin(f"B{b_}"))
+        s.glabel(f"MD{idx - 4}", U2.pin(f"A{b_}"), BI)
+    s.label("GND", U2.pin("1"))
+    s.glabel("nAEN_Y", U2.pin("19"), IN)
+    s.label("+3V3", U2.pin("20")); s.label("GND", U2.pin("10"))
 
-    # ---- U3 data transceiver: B side = Z80 (faces the fingers), A side = local MD.
-    # DIR = 1 means A->B (local -> Z80): high on a Z80 read in Z80 mode, high on
-    # a write in DMA mode: DATA_DIR = nRD xor nDMA_EN (U9).
+    # ---- U3 data transceiver ---------------------------------------------------------
     U3 = transceiver("U3", 150, 170)
-    for b, idx in zip(range(7, -1, -1), [7, 0, 1, 2, 6, 5, 3, 4]):
-        s.label(f"D{idx}", U3.pin(f"B{b}"))
-        s.glabel(f"MD{idx}", U3.pin(f"A{b}"), BI)
-    s.label("DATA_DIR", U3.pin("1"))
+    z80_side, md_side = ("B", "A") if DMA_OPTION else ("A", "B")
+    for b_, idx in zip(range(7, -1, -1), [7, 0, 1, 2, 6, 5, 3, 4]):
+        s.label(f"D{idx}", U3.pin(f"{z80_side}{b_}"))
+        s.glabel(f"MD{idx}", U3.pin(f"{md_side}{b_}"), BI)
+    if DMA_OPTION:
+        # B = Z80, A = MD. DIR high = A->B (local -> Z80): a Z80 read in Z80 mode,
+        # a write in DMA mode: DATA_DIR = nRD xor nDMA_EN (U9).
+        s.label("DATA_DIR", U3.pin("1"))
+    else:
+        # A = Z80, B = MD. DIR = /RD: low on a Z80 read = B->A (local -> Z80).
+        s.label("nRD", U3.pin("1"))
     s.glabel("nDATA_OE", U3.pin("19"), IN)
-    s.label("+3V3", U3.pin("20"))
-    s.label("GND", U3.pin("10"))
+    s.label("+3V3", U3.pin("20")); s.label("GND", U3.pin("10"))
 
     # ---- U4 control inputs, fixed B (Z80) -> A (MCU), in finger order ----------
     U4 = transceiver("U4", 150, 230)
     ctl = [("SPKR_TAPE", "TAPE_IN"), ("nINT", "nINT_L"), ("A15", "Z80_A15"), ("A14", "Z80_A14"),
-           ("nRD", "nRD_L"), ("nWR", "nWR_L"), ("nEXROM", "nEXROM_L"), ("nROSCS", "nROSCS_L")]
-    for b, (src, dst) in zip(range(7, -1, -1), ctl):
-        s.label(src, U4.pin(f"B{b}"))
-        s.glabel(dst, U4.pin(f"A{b}"), OUT)
+           ("nBUSAK", "nBUSAK_L"), (None, None), ("nEXROM", "nEXROM_L"), ("nROSCS", "nROSCS_L")]
+    for b_, (src, dst) in zip(range(7, -1, -1), ctl):
+        if src is None:
+            s.label("GND", U4.pin(f"B{b_}")); s.nc(U4.pin(f"A{b_}"))
+            continue
+        if src == "nBUSAK":
+            s.glabel(src, U4.pin(f"B{b_}"), IN)
+        else:
+            s.label(src, U4.pin(f"B{b_}"))
+        s.glabel(dst, U4.pin(f"A{b_}"), OUT)
     s.label("GND", U4.pin("1"))     # DIR low: B -> A
     s.label("GND", U4.pin("19"))    # always enabled
-    s.label("+3V3", U4.pin("20"))
-    s.label("GND", U4.pin("10"))
+    s.label("+3V3", U4.pin("20")); s.label("GND", U4.pin("10"))
 
-    # ---- U5 inverters, U6 AND gates ------------------------------------------
-    inv_x, inv_y = 250, 40
-    inv = [s.place("74xx:74LS04", "U5", "74LVC04APW", TSSOP14, inv_x, inv_y + 15 * k, unit=k + 1) for k in range(6)]
-    pw5 = s.place("74xx:74LS04", "U5", "74LVC04APW", TSSOP14, inv_x, inv_y + 100, unit=7)
-    s.label("+3V3", pw5.pin("14")); s.label("GND", pw5.pin("7"))
-    and_x, and_y = 250, 160
-    ands = [s.place("74xx:74LS08", "U6", "74LVC08APW", TSSOP14, and_x, and_y + 15 * k, unit=k + 1) for k in range(4)]
-    pw6 = s.place("74xx:74LS08", "U6", "74LVC08APW", TSSOP14, and_x, and_y + 70, unit=5)
+    # ---- U6 bus strobes (74LVC32, inputs straight from the 5 V bus) ---------------
+    or_x, or_y = 250, 160
+    ors = [s.place("74xx:74LS32", "U6", "74LVC32APW", TSSOP14, or_x, or_y + 15 * k, unit=k + 1) for k in range(4)]
+    pw6 = s.place("74xx:74LS32", "U6", "74LVC32APW", TSSOP14, or_x, or_y + 70, unit=5)
     s.label("+3V3", pw6.pin("14")); s.label("GND", pw6.pin("7"))
-
-    # inverter a: nMREQ -> MREQ_H ; b: nIORQ -> IORQ_H ; c: MREQ_RFSH -> nMREQ_V
-    # d: IORQ_M1 -> nIORQ_V ; e: DMA_EN -> nDMA_EN ; f: WIFI_DL -> nWIFI_BOOT (ESP32 IO9)
-    s.label("nMREQ", inv[0].pin("1"));   s.label("MREQ_H", inv[0].pin("2"))
-    s.label("nIORQ", inv[1].pin("3"));   s.label("IORQ_H", inv[1].pin("4"))
-    s.label("MREQ_RFSH", inv[2].pin("5")); s.glabel("nMREQ_V", inv[2].pin("6"), OUT)
-    s.label("IORQ_M1", inv[3].pin("9"));   s.glabel("nIORQ_V", inv[3].pin("8"), OUT)
-    s.glabel("DMA_EN", inv[4].pin("11"), IN); s.glabel("nDMA_EN", inv[4].pin("10"), OUT)
-    s.glabel("WIFI_DL", inv[5].pin("13"), IN); s.glabel("nWIFI_BOOT", inv[5].pin("12"), OUT)
-
-    # AND a: MREQ_H & nRFSH ; b: IORQ_H & nM1 ; c: nMRD & nMWR ; d: spare
-    s.label("MREQ_H", ands[0].pin("1")); s.label("nRFSH", ands[0].pin("2")); s.label("MREQ_RFSH", ands[0].pin("3"))
-    s.label("IORQ_H", ands[1].pin("4")); s.label("nM1", ands[1].pin("5"));   s.label("IORQ_M1", ands[1].pin("6"))
-    s.glabel("nMRD", ands[2].pin("9"), IN); s.glabel("nMWR", ands[2].pin("10"), IN); s.label("nDMA_MREQ", ands[2].pin("8"))
-    s.label("GND", ands[3].pin("12")); s.label("GND", ands[3].pin("13")); s.nc(ands[3].pin("11"))
+    for k, (a_, b_, out, (pa, pb, po)) in enumerate([("nMREQ", "nRD", "nMEMRD", ("1", "2", "3")), ("nMREQ", "nWR", "nMEMWR", ("4", "5", "6")),
+                                                     ("nIORQ", "nRD", "nIORD", ("9", "10", "8")), ("nIORQ", "nWR", "nIOWR", ("12", "13", "11"))]):
+        s.label(a_, ors[k].pin(pa)); s.label(b_, ors[k].pin(pb)); s.glabel(out, ors[k].pin(po), OUT)
 
     # ---- U7 open-drain drivers -------------------------------------------------
     od_x, od_y = 330, 60
@@ -159,28 +157,37 @@ def main():
     for k, (src, dst, pi, po) in enumerate(od_map):
         s.glabel(src, od[k].pin(pi), IN)
         s.label(dst, od[k].pin(po))
-    s.label("GND", od[5].pin("13")); s.nc(od[5].pin("12"))    # spare inverter: input low, output off
+    s.glabel("WIFI_DL", od[5].pin("13"), IN); s.glabel("nWIFI_BOOT", od[5].pin("12"), OUT)   # ESP32 IO9, pulled up on the WiFi sheet
 
-    # ---- U8 DMA bus drivers: a fifth 74LVC245, DIR high (A->B), /OE = nDMA_EN ----
-    # Same part as U1-U4 (one part number fewer on the JLC BOM than the 74LVC126 it replaces).
-    U8 = transceiver("U8", 330, 200)
-    dr_map = [("nDMA_MREQ", "nMREQ"), ("nMRD", "nRD"), ("nMWR", "nWR")]
-    for k, (src, dst) in enumerate(dr_map):
-        if src.startswith("nM") and src != "nDMA_MREQ":
+    if DMA_OPTION:
+        # ---- U8 DMA bus drivers: 74LVC245, DIR high (A->B), /OE = nDMA_EN. DNP. ------
+        U8 = transceiver("U8", 330, 200, dnp=True)
+        for k, (src, dst) in enumerate([("nDMA_MREQ", "nMREQ"), ("nMRD", "nRD"), ("nMWR", "nWR")]):
             s.glabel(src, U8.pin(f"A{k}"), IN)
-        else:
-            s.label(src, U8.pin(f"A{k}"))
-        s.label(dst, U8.pin(f"B{k}"))
-    for k in range(3, 8):
-        s.label("GND", U8.pin(f"A{k}")); s.nc(U8.pin(f"B{k}"))
-    s.label("+3V3", U8.pin("1"))                      # DIR: A -> B
-    s.glabel("nDMA_EN", U8.pin("19"), IN)
-    s.label("+3V3", U8.pin("20")); s.label("GND", U8.pin("10"))
+            s.label(dst, U8.pin(f"B{k}"))
+        for k in range(3, 8):
+            s.label("GND", U8.pin(f"A{k}")); s.nc(U8.pin(f"B{k}"))
+        s.label("+3V3", U8.pin("1"))                      # DIR: A -> B
+        s.glabel("nDMA_EN", U8.pin("19"), IN)
+        s.label("+3V3", U8.pin("20")); s.label("GND", U8.pin("10"))
 
-    # ---- U9 XOR: DATA_DIR = nRD xor DMA_EN -------------------------------------
-    U9 = s.place("74xGxx:74LVC1G86", "U9", "74LVC1G86", SOT23_5, 260, 250)
-    s.label("nRD", U9.pin("1")); s.glabel("nDMA_EN", U9.pin("2"), IN); s.label("DATA_DIR", U9.pin("4"))
-    s.label("+3V3", U9.pin("5")); s.label("GND", U9.pin("3"))
+        # ---- U9 XOR: DATA_DIR = nRD xor nDMA_EN (fitted; nDMA_EN idles high) ---------
+        U9 = s.place("74xGxx:74LVC1G86", "U9", "74LVC1G86", SOT23_5, 260, 250)
+        s.label("nRD", U9.pin("1")); s.glabel("nDMA_EN", U9.pin("2"), IN); s.label("DATA_DIR", U9.pin("4"))
+        s.label("+3V3", U9.pin("5")); s.label("GND", U9.pin("3"))
+        R4 = s.place("Device:R", "R4", "10k", R0603, 290, 250)
+        s.label("+3V3", R4.pin("1")); s.glabel("nDMA_EN", R4.pin("2"), IN)
+
+        # ---- U12/U13 DMA address latches, outputs on the Z80 address bus. DNP. -------
+        # 74LS574 pinout: 1 /OE, 2-9 D0-D7, 11 CP, 19-12 Q0-Q7. LVC: 5 V tolerant when disabled.
+        for k, (ref, strobe) in enumerate((("U12", "nWR_ALO"), ("U13", "nWR_AHI"))):
+            U = s.place("74xx:74LS574", ref, "74LVC574APW", TSSOP20, 250, 45 + 60 * k, dnp=True)
+            for bit in range(8):
+                s.glabel(f"MD{bit}", U.pin(str(2 + bit)), BI)
+                s.label(f"A{8 * k + bit}", U.pin(str(19 - bit)))
+            s.glabel(strobe, U.pin("11"), IN)
+            s.glabel("nDMA_EN", U.pin("1"), IN)
+            s.label("+3V3", U.pin("20")); s.label("GND", U.pin("10"))
 
     # ---- reset / NMI buttons, pull-down, tape divider --------------------------
     SW1 = s.place("Switch:SW_Push", "SW1", "TS Reset", SW_FP, 385, 150)
@@ -197,8 +204,8 @@ def main():
     s.text("Values to be confirmed on the prototype.", 355, 128, 1.5)
 
     # ---- decoupling ------------------------------------------------------------
-    for k in range(8):
-        C = s.place("Device:C", f"C{k + 1}", "100n", C0603, 40 + 9 * k, 255)
+    for k in range(9 if DMA_OPTION else 6):          # C1-C6: U1-U4, U6, U7 (U9 shares); C7-C9: U8, U12, U13 (DNP)
+        C = s.place("Device:C", f"C{k + 1}", "100n", C0603, 40 + 9 * k, 255, dnp=k >= 6)
         s.label("+3V3", C.pin("1")); s.label("GND", C.pin("2"))
 
     s.write()

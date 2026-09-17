@@ -16,6 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from schlib import Sheet  # noqa: E402
+from config import DMA_OPTION  # noqa: E402
 
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
@@ -29,22 +30,25 @@ OUT, IN, BI = "output", "input", "bidirectional"
 # GPIO number -> (net, shape)
 GPIO = {
     **{i: (f"MD{i}", BI) for i in range(8)},
-    8: ("ASEL", OUT), 9: ("nAOE", OUT), 10: ("nDATA_OE", OUT), 11: ("BE_REQ", OUT), 12: ("WAIT_REQ", OUT),
-    13: ("Z80_A14", IN), 14: ("Z80_A15", IN), 15: ("nMREQ_V", IN), 16: ("nIORQ_V", IN),
-    17: ("nRD_L", IN), 18: ("nWR_L", IN), 19: ("nROSCS_L", IN), 20: ("nEXROM_L", IN),
+    8: ("nAEN_X", OUT), 9: ("nAEN_Y", OUT), 10: ("nDATA_OE", OUT), 11: ("BE_REQ", OUT), 12: ("WAIT_REQ", OUT),
+    13: ("Z80_A14", IN), 14: ("Z80_A15", IN), 15: ("nMEMRD", IN), 16: ("nMEMWR", IN),
+    17: ("nIORD", IN), 18: ("nIOWR", IN), 19: ("nROSCS_L", IN), 20: ("nEXROM_L", IN),
     21: ("nINT_L", IN), 22: ("TAPE_IN", IN), 23: ("TAPE_OUT", OUT),
-    24: ("nWR_ALO", OUT), 25: ("nWR_AHI", OUT), 26: ("nWR_CTL", OUT), 31: ("nRD_STAT", OUT),
-    27: ("nMRD", OUT), 28: ("nMWR", OUT), 29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
-    32: ("SD_MISO", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
+    24: ("I2C_SDA", BI), 25: ("I2C_SCL", OUT),
+    29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
+    32: ("SD_MISO", IN), 35: ("nIOX_INT", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
     40: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),
     44: ("WIFI_TX", OUT), 45: ("WIFI_RX", IN), 46: ("AUDIO_L", OUT),
 }
-SPARE = [33, 34, 35, 36]
+DMA_GPIO = {26: ("nWR_ALO", OUT), 27: ("nMRD", OUT), 28: ("nMWR", OUT), 31: ("nWR_AHI", OUT), 33: ("nDMA_EN", OUT), 34: ("nDMA_MREQ", OUT)}
+if DMA_OPTION:
+    GPIO.update(DMA_GPIO)
+SPARE = [36] if DMA_OPTION else [36] + sorted(DMA_GPIO)
 
 
 def main():
     s = Sheet("tspico-v3.kicad_sch", "mcu.kicad_sch", "TS-Pico v3: RP2350B Core")
-    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP33-GP36 spare.", 20, 285, 2.5)
+    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP36 spare (plus the six DMA pins when the DMA option is off).", 20, 285, 2.5)
     s.text("USB-C: data, and VBUS to the power sheet (diode-ORed with the edge +5V) so the card runs from USB alone on the bench.", 20, 290, 2.0)
 
     s.power("+3V3", 300, 30, "#PWR06", flag=False)
