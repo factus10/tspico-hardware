@@ -52,14 +52,12 @@ def main():
         else:
             bodies[f.GetReference()] = box(f.GetBoundingBox(False), 0.05)
 
-    placed, hidden, moved = [], [], 0
-    # big parts first: their designators have the fewest good spots relative to their size
-    for f in sorted(fps, key=lambda f: -(bodies[f.GetReference()][2] - bodies[f.GetReference()][0]) * (bodies[f.GetReference()][3] - bodies[f.GetReference()][1])):
+    placed, hidden = {}, []
+
+    def try_place(f):
+        """Put f's designator at the first candidate spot that is clear; returns its ink box or None."""
         ref = f.Reference()
         name = f.GetReference()
-        if name.startswith(("FID", "H")):
-            ref.SetVisible(False)
-            continue
         ref.SetVisible(True)
         ref.SetLayer(pcbnew.F_SilkS)
         ref.SetTextSize(pcbnew.VECTOR2I(MM(SIZE), MM(SIZE)))
@@ -68,37 +66,72 @@ def main():
         ref.SetKeepUpright(True)
         x0, y0, x1, y1 = bodies[name]
         cx, cy_ = (x0 + x1) / 2, (y0 + y1) / 2
-        tw, th = len(name) * SIZE * 0.92 + 0.1, SIZE + 0.1
+        tw, th = len(name) * SIZE * 0.87 + 0.13, SIZE + STROKE + 0.08      # the ink box below
+
+        def ink(px, py, ang, n=len(name)):
+            # the glyphs themselves (capitals and digits, centred): KiCad's text bounding box adds
+            # a line-spacing allowance that would waste half the room between parts
+            hw, hh = (n * SIZE * 0.87 + 0.05) / 2 + 0.04, (SIZE + STROKE) / 2 + 0.04
+            return (px - hw, py - hh, px + hw, py + hh) if ang == 0 else (px - hh, py - hw, px + hh, py + hw)
         cands = []
-        for g in (0.08, 0.3, 0.6, 1.0, 1.5, 2.0):
+        for g in (0.02, 0.3, 0.6, 1.0, 1.5, 2.0):
             for ang, w, h in ((0, tw, th), (90, th, tw)):
-                for px, py in ((cx, y0 - h / 2 - g), (cx, y1 + h / 2 + g), (x0 - w / 2 - g, cy_), (x1 + w / 2 + g, cy_),
+                centred = [(cx, y0 - h / 2 - g), (cx, y1 + h / 2 + g), (x1 + w / 2 + g, cy_), (x0 - w / 2 - g, cy_)]
+                if y1 - y0 > x1 - x0:                # upright part: beside it reads better than above it
+                    centred = centred[2:] + centred[:2]
+                for px, py in (*centred,
                                (x0 + w / 2, y0 - h / 2 - g), (x1 - w / 2, y0 - h / 2 - g), (x0 + w / 2, y1 + h / 2 + g), (x1 - w / 2, y1 + h / 2 + g),
                                (x0 - w / 2 - g, y0 + h / 2), (x0 - w / 2 - g, y1 - h / 2), (x1 + w / 2 + g, y0 + h / 2), (x1 + w / 2 + g, y1 - h / 2)):
                     cands.append((px, py, ang, False))
         if (x1 - x0) * (y1 - y0) > 14:              # ICs, connectors, the module: inside the body as a fallback
             cands += [(cx, cy_, 0, True), (cx, cy_, 90, True)]
-        done = False
         for px, py, ang, inside in cands:
-            ref.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
-            ref.SetPosition(pcbnew.VECTOR2I(MM(px), MM(py)))
-            tb = box(ref.GetBoundingBox(), 0.04)
+            tb = ink(px, py, ang)
             if tb[0] < EDGE or tb[1] < EDGE or tb[2] > W - EDGE or tb[3] > BODY_H - EDGE:
                 continue
             if any(hit(tb, p) for p in pads):
                 continue
             if any(hit(tb, s) for owner, s in silk if not (inside and owner == name)):
                 continue
-            if any(hit(tb, o) for o in placed):
+            if any(hit(tb, o) for o in placed.values()):
                 continue
             if any(hit(tb, bd) for other, bd in bodies.items() if other != name):
                 continue
             if inside and not (tb[0] > x0 and tb[2] < x1 and tb[1] > y0 and tb[3] < y1):
                 continue
-            placed.append(tb); moved += 1; done = True
-            break
-        if not done:
-            ref.SetVisible(False); hidden.append(name)
+            ref.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
+            ref.SetPosition(pcbnew.VECTOR2I(MM(px), MM(py)))
+            return tb
+        ref.SetVisible(False)
+        return None
+
+    byname = {f.GetReference(): f for f in fps}
+    # big parts first: their designators have the fewest good spots relative to their size
+    # (ties in reading order, so a row or column of equal parts all get the same side)
+    for f in sorted(fps, key=lambda f: (-round((bodies[f.GetReference()][2] - bodies[f.GetReference()][0]) * (bodies[f.GetReference()][3] - bodies[f.GetReference()][1]), 1), bodies[f.GetReference()][0], bodies[f.GetReference()][1])):
+        name = f.GetReference()
+        if name.startswith(("FID", "H")):
+            f.Reference().SetVisible(False)
+            continue
+        tb = try_place(f)
+        if tb: placed[name] = tb
+        else: hidden.append(name)
+    # second chance: lift a neighbour's designator, place the hidden one, then put the neighbour somewhere else
+    for name in list(hidden):
+        x0, y0, x1, y1 = bodies[name]
+        near = [n for n, tb in placed.items() if hit(tb, (x0 - 3.5, y0 - 3.5, x1 + 3.5, y1 + 3.5))]
+        for n in near:
+            old_tb = placed.pop(n)
+            ref_n = byname[n].Reference(); keep = (ref_n.GetPosition(), ref_n.GetTextAngle())
+            tb = try_place(byname[name])
+            if tb:
+                placed[name] = tb
+                tb_n = try_place(byname[n])
+                if tb_n:
+                    placed[n] = tb_n; hidden.remove(name); break
+                del placed[name]; byname[name].Reference().SetVisible(False)
+            ref_n.SetVisible(True); ref_n.SetPosition(keep[0]); ref_n.SetTextAngle(keep[1]); placed[n] = old_tb
+    moved = len(placed)
     # clusters of parts too dense for individual designators get one legend, e.g. "R90-101 C90-95"
     import re
     def ranges(names):
@@ -141,12 +174,12 @@ def main():
                     txt.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T)); txt.SetPosition(pcbnew.VECTOR2I(MM(px), MM(py)))
                     tb = box(txt.GetBoundingBox(), 0.04)
                     if tb[0] < EDGE or tb[1] < EDGE or tb[2] > W - EDGE or tb[3] > BODY_H - EDGE: continue
-                    if any(hit(tb, p_) for p_ in pads) or any(hit(tb, s_) for _, s_ in silk) or any(hit(tb, o) for o in placed) or any(hit(tb, bd) for bd in bodies.values()): continue
+                    if any(hit(tb, p_) for p_ in pads) or any(hit(tb, s_) for _, s_ in silk) or any(hit(tb, o) for o in placed.values()) or any(hit(tb, bd) for bd in bodies.values()): continue
                     ok = True; break
                 if ok: break
             if ok: break
         if ok:
-            b.Add(txt); placed.append(tb); legends.append(label)
+            b.Add(txt); placed[label] = tb; legends.append(label)
     print("group legends:", legends)
     for f, g in doomed:                # last: pcbnew's item lists do not survive a Remove
         f.Remove(g)

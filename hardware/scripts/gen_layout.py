@@ -58,15 +58,15 @@ P["U6"], P["C5"] = (76, R2Y, 270), (80.1, R2Y, 90)
 P["U7"], P["C6"] = (87, R2Y, 270), (93.8, R2Y - 1.5, 90)
 P["R1"] = (93.8, R2Y + 3.2, 0)
 P["U9"], P["R4"] = (32, R2Y + 4, 0), (32, R2Y + 1, 0)
-P["R9"], P["R10"] = (94.6, 37.2, 0), (94.6, 34.6, 0)          # BUSRQ / NMI_REQ pull-downs by U7 and the expander
+P["R9"], P["R10"] = (94.6, 37.6, 0), (94.6, 35.6, 0)          # BUSRQ / NMI_REQ pull-downs by U7 and the expander
 # I2C expander and the joystick network beside the DE-9
-P["U15"], P["C10"] = (101, 41.5, 0), (106.4, 35.8, 0)
-P["R6"], P["R7"], P["R8"] = (109.8, 35.8, 0), (113.2, 35.8, 0), (101, 35.8, 0)
+P["U15"], P["C10"] = (100.5, 41.5, 0), (106.4, 36.0, 0)
+P["R6"], P["R7"], P["R8"] = (109.8, 36.0, 0), (113.2, 36.0, 0), (101, 36.0, 0)
 for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
                                     ["R96", "R97", "R98", "R99", "R100", "R101"],
                                     ["C90", "C91", "C92", "C93", "C94", "C95"])):
-    x = 106.6 + 2.0 * i
-    P[rs], P[rp], P[c] = (x, 38.7, 90), (x, 41.7, 90), (x, 44.7, 90)
+    x = 105.15 + 2.6 * i          # column pitch leaves room for a designator beside each part
+    P[rs], P[rp], P[c] = (x, 39.0, 90), (x, 42.3, 90), (x, 45.6, 90)
 P["JP10"] = (105.5, 50.2, 0)
 # RP2350B core, rotated so GPIO0-7 (MD bus) sit at the bottom-left corner, the
 # control GPIOs along the bottom, QSPI/USB/regulator on the left, crystal on the right
@@ -84,7 +84,7 @@ P["C28"], P["C29"], P["C47"] = (69.4, 30.6, 0), (72.6, 33.0, 0), (70.6, 19.8, 0)
 P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (62.3, 18.2, 90), (57.4, 16.4, 0)     # C21 straight above DVDD pin 51 (pin 50 beside it connects under the package, so its lane is free)
 P["U21"], P["C37"], P["R21"] = (44, 20, 0), (38, 20, 90), (38, 25, 0)
 P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
-P["R27"], P["R26"] = (47.6, 24.0, 0), (47.6, 26.0, 0)          # USB series resistors on the way out to J1
+P["R27"], P["R26"] = (47.6, 23.7, 0), (47.6, 26.3, 0)          # USB series resistors on the way out to J1
 P["TP1"], P["TP2"], P["TP3"] = (6, 45.8, 0), (9.5, 45.8, 0), (13, 45.8, 0)
 P["R2"], P["R3"] = (20, 47.5, 0), (23.5, 47.5, 0)
 # top edge: ESP32-C3 (antenna over the edge), WiFi bulk cap, LED, buttons on 0.5 in centres, OLED header
@@ -100,9 +100,9 @@ P["J1"] = (3.2, 21, 270)
 P["R24"], P["R25"] = (12, 21, 0), (15, 21, 0)
 P["J2"] = (9.58, 35.5, 270)    # TF-01A: shell front 9.576 mm from the origin, so the shell is flush with the board edge
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
-    P[r] = (23.5, 27 + 2.5 * i, 0)
+    P[r] = (23.5, 26.6 + 2.7 * i, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
-    P[r] = (27, 27 + 2.5 * i, 0)
+    P[r] = (27, 26.6 + 2.7 * i, 0)
 P["C50"], P["C51"] = (30.5, 30, 0), (30.5, 34, 0)
 # power block, top right below the OLED header
 P["D2"], P["D3"] = (84, 11, 0), (84, 15.5, 0)
@@ -112,14 +112,14 @@ P["U31"], P["C44"], P["C45"] = (88, 32.5, 0), (81.6, 30, 90), (81.6, 34.5, 90)
 # right edge: audio jack in the corner (opening to the right), DE-9 below it
 P["J4"] = (123.7, 7, 180)
 P["J5"] = (122.3, 34, 90)
-# audio: op-amp, passives in signal order in three rows
-P["U50"], P["C79"] = (99, 22.5, 0), (104.6, 21, 0)
+# audio: op-amp, passives in signal order in three rows, 3.2 mm apart so each designator fits above its part
+P["U50"], P["C79"] = (99, 21.3, 0), (104.6, 19.8, 0)
 for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):
-    P[r] = (94 + 3.4 * i, 27.4, 0)
+    P[r] = (94 + 3.4 * i, 27.0, 0)
 for i, r in enumerate(["R75", "C75", "R76", "C76", "R77", "R78"]):
-    P[r] = (94 + 3.4 * i, 30.1, 0)
+    P[r] = (94 + 3.4 * i, 30.2, 0)
 for i, r in enumerate(["C70", "R70", "C80", "R80", "C81", "R81"]):
-    P[r] = (94 + 3.4 * i, 32.8, 0)
+    P[r] = (94 + 3.4 * i, 33.4, 0)
 
 # ---------------------------------------------------------------------------
 

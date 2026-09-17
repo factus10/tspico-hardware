@@ -77,26 +77,39 @@ def main():
     if spots:
         b = pcbnew.LoadBoard(PCB)
         gone = [t for t in b.GetTracks() if t.GetClass() == "PCB_VIA" and any(abs(T(t.GetPosition().x) - x) < 0.01 and abs(T(t.GetPosition().y) - y) < 0.01 for x, y in spots)]
+        zones = b.Zones()                  # before the removals: pcbnew can segfault looking the type up afterwards
         for t in gone: b.Remove(t)
-        pcbnew.ZONE_FILLER(b).Fill(b.Zones()); pcbnew.SaveBoard(PCB, b)
+        pcbnew.ZONE_FILLER(b).Fill(zones); pcbnew.SaveBoard(PCB, b)
         print("removed", len(gone), "unused vias")
         kinds, open_nets = drc()
-    # ...and the stubs that led to them, peeled back a segment at a time (one board load: repeated
-    # LoadBoard calls in one process eventually hand back an unwrapped pointer)
-    b = pcbnew.LoadBoard(PCB); peeled = 0
+    # ...and the stubs that led to them. In a fresh interpreter: after several board loads in one
+    # process pcbnew starts handing back unwrapped SWIG pointers
+    peeled = 0
     for _ in range(20):
-        b.BuildConnectivity(); conn = b.GetConnectivity()
-        gone = [t for t in b.GetTracks() if t.GetClass() == "PCB_TRACK" and conn.TestTrackEndpointDangling(t, True)]
-        if not gone:
+        out = subprocess.run([sys.executable, os.path.abspath(__file__), "--peel"], capture_output=True, text=True).stdout
+        n = int((re.findall(r"peeled (\d+)", out) or ["0"])[-1])
+        peeled += n
+        if not n:
             break
-        for t in gone: b.Remove(t)
-        peeled += len(gone)
     if peeled:
-        pcbnew.ZONE_FILLER(b).Fill(b.Zones()); pcbnew.SaveBoard(PCB, b)
         print("removed", peeled, "dangling stub segments")
         kinds, open_nets = drc()
     print("final DRC:", kinds or "clean", sorted(open_nets))
 
 
+def peel():
+    """Remove the track segments that have a free end. One layer per call: pcbnew's connectivity
+    handle does not survive a rebuild in the same interpreter, so main() calls this in a fresh
+    process until nothing is left, which walks each stub back to its first junction or pad."""
+    b = pcbnew.LoadBoard(PCB)
+    b.BuildConnectivity(); conn = b.GetConnectivity()
+    gone = [t for t in b.GetTracks() if t.GetClass() == "PCB_TRACK" and conn.TestTrackEndpointDangling(t, True)]
+    zones = b.Zones()                      # before the removals, as above
+    for t in gone: b.Remove(t)
+    if gone:
+        pcbnew.ZONE_FILLER(b).Fill(zones); pcbnew.SaveBoard(PCB, b)
+    print("peeled", len(gone))
+
+
 if __name__ == "__main__":
-    main()
+    peel() if "--peel" in sys.argv else main()
