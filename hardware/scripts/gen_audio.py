@@ -16,7 +16,7 @@ R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
 SOIC8 = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
-JACK_FP = "Connector_Audio:Jack_3.5mm_CUI_SJ-3523-SMT_Horizontal"
+JACK_FP = "Connector_Audio:Jack_3.5mm_PJ320D_Horizontal"
 
 OUT, IN, BI = "output", "input", "bidirectional"
 
@@ -68,12 +68,12 @@ def main():
 
     # output coupling and jack
     for k, (ch, y) in enumerate((("L", 110), ("R", 170))):
-        C = s.place("Device:C_Polarized", f"C{80 + k}", "10u", C0805, 250, y)
+        C = s.place("Device:C_Polarized", f"C{80 + k}", "10u", C0603, 250, y)
         s.label(f"{ch}_OUT", C.pin("1")); s.label(f"{ch}_AC", C.pin("2"))
         R = s.place("Device:R", f"R{80 + k}", "100", R0603, 270, y)
         s.label(f"{ch}_AC", R.pin("1")); s.label(f"{ch}_JACK", R.pin("2"))
-    J4 = s.place("Connector_Audio:AudioJack3", "J4", "3.5mm stereo", JACK_FP, 320, 140)
-    s.label("L_JACK", J4.pin("T")); s.label("R_JACK", J4.pin("R")); s.label("GND", J4.pin("S"))
+    J4 = s.place("Connector_Audio:AudioJack4", "J4", "3.5mm stereo", JACK_FP, 320, 140)   # PJ-320D is 4-pole; a TRS plug shorts R2 to S
+    s.label("L_JACK", J4.pin("T")); s.label("R_JACK", J4.pin("R1")); s.label("GND", J4.pin("R2")); s.label("GND", J4.pin("S"))
     s.text("Mix: L = AY A + AY B/2, R = AY C + AY B/2 done in firmware; SOUND_2068 added to both channels here.", 40, 215, 1.5)
     s.text("The PWM branch (0 to 3.3 V, DC about 1.65 V) also biases the buffer input; SOUND is AC-coupled by C70.", 40, 218, 1.5)
 

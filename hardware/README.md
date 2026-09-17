@@ -43,7 +43,7 @@ Fab notes for the fingers: hard gold over the fingers if the fab offers it (ENIG
 
 ## Stock library parts already identified
 
-RP2350B symbol (`MCU_RaspberryPi`), `Package_DFN_QFN:QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm`, `Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJM5`, `Connector_Dsub:DSUB-9_*`, `Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12`, SOIC/TSSOP logic packages, `Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92`, `Connector_Audio:Jack_3.5mm_CUI_SJ-352x-SMT_Horizontal`, `Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm`.
+RP2350B symbol (`MCU_RaspberryPi`), `Package_DFN_QFN:QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm`, `TSPico:microSD_TF-01A` (to be drawn from the HRO TF-01A drawing), `Connector_Dsub:DSUB-9_*`, `Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12`, SOIC/TSSOP logic packages, `Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92`, `Connector_Audio:Jack_3.5mm_CUI_SJ-352x-SMT_Horizontal`, `Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm`.
 
 All parts used so far have stock symbols and footprints (the APS6404L PSRAM is in `Memory_RAM`, the ESP32-C3-WROOM-02 in `RF_Module`).
 
@@ -55,7 +55,7 @@ KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
 $KC sch export bom --output bom/tspico-v3-jlcpcb-bom.csv --fields "Value,Reference,Footprint,LCSC" --labels "Comment,Designator,Footprint,LCSC Part #" --group-by "Value,Footprint" --exclude-dnp tspico-v3.kicad_sch
 ```
 
-Part-number decisions forced by LCSC stock: 74HC273PW for the CTL register (no 74LVC273 stocked; HC is fine at 3.3 V), 74LVC139PW (non-A), TI parts for the LVC04/08/126/574/1G86, 33 R instead of 27 R on USB D+/D- (basic part), XKB TS-1187A-B-A-B tactile switches (basic), Panasonic 6SVPC220MV polymer for the bulk and WiFi caps. The 3.3 uH inductor (Sunlord SWPA252012S3R3MT) has no confirmed LCSC number yet.
+Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price.py --boards 10`; the reasoning for each substitution is in `docs/bom-cost-optimization.md` (2026-09-17: parts + fees per board went from $32.95 to $17.19 on a 10-board run). **The PCB file predates these substitutions** (new footprints for J2, J4, D4, C40/C41/C46, the 10 uF caps, L1, U7, U8; U16 deleted; C34 gone; R28/C39 added) and must be laid out again before new fab outputs are generated; `fab/` is stale.
 
 ## Fab outputs
 

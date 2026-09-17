@@ -15,7 +15,7 @@ SCH = os.path.join(HW, "tspico-v3.kicad_sch")
 OUT = os.path.join(HW, "fab", "jlcpcb")
 GERB = os.path.join(OUT, "gerbers")
 LAYERS = "F.Cu,In1.Cu,In2.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
-NOT_ASSEMBLED = re.compile(r"^(P\d+|TP\d+|JP\d+|FID\d+|H\d+)$")   # edge fingers, test points, solder jumpers, fiducials, holes
+NOT_ASSEMBLED = re.compile(r"^(P\d+|TP\d+|JP\d+|FID\d+|H\d+|J3|J5)$")   # edge fingers, test points, solder jumpers, fiducials, holes; J3/J5 through-hole, hand-soldered
 
 
 def expand_refs(field):
@@ -41,18 +41,21 @@ def run(*args):
 
 
 def main():
-    shutil.rmtree(OUT, ignore_errors=True)
-    os.makedirs(GERB)
+    bom_only = "--bom-only" in sys.argv
+    if not bom_only:
+        shutil.rmtree(OUT, ignore_errors=True)
+    os.makedirs(GERB, exist_ok=True)
     # --- Gerbers + drill -------------------------------------------------
-    run("pcb", "export", "gerbers", "--output", GERB, "--layers", LAYERS, "--subtract-soldermask",
+    if not bom_only: run("pcb", "export", "gerbers", "--output", GERB, "--layers", LAYERS, "--subtract-soldermask",
         "--no-x2", "--no-netlist", "--disable-aperture-macros", PCB)
-    run("pcb", "export", "drill", "--output", GERB, "--format", "excellon", "--excellon-units", "mm",
+    if not bom_only: run("pcb", "export", "drill", "--output", GERB, "--format", "excellon", "--excellon-units", "mm",
         "--excellon-zeros-format", "decimal", "--drill-origin", "absolute", "--generate-map", "--map-format", "gerberx2", PCB)
     zpath = os.path.join(OUT, "tspico-v3-gerbers.zip")
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+    if not bom_only:
+      with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         for f in sorted(os.listdir(GERB)):
             z.write(os.path.join(GERB, f), f)
-    print("gerbers:", zpath, len(os.listdir(GERB)), "files")
+      print("gerbers:", zpath, len(os.listdir(GERB)), "files")
     # --- BOM (JLC format) --------------------------------------------------
     bom_src = os.path.join(HW, "bom", "tspico-v3-jlcpcb-bom.csv")
     run("sch", "export", "bom", "--output", bom_src, "--fields", "Value,Reference,Footprint,LCSC",
@@ -75,6 +78,8 @@ def main():
         w = csv.DictWriter(f, fieldnames=["Comment", "Designator", "Footprint", "LCSC Part #"]); w.writeheader(); w.writerows(rows)
     print("bom:", len(rows), "lines,", len(assembled), "parts; missing LCSC:", missing)
     # --- CPL -------------------------------------------------------------
+    if bom_only:
+        print("bom only; gerbers/CPL not regenerated"); return
     pos = os.path.join(OUT, "pos.csv")
     run("pcb", "export", "pos", "--output", pos, "--format", "csv", "--units", "mm", "--side", "both", "--exclude-dnp", PCB)
     cpl, skipped, th = [], [], []

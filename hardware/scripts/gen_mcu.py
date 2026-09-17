@@ -5,7 +5,7 @@
       internal 1.1 V regulator (L1 3.3 uH, 4.7 uF caps), 100 nF on every IOVDD,
       12 MHz crystal with 15 pF loads and 1 k series, RUN pull-up and button,
       BOOTSEL button on QSPI_SS through 1 k, USB D+/D- 27 R series.
-  U21 W25Q128JVS 16 MB QSPI flash on the QSPI bus (XIP, CS0)
+  U21 GD25Q128E (W25Q128 pinout) 16 MB QSPI flash on the QSPI bus (XIP, CS0)
   U22 APS6404L 8 MB PSRAM on the QSPI bus, CS1 = GPIO47
   J1  USB-C receptacle, data only: VBUS unconnected, 5.1 k Rd on CC1/CC2
   SW3 RUN, SW4 BOOTSEL, TP1-TP3 SWD pads
@@ -20,7 +20,7 @@ from schlib import Sheet  # noqa: E402
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-L_FP = "Inductor_SMD:L_1008_2520Metric"
+L_FP = "Inductor_SMD:L_0806_2016Metric"
 SW_FP = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
 TP_FP = "TestPoint:TestPoint_Pad_1.5x1.5mm"
 
@@ -33,18 +33,18 @@ GPIO = {
     13: ("Z80_A14", IN), 14: ("Z80_A15", IN), 15: ("nMREQ_V", IN), 16: ("nIORQ_V", IN),
     17: ("nRD_L", IN), 18: ("nWR_L", IN), 19: ("nROSCS_L", IN), 20: ("nEXROM_L", IN),
     21: ("nINT_L", IN), 22: ("TAPE_IN", IN), 23: ("TAPE_OUT", OUT),
-    24: ("REG_SEL0", OUT), 25: ("REG_SEL1", OUT), 26: ("nREG_STB", OUT),
+    24: ("nWR_ALO", OUT), 25: ("nWR_AHI", OUT), 26: ("nWR_CTL", OUT), 31: ("nRD_STAT", OUT),
     27: ("nMRD", OUT), 28: ("nMWR", OUT), 29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
     32: ("SD_MISO", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
     40: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),
     44: ("WIFI_TX", OUT), 45: ("WIFI_RX", IN), 46: ("AUDIO_L", OUT),
 }
-SPARE = [31, 33, 34, 35, 36]
+SPARE = [33, 34, 35, 36]
 
 
 def main():
     s = Sheet("tspico-v3.kicad_sch", "mcu.kicad_sch", "TS-Pico v3: RP2350B Core")
-    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP31, GP33-GP36 spare.", 20, 285, 2.5)
+    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP33-GP36 spare.", 20, 285, 2.5)
     s.text("USB-C: data, and VBUS to the power sheet (diode-ORed with the edge +5V) so the card runs from USB alone on the bench.", 20, 290, 2.0)
 
     s.power("+3V3", 300, 30, "#PWR06", flag=False)
@@ -62,8 +62,10 @@ def main():
         s.nc(U.pin(by_name[f"GPIO{g}"]))
     s.label("PSRAM_CS", U.pin(by_name["GPIO47"]))
     for num, nm in names.items():
-        if nm in ("IOVDD", "QSPI_IOVDD", "USB_OTP_VDD", "ADC_AVDD", "VREG_AVDD", "VREG_VIN"):
+        if nm in ("IOVDD", "QSPI_IOVDD", "USB_OTP_VDD", "ADC_AVDD", "VREG_VIN"):
             s.label("+3V3", U.pin(num))
+        elif nm == "VREG_AVDD":
+            s.label("VREG_AVDD", U.pin(num))
         elif nm in ("GND", "VREG_PGND"):
             s.label("GND", U.pin(num))
         elif nm == "DVDD":
@@ -80,19 +82,26 @@ def main():
 
     # ---- core regulator: VREG_LX -> L1 -> DVDD, 4.7 uF x2, 4.7 uF on VREG_VIN --------
     L1 = s.place("Device:L", "L1", "3.3uH", L_FP, 250, 60)
-    s.label("VREG_LX", L1.pin("1")); s.label("DVDD", L1.pin("2"))
+    s.label("DVDD", L1.pin("1")); s.label("VREG_LX", L1.pin("2"))   # AOTA dot = pin 1 = DVDD side (design guide fig. 4)
     for k, (ref, net, val, fp) in enumerate([("C20", "DVDD", "4.7u", C0805), ("C21", "DVDD", "4.7u", C0805), ("C22", "+3V3", "4.7u", C0805)]):
         C = s.place("Device:C", ref, val, fp, 265 + 10 * k, 60)
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
-    s.text("L1/C20/C21: RP2350 internal 1.1 V core regulator. C22 at VREG_VIN.", 245, 75, 1.5)
+    s.text("L1 (Abracon AOTA-B201610S3R3-101-T, polarised: dot/pin 1 to DVDD)/C20/C21: RP2350 1.1 V core regulator. C22 at VREG_VIN.", 245, 75, 1.5)
+    R28 = s.place("Device:R", "R28", "33", R0603, 300, 85)
+    s.label("+3V3", R28.pin("1")); s.label("VREG_AVDD", R28.pin("2"))
+    C39 = s.place("Device:C", "C39", "4.7u", C0805, 315, 85)
+    s.label("VREG_AVDD", C39.pin("1")); s.label("GND", C39.pin("2"))
+    s.text("R28/C39: 33 R + 4.7 uF filter on VREG_AVDD (design guide R3/C9).", 245, 95, 1.5)
+    FL2 = s.place("power:PWR_FLAG", "#FLG08", "PWR_FLAG", "", 330, 85)
+    s.label("VREG_AVDD", FL2.pin("1"))
     FL = s.place("power:PWR_FLAG", "#FLG06", "PWR_FLAG", "", 300, 60)
     s.label("DVDD", FL.pin("1"))
 
     # ---- IOVDD and analog decoupling: 12 x 100 nF ----------------------------------
-    for k in range(12):
+    for k in range(11):
         C = s.place("Device:C", f"C{23 + k}", "100n", C0603, 250 + 9 * k, 100)
         s.label("+3V3", C.pin("1")); s.label("GND", C.pin("2"))
-    s.text("C23-C34: one per IOVDD, QSPI_IOVDD, USB_OTP_VDD, ADC_AVDD, VREG_AVDD pin, placed at the pin.", 245, 115, 1.5)
+    s.text("C23-C33: one per IOVDD, QSPI_IOVDD, USB_OTP_VDD, ADC_AVDD pin, placed at the pin.", 245, 115, 1.5)
 
     # ---- crystal ---------------------------------------------------------------------
     Y1 = s.place("Device:Crystal_GND24", "Y1", "12MHz", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", 270, 150)
@@ -106,10 +115,10 @@ def main():
     s.text("Y1: 12 MHz, e.g. ABM8-272-T3 (CL 10 pF). C35/C36 15 pF, R20 1 k in series with XOUT.", 245, 180, 1.5)
 
     # ---- QSPI flash and PSRAM ---------------------------------------------------------
-    F = s.place("Memory_Flash:W25Q128JVS", "U21", "W25Q128JVSIQ", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 150)
+    F = s.place("Memory_Flash:W25Q128JVS", "U21", "GD25Q128ESIGR", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 150)
     s.label("nQSPI_SS", F.pin("1")); s.label("QSPI_SD1", F.pin("2")); s.label("QSPI_SD2", F.pin("3")); s.label("GND", F.pin("4"))
     s.label("QSPI_SD0", F.pin("5")); s.label("QSPI_SCLK", F.pin("6")); s.label("QSPI_SD3", F.pin("7")); s.label("+3V3", F.pin("8"))
-    P = s.place("Memory_RAM:APS6404L-3SQRx-SN", "U22", "APS6404L-3SQR-SN", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 200)
+    P = s.place("Memory_RAM:APS6404L-3SQRx-SN", "U22", "APS6404L-3SQR-SN", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 200, dnp=True)
     # APS6404L SOP-8: 1 CE#, 2 SO/SIO1, 3 SIO2, 4 VSS, 5 SI/SIO0, 6 SCLK, 7 SIO3, 8 VCC
     s.label("PSRAM_CS", P.pin("1")); s.label("QSPI_SD1", P.pin("2")); s.label("QSPI_SD2", P.pin("3")); s.label("GND", P.pin("4"))
     s.label("QSPI_SD0", P.pin("5")); s.label("QSPI_SCLK", P.pin("6")); s.label("QSPI_SD3", P.pin("7")); s.label("+3V3", P.pin("8"))
@@ -118,7 +127,7 @@ def main():
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
     R21 = s.place("Device:R", "R21", "10k", R0603, 395, 150)
     s.label("+3V3", R21.pin("1")); s.label("nQSPI_SS", R21.pin("2"))
-    s.text("U21 boot flash (XIP CS0). U22 PSRAM on the same QSPI bus,", 320, 225, 1.5)
+    s.text("U21 boot flash (XIP CS0). U22 PSRAM on the same QSPI bus, DNP on the prototype ($5 part, SD-image cache only),", 320, 225, 1.5)
     s.text("CS1 = GPIO47 (QMI CS1n). C37/C38 at U21/U22.", 320, 228, 1.5)
 
     # ---- RUN and BOOTSEL -------------------------------------------------------------

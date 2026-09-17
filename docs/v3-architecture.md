@@ -16,18 +16,18 @@ Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist p
 TS2068 edge connector (5 V)                                        RP2350B (3.3 V)
   A0-A15 <-> 74LVC245 x2 -> MA0-MA15 -+-> 74LVC257 x2 (byte mux) -> MD0-MD7 <--> GP0-GP7
              (DIR = DMA_EN)            |       ASEL, nAOE <----------------------- GP8, GP9
-                                       +-< 74LVC574 x2 ALO/AHI (DMA address, /OE = nDMA_EN)
+                                       +-< 74HC574 x2 ALO/AHI (DMA address, /OE = nDMA_EN)
   D0-D7  <-> 74LVC245 (DIR = nRD xor DMA_EN, /OE = nDATA_OE) <--> MD0-MD7
   control -> 74LVC245 -> nRD_L nWR_L nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN -> GPIO
   /MREQ&/RFSH, /IORQ&/M1 -> 74LVC04/08 -> nMREQ_V, nIORQ_V -> GPIO
   /BE /WAIT /BUSRQ /NMI /RESET <-- 74LVC06 open-drain <-- BE_REQ, WAIT_REQ (PIO), BUSRQ, NMI_REQ (CTL), RESET_HOLD (GPIO, pull-up)
-  /MREQ /RD /WR <-- 74LVC126 (DMA mode) <-- nMRD, nMWR
+  /MREQ /RD /WR <-- 74LVC245 (DMA mode, /OE = nDMA_EN) <-- nMRD, nMWR
   EAR <-- divider <-- TAPE_OUT ; SOUND -> audio mixer
-Registers on MD0-MD7, selected by 74LVC139 (REG_SEL0/1, nREG_STB <-- GPIO):
-  ALO, AHI  74LVC574  DMA-mode address
+Registers on MD0-MD7, strobed directly by four GPIOs (nWR_ALO, nWR_AHI, nWR_CTL, nRD_STAT):
+  ALO, AHI  74HC574   DMA-mode address
   CTL       74LVC273  DMA_EN, BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, LED, spare (cleared at power-up)
-  STAT      74LVC541  joystick x6, nBUSAK, SD_CD
-RP2350B support: W25Q128 QSPI (16 MB), APS6404L PSRAM (CS1 = GP47), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
+  STAT      74LVC245  joystick x6, nBUSAK, SD_CD
+RP2350B support: GD25Q128E QSPI (16 MB, W25Q128 pinout), APS6404L PSRAM footprint (CS1 = GP47, not fitted on the prototype), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
 SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> STAT
 ```
 
@@ -69,18 +69,18 @@ Which ports are enabled is a firmware setting; there is no port jumper. WAIT_REQ
 
 ### 3.3 DMA mode (onto the 2068's own memory)
 
-Write ALO and AHI with the target address, set DMA_EN in CTL. The address latches drive MA0-MA15 and the address transceivers turn outward. Pulse nMRD to read (the 74LVC126 drives /MREQ and /RD; the data transceiver direction follows nRD xor DMA_EN, so the byte arrives on MD) or put data on MD and pulse nMWR. Only after BUSRQ in CTL has been set and nBUSAK is seen low in STAT. This gives snapshot load and save, screen capture and pokes with no ROM support; the SCLD's DRAM handling during bus grant is validated on the prototype.
+Write ALO and AHI with the target address, set DMA_EN in CTL. The address latches drive MA0-MA15 and the address transceivers turn outward. Pulse nMRD to read (the DMA-driver 74LVC245 drives /MREQ and /RD; the data transceiver direction follows nRD xor DMA_EN, so the byte arrives on MD) or put data on MD and pulse nMWR. Only after BUSRQ in CTL has been set and nBUSAK is seen low in STAT. This gives snapshot load and save, screen capture and pokes with no ROM support; the SCLD's DRAM handling during bus grant is validated on the prototype.
 
 ## 4. Registers
 
-Selected by the 74LVC139 from REG_SEL0/1 and strobed by nREG_STB. Writes clock on the strobe's rising edge; the read buffer is enabled while the strobe is low.
+Each register has its own strobe GPIO (no decoder). Writes clock on the strobe's rising edge; the read buffer is enabled while nRD_STAT is low.
 
 | Sel | Name | Chip | Bits |
 |---|---|---|---|
-| 0 | ALO (write) | 74LVC574, /OE = nDMA_EN | MA0-MA7 in DMA mode |
-| 1 | AHI (write) | 74LVC574, /OE = nDMA_EN | MA8-MA15 in DMA mode |
+| 0 | ALO (write) | 74HC574, /OE = nDMA_EN | MA0-MA7 in DMA mode |
+| 1 | AHI (write) | 74HC574, /OE = nDMA_EN | MA8-MA15 in DMA mode |
 | 2 | CTL (write) | 74LVC273, cleared by a power-on RC | 0 DMA_EN, 1 BUSRQ, 2 NMI_REQ, 3 nOLED_RST, 4 WIFI_EN, 5 WIFI_DL (1 = ESP32 download mode; inverted onto IO9), 6 LED, 7 spare |
-| 3 | STAT (read) | 74LVC541 | 0-4 joystick up/down/left/right/fire, 5 fire 2, 6 nBUSAK, 7 SD card detect |
+| 3 | STAT (read) | 74LVC245, DIR low | 0-4 joystick up/down/left/right/fire, 5 fire 2, 6 nBUSAK, 7 SD card detect |
 
 All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA, no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot selected, LED off.
 
@@ -115,13 +115,13 @@ All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA,
 | 21 | nINT_L | in | 2068 frame interrupt, AY timing. |
 | 22 | TAPE_IN | in | SPK/TAP from the 2068 (through the control transceiver). |
 | 23 | TAPE_OUT | out | To EAR via divider. |
-| 24, 25 | REG_SEL0, REG_SEL1 | out | Register select. |
-| 26 | nREG_STB | out | Register strobe. |
+| 24, 25, 26 | nWR_ALO, nWR_AHI, nWR_CTL | out | Register write strobes (rising edge clocks). |
 | 27 | nMRD | out | DMA read strobe. |
 | 28 | nMWR | out | DMA write strobe. |
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
-| 31, 33-36 | spare | | Five spares. |
+| 31 | nRD_STAT | out | STAT read-buffer enable. |
+| 33-36 | spare | | Four spares. |
 | 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
 | 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
 | 40-43 | OLED DC, CS, SCK, MOSI | | SPI1 pin group; OLED reset from CTL. |
@@ -139,16 +139,15 @@ All CTL bits are active high and 0 at power-up, so the cleared state is: no DMA,
 | 1 | 74LVC245 | Z80 D0-D7 to MD0-MD7 |
 | 1 | 74LVC245 | Control inputs, 5 V tolerant |
 | 2 | 74LVC257 | MA byte mux onto MD |
-| 2 | 74LVC574 | ALO, AHI |
-| 1 | 74LVC273 | CTL |
-| 1 | 74LVC541 | STAT |
-| 1 | 74LVC139 | Register select |
+| 2 | 74HC574 | ALO, AHI |
+| 1 | 74HC273 | CTL |
+| 1 | 74LVC245 | STAT read buffer (DIR low) |
+| 1 | 74LVC245 | DMA drivers for /MREQ, /RD, /WR (DIR high, /OE = nDMA_EN) |
 | 1 | 74LVC04, 1 74LVC08 | /MREQ and /IORQ qualification, DMA /MREQ, DMA_EN inversion, WIFI_DL inversion |
 | 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET |
-| 1 | 74LVC126 | DMA drivers for /MREQ, /RD, /WR |
 | 1 | 74LVC1G86 | Data direction = nRD xor DMA_EN |
 
-15 packages, all 74LVC, no memory chips. MCU support: RP2350B, W25Q128JV, APS6404L-3SQR, 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock KiCad symbol and footprint) running Zimodem, which has a native ESP32-C3 4 MB target; flashed through the card's USB-C with the RP2350 as a UART bridge. Audio: dual op-amp, RC filters, 3.5 mm jack. Joystick: DE-9 with ESD array. Display: 7-pin header for the Waveshare 1.27" 128x96 SSD1351 module.
+15 packages and eight part numbers: 74LVC on everything that touches the 5 V bus, 74HC for the 3.3 V-only registers, no memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock KiCad symbol and footprint) running Zimodem, which has a native ESP32-C3 4 MB target; flashed through the card's USB-C with the RP2350 as a UART bridge. Audio: dual op-amp, RC filters, 3.5 mm jack. Joystick: DE-9 with ESD array. Display: 7-pin header for the Waveshare 1.27" 128x96 SSD1351 module.
 
 ## 9. Firmware impact
 

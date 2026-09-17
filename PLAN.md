@@ -104,7 +104,11 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - **Edge connector fit** remains the hard mechanical constraint; verify the footprint against the old Gerbers and test-fit the first prototype.
 - **Part stock at JLC**: 3.3 V flash, SD socket, ESP32-C3 module, RP2350B. Keep alternates in the BOM.
 
-## Pending rework before ordering: RP2350B regulator and crystal (JLCPCB review, 2026-09-16)
+## Pending rework before ordering: relayout (regulator/crystal fix + cheaper BOM)
+
+Schematic side is done as of 2026-09-17 (AOTA inductor with pin 1 on DVDD, VREG_AVDD 33 R + 4.7 uF filter, BOM substitutions in docs/bom-cost-optimization.md). Remaining: draw the TF-01A footprint, update gen_layout.py for the new/removed parts, place the regulator and crystal per the notes below, reroute, DRC, regenerate fab outputs.
+
+### RP2350B regulator and crystal (JLCPCB review, 2026-09-16)
 
 JLCPCB's RP2350 review flagged the core regulator and crystal circuitry. Checked against
 "Hardware design with RP2350" (release 3):

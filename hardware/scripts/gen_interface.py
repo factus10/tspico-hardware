@@ -10,8 +10,8 @@ Contents (see docs/v3-architecture.md sections 2, 3, 5):
   U5   74LVC04   inverters for the gating below, one spare
   U6   74LVC08   nMREQ_V = /(MREQ & /RFSH), nIORQ_V = /(IORQ & /M1),
                  nDMA_MREQ = nMRD & nMWR, one spare
-  U7   74LVC06   open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT, nBUSRQ, nNMI, nRESET
-  U8   74LVC126  DMA bus drivers for nMREQ, nRD, nWR (OE = DMA_EN)
+  U7   74LVC06   (SOIC-14) open-drain inverting drivers: BE_REQ, WAIT_REQ, BUSRQ, NMI_REQ, RESET_HOLD -> nBE, nWAIT, nBUSRQ, nNMI, nRESET
+  U8   74LVC245  DMA bus drivers for nMREQ, nRD, nWR (DIR fixed A->B, /OE = nDMA_EN; same part as U1-U4)
   U9   74LVC1G86 DATA_DIR = nRD xor nDMA_EN
   SW1/SW2 TS reset and NMI buttons; R1 RESET_HOLD pull-up; R2/R3 EAR divider
   C1-C8 decoupling
@@ -27,6 +27,7 @@ from schlib import Sheet  # noqa: E402
 
 TSSOP20 = "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm"
 TSSOP14 = "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
+SOIC14 = "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm"
 SOT23_5 = "Package_TO_SOT_SMD:SOT-23-5"
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
@@ -150,8 +151,8 @@ def main():
 
     # ---- U7 open-drain drivers -------------------------------------------------
     od_x, od_y = 330, 60
-    od = [s.place("74xx:74LS06", "U7", "74LVC06APW", TSSOP14, od_x, od_y + 15 * k, unit=k + 1) for k in range(6)]
-    pw7 = s.place("74xx:74LS06", "U7", "74LVC06APW", TSSOP14, od_x, od_y + 100, unit=7)
+    od = [s.place("74xx:74LS06", "U7", "74LVC06AD", SOIC14, od_x, od_y + 15 * k, unit=k + 1) for k in range(6)]
+    pw7 = s.place("74xx:74LS06", "U7", "74LVC06AD", SOIC14, od_x, od_y + 100, unit=7)
     s.label("+3V3", pw7.pin("14")); s.label("GND", pw7.pin("7"))
     od_map = [("BE_REQ", "nBE", "1", "2"), ("WAIT_REQ", "nWAIT", "3", "4"), ("BUSRQ", "nBUSRQ", "5", "6"),
               ("NMI_REQ", "nNMI", "9", "8"), ("RESET_HOLD", "nRESET", "11", "10")]
@@ -160,20 +161,21 @@ def main():
         s.label(dst, od[k].pin(po))
     s.label("GND", od[5].pin("13")); s.nc(od[5].pin("12"))    # spare inverter: input low, output off
 
-    # ---- U8 DMA bus drivers (74LVC126, OE active high = DMA_EN) -----------------
-    dma_x, dma_y = 330, 185
-    dr = [s.place("74xx:74LS126", "U8", "74LVC126APW", TSSOP14, dma_x, dma_y + 18 * k, unit=k + 1) for k in range(4)]
-    pw8 = s.place("74xx:74LS126", "U8", "74LVC126APW", TSSOP14, dma_x + 35, dma_y + 45, unit=5)
-    s.label("+3V3", pw8.pin("14")); s.label("GND", pw8.pin("7"))
-    dr_map = [("nDMA_MREQ", "nMREQ", "2", "3", "1"), ("nMRD", "nRD", "5", "6", "4"), ("nMWR", "nWR", "9", "8", "10")]
-    for k, (src, dst, pi, po, oe) in enumerate(dr_map):
+    # ---- U8 DMA bus drivers: a fifth 74LVC245, DIR high (A->B), /OE = nDMA_EN ----
+    # Same part as U1-U4 (one part number fewer on the JLC BOM than the 74LVC126 it replaces).
+    U8 = transceiver("U8", 330, 200)
+    dr_map = [("nDMA_MREQ", "nMREQ"), ("nMRD", "nRD"), ("nMWR", "nWR")]
+    for k, (src, dst) in enumerate(dr_map):
         if src.startswith("nM") and src != "nDMA_MREQ":
-            s.glabel(src, dr[k].pin(pi), IN)
+            s.glabel(src, U8.pin(f"A{k}"), IN)
         else:
-            s.label(src, dr[k].pin(pi))
-        s.label(dst, dr[k].pin(po))
-        s.glabel("DMA_EN", dr[k].pin(oe), IN)
-    s.label("GND", dr[3].pin("12")); s.label("GND", dr[3].pin("13")); s.nc(dr[3].pin("11"))
+            s.label(src, U8.pin(f"A{k}"))
+        s.label(dst, U8.pin(f"B{k}"))
+    for k in range(3, 8):
+        s.label("GND", U8.pin(f"A{k}")); s.nc(U8.pin(f"B{k}"))
+    s.label("+3V3", U8.pin("1"))                      # DIR: A -> B
+    s.glabel("nDMA_EN", U8.pin("19"), IN)
+    s.label("+3V3", U8.pin("20")); s.label("GND", U8.pin("10"))
 
     # ---- U9 XOR: DATA_DIR = nRD xor DMA_EN -------------------------------------
     U9 = s.place("74xGxx:74LVC1G86", "U9", "74LVC1G86", SOT23_5, 260, 250)

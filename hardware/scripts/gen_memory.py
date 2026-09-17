@@ -2,10 +2,10 @@
 """Generate memory.kicad_sch: the local bus muxes and the four registers.
 
   U10/U11 74LVC257  MA0-MA15 byte mux onto MD0-MD7 (S = ASEL, /OE = nAOE)
-  U12/U13 74LVC574  ALO / AHI: DMA-mode address latches (/OE = nDMA_EN)
-  U14     74LVC273  CTL register (cleared by power-on RC)
-  U15     74LVC541  STAT read buffer
-  U16     74LVC139  register select from REG_SEL0/1 + nREG_STB
+  U12/U13 74HC574   ALO / AHI: DMA-mode address latches (/OE = nDMA_EN)
+  U14     74HC273   CTL register (cleared by power-on RC)
+  U15     74LVC245  STAT read buffer (DIR low, B->A; same part as U1-U4)
+  Register strobes nWR_ALO, nWR_AHI, nWR_CTL, nRD_STAT come straight from RP2350B GPIOs (the 74LVC139 is gone)
   R4/C9/D1 power-on reset for CTL; C10-C16 decoupling
 See docs/v3-architecture.md sections 3 and 4.
 """
@@ -46,11 +46,11 @@ def main():
 
     # ---- U12/U13 DMA address latches (74LS574 pinout: 1 /OE, 2-9 D0-D7, 11 CP, 12-19 Q7-Q0)
     for k, (ref, strobe) in enumerate((("U12", "nWR_ALO"), ("U13", "nWR_AHI"))):
-        U = s.place("74xx:74LS574", ref, "74LVC574APW", TSSOP20, 190, 50 + 60 * k)
+        U = s.place("74xx:74LS574", ref, "74HC574PW", TSSOP20, 190, 50 + 60 * k)
         for bit in range(8):
             s.glabel(f"MD{bit}", U.pin(str(2 + bit)), BI)
             s.glabel(f"MA{8 * k + bit}", U.pin(str(19 - bit)), BI)
-        s.label(strobe, U.pin("11"))
+        s.glabel(strobe, U.pin("11"), IN)
         s.glabel("nDMA_EN", U.pin("1"), IN)
         s.label("+3V3", U.pin("20")); s.label("GND", U.pin("10"))
 
@@ -63,34 +63,21 @@ def main():
             s.glabel(ctl_bits[bit], U14.pin(f"Q{bit}"), OUT)
         else:
             s.nc(U14.pin(f"Q{bit}"))
-    s.label("nWR_CTL", U14.pin("Cp"))
+    s.glabel("nWR_CTL", U14.pin("Cp"), IN)
     s.label("nPOR", U14.pin("~{Mr}"))
     s.label("+3V3", U14.pin("VCC")); s.label("GND", U14.pin("GND"))
 
     # ---- U15 STAT read buffer ------------------------------------------------------
-    U15 = s.place("74xx:74LS541", "U15", "74LVC541APW", TSSOP20, 290, 160)
+    U15 = s.place("74xx:74LS245", "U15", "74LVC245APW", TSSOP20, 290, 160)
     stat_bits = ["JOY_UP", "JOY_DOWN", "JOY_LEFT", "JOY_RIGHT", "JOY_FIRE1", "JOY_FIRE2", "nBUSAK", "SD_CD"]
     for bit in range(8):
-        s.glabel(stat_bits[bit], U15.pin(f"A{bit}"), IN)
-        s.glabel(f"MD{bit}", U15.pin(f"Y{bit}"), BI)
-    s.label("nRD_STAT", U15.pin("G1"))
-    s.label("GND", U15.pin("G2"))
-    s.label("+3V3", U15.pin("VCC")); s.label("GND", U15.pin("GND"))
+        s.glabel(stat_bits[bit], U15.pin(f"B{bit}"), IN)
+        s.glabel(f"MD{bit}", U15.pin(f"A{bit}"), BI)
+    s.label("GND", U15.pin("1"))                      # DIR low: B -> A
+    s.glabel("nRD_STAT", U15.pin("19"), IN)
+    s.label("+3V3", U15.pin("20")); s.label("GND", U15.pin("10"))
 
-    # ---- U16 register select ---------------------------------------------------------
-    U16a = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 170, unit=1)
-    s.glabel("REG_SEL0", U16a.pin("A0"), IN)
-    s.glabel("REG_SEL1", U16a.pin("A1"), IN)
-    s.glabel("nREG_STB", U16a.pin("E"), IN)
-    for n, net in enumerate(["nWR_ALO", "nWR_AHI", "nWR_CTL", "nRD_STAT"]):
-        s.label(net, U16a.pin(f"O{n}"))
-    U16b = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 200, unit=2)
-    s.label("+3V3", U16b.pin("E"))      # second decoder disabled
-    s.label("GND", U16b.pin("A0")); s.label("GND", U16b.pin("A1"))
-    for n in range(4):
-        s.nc(U16b.pin(f"O{n}"))
-    U16p = s.place("74xx:74LS139", "U16", "74LVC139PW", TSSOP16, 190, 230, unit=3)
-    s.label("+3V3", U16p.pin("VCC")); s.label("GND", U16p.pin("GND"))
+    s.text("Register strobes nWR_ALO / nWR_AHI / nWR_CTL / nRD_STAT are RP2350B GPIOs (no decoder).", 190, 170, 1.5)
 
     # ---- power-on reset for CTL: 10k up, 1u down, Schottky for fast discharge -------
     R4 = s.place("Device:R", "R4", "10k", R0603, 370, 80)
@@ -105,7 +92,7 @@ def main():
     # ---- activity LED from CTL bit 6 ---------------------------------------------------
     R5 = s.place("Device:R", "R5", "1k", R0603, 370, 160)
     s.glabel("LED", R5.pin("1"), IN); s.label("LED_K", R5.pin("2"))
-    D4 = s.place("Device:LED", "D4", "green", "LED_SMD:LED_0603_1608Metric", 375, 180)
+    D4 = s.place("Device:LED", "D4", "green", "LED_SMD:LED_0805_2012Metric", 375, 180)
     s.label("LED_K", D4.pin("A")); s.label("GND", D4.pin("K"))
     s.text("R5/D4: activity LED, CTL bit 6.", 355, 195, 1.5)
 

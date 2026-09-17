@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate storage_display.kicad_sch: micro SD socket and OLED header.
 
-  J2  Hirose DM3AT-SF-PEJM5 push-push micro SD, SPI mode on SPI0, card detect to STAT
+  J2  HRO TF-01A push-push micro SD (was Hirose DM3AT, 8x the price), SPI mode on SPI0, card detect to STAT
   J3  7-pin header for the Waveshare 1.27" 128x96 SSD1351 RGB OLED (VCC GND DIN CLK CS DC RST)
 """
 import os
@@ -13,7 +13,7 @@ from schlib import Sheet  # noqa: E402
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-SD_FP = "Connector_Card:microSD_HC_Hirose_DM3AT-SF-PEJM5"
+SD_FP = "TSPico:microSD_TF-01A"   # custom footprint for the HRO TF-01A push-push socket (pads 1-8, 9 = CD switch, 10 = CD common, SH)
 HDR7 = "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical"
 
 OUT, IN, BI = "output", "input", "bidirectional"
@@ -43,11 +43,11 @@ def main():
         s.label("+3V3", R.pin("1")); s.label(net, R.pin("2"))
     R39 = s.place("Device:R", "R39", "0", R0603, 230, 130)
     s.label("SD_CD_SW", R39.pin("1")); s.glabel("SD_CD", R39.pin("2"), OUT)
-    for k, (ref, val, fp) in enumerate((("C50", "10u", C0805), ("C51", "100n", C0603))):
+    for k, (ref, val, fp) in enumerate((("C50", "10u", C0603), ("C51", "100n", C0603))):
         C = s.place("Device:C", ref, val, fp, 100, 150 + 15 * k)
         s.label("+3V3", C.pin("1")); s.label("GND", C.pin("2"))
     s.text("R30-R33 33 R series; R34-R37 10 k pull-ups (CS, MISO, DAT1, DAT2); R38 pull-up on the detect switch, R39 0 R link to SD_CD.", 90, 185, 1.5)
-    s.text("Card present = SD_CD low (DM3AT switch closes to GND).", 90, 188, 1.5)
+    s.text("Card present = SD_CD low (TF-01A detect switch closes to GND; verify polarity on the HRO drawing).", 90, 188, 1.5)
 
     # ---- J3 OLED header --------------------------------------------------------------
     J3 = s.place("Connector_Generic:Conn_01x07", "J3", "OLED 1.27in 128x96", HDR7, 300, 110)
