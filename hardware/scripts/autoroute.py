@@ -37,78 +37,57 @@ def _seg_dist(a, b, p):
 
 
 def plane_fanout(board):
-    """Freerouting treats the GND/+3V3 zones as planes and leaves their SMD
-    pads alone. Give every such pad that has no track a via next to it so the
-    zone fill picks it up: a short stub from the pad centre outward (away
-    from the footprint centre) to a 0.6/0.3 via."""
-    tracks = list(board.GetTracks())
-    def has_track(pad):
-        net = pad.GetNetCode()
-        for t in tracks:
-            if t.GetNetCode() == net and t.HitTest(pad.GetPosition(), pcbnew.FromMM(0.05)):
-                return True
-        return False
-    added = 0
-    placed = []
-    other_pads = [(p.GetPosition(), p.GetNetCode()) for f in board.GetFootprints() for p in f.Pads()]
+    """Freerouting treats the GND/+3V3 zones as planes and leaves their SMD pads
+    alone. Give every such pad that is not already wired a short stub to a via,
+    clearance-checked against pads, tracks, vias and keepouts (finish_route.Board).
+    Pads with no legal spot are left for the router or the hand finish."""
+    from finish_route import Board
+    B = Board(PCB, board)
+    added, skipped = 0, []
     for fp in board.GetFootprints():
         fc = fp.GetPosition()
-        for pad in fp.Pads():
+        pads = list(fp.Pads())
+        if len(pads) > 60:        # the 0.4 mm pitch QFN: a via 0.9 mm out of a supply pin blocks both neighbours' lanes; leave it to the router
+            continue
+        for pad in pads:
             name = pad.GetNetname()
-            if name not in PLANE_NETS or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+            if name not in PLANE_NETS or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD or not pad.GetLayerSet().Contains(pcbnew.F_Cu):
                 continue
-            if pad.GetLayerSet().Contains(pcbnew.F_Cu) is False:
-                continue
-            if has_track(pad):
-                continue
-            pp = pad.GetPosition()
             net = pad.GetNetCode()
-            dx, dy = pp.x - fc.x, pp.y - fc.y
-            sz = pad.GetSize()
-            if min(sz.x, sz.y) >= pcbnew.FromMM(1.4):
-                vp = pp                      # big pad (thermal pad): via inside it
+            bb = pad.GetBoundingBox()
+            x0, y0, x1, y1 = (pcbnew.ToMM(v) for v in (bb.GetLeft(), bb.GetTop(), bb.GetRight(), bb.GetBottom()))
+            if any(tn == net and tl == pcbnew.F_Cu and any(x0 - 0.05 <= px <= x1 + 0.05 and y0 - 0.05 <= py <= y1 + 0.05 for px, py in ((ax, ay), (bx, by)))
+                   for ax, ay, bx, by, hw, tn, tl in B.tracks):
+                continue                                  # already wired (pre-route or an earlier pass)
+            px, py = pcbnew.ToMM(pad.GetPosition().x), pcbnew.ToMM(pad.GetPosition().y)
+            if min(x1 - x0, y1 - y0) >= 1.4:              # big pad (thermal pad): via inside it
+                B.add_via(px, py, net); added += 1
+                continue
+            dx, dy = px - pcbnew.ToMM(fc.x), py - pcbnew.ToMM(fc.y)
+            if len(pads) == 2:                            # R, C, D, L: sideways first, then outward along the axis
+                other = [q for q in pads if q is not pad][0].GetPosition()
+                ax, ay = px - pcbnew.ToMM(other.x), py - pcbnew.ToMM(other.y)
+                n = (ax * ax + ay * ay) ** 0.5 or 1.0
+                dirs = [(-ay / n, ax / n), (ay / n, -ax / n), (ax / n, ay / n)]
+            elif abs(dx) >= abs(dy):
+                dirs = [(1 if dx > 0 else -1, 0)]
             else:
-                pads = list(fp.Pads())
-                if len(pads) == 2:
-                    # two-pad part (R, C, D, L): go sideways, perpendicular to the
-                    # pad axis, so rows and columns of passives do not collide
-                    ax, ay = pads[1].GetPosition().x - pads[0].GetPosition().x, pads[1].GetPosition().y - pads[0].GetPosition().y
-                    if abs(ax) >= abs(ay):
-                        ux, uy = 0, 1
-                    else:
-                        ux, uy = 1, 0
-                elif abs(dx) >= abs(dy):
-                    ux, uy = (1 if dx > 0 else -1), 0
-                else:
-                    ux, uy = 0, (1 if dy > 0 else -1)
-                vp = None
-                # candidate stubs: straight out 0.9 mm, else 1.7 mm; reject any
-                # whose via/stub comes within 0.8 mm of a placed via or within
-                # 0.55 mm of a pad on another net; otherwise leave the pad to the router
-                for step_mm in (0.9, 1.7):
-                    step = pcbnew.FromMM(step_mm)
-                    cand = pcbnew.VECTOR2I(int(pp.x + ux * step), int(pp.y + uy * step))
-                    if not all(_seg_dist(pp, cand, v) >= pcbnew.FromMM(0.8) for v in placed):
-                        continue
-                    if any(_seg_dist(pp, cand, op) < pcbnew.FromMM(0.5) for op, onet in other_pads if onet != net):
-                        continue
-                    if any(z.GetIsRuleArea() and z.GetDoNotAllowVias() and z.Outline().Contains(cand) for z in board.Zones()):
-                        continue
-                    vp = cand
+                dirs = [(0, 1 if dy > 0 else -1)]
+            spot = None
+            for step in (0.9, 1.3, 1.7):
+                for ux, uy in dirs:
+                    cx, cy = px + ux * step, py + uy * step
+                    if B.via_ok(cx, cy, net) and B.track_ok(px, py, cx, cy, net, pcbnew.F_Cu, 0.25):
+                        spot = (cx, cy); break
+                if spot:
                     break
-                if vp is None:
-                    print("no via spot for", fp.GetReference(), pad.GetNumber())
-                    continue
-            tr = pcbnew.PCB_TRACK(board)
-            tr.SetStart(pp); tr.SetEnd(vp); tr.SetWidth(pcbnew.FromMM(0.25)); tr.SetLayer(pcbnew.F_Cu); tr.SetNet(pad.GetNet())
-            board.Add(tr)
-            via = pcbnew.PCB_VIA(board)
-            via.SetPosition(vp); via.SetDrill(pcbnew.FromMM(0.3)); via.SetWidth(pcbnew.FromMM(0.6))
-            via.SetViaType(pcbnew.VIATYPE_THROUGH); via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu); via.SetNet(pad.GetNet())
-            board.Add(via)
-            placed.append(vp)
+            if spot is None:
+                skipped.append(fp.GetReference() + "." + pad.GetNumber())
+                continue
+            B.add_track(px, py, spot[0], spot[1], net, pcbnew.F_Cu, 0.25)
+            B.add_via(spot[0], spot[1], net)
             added += 1
-    print("plane fanout vias added:", added)
+    print("plane fanout vias added:", added, "; no spot for:", " ".join(skipped) or "none")
 
 
 def main():

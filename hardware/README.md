@@ -28,7 +28,7 @@ Measured from the v2.2 fab Gerbers (`../old/tsPico2_2Fab/Gerber/tsPico.GTL`, `.G
 
 | Item | Value |
 |---|---|
-| Board | 130.00 x 72.25 mm, 1.6 mm (v2.2 was 100 mm tall; v3 body is 64 mm plus the 8.25 mm tongue) |
+| Board | 130.00 x 64.25 mm, 1.6 mm (v2.2 was 100 mm tall; v3 body is 56 mm plus the 8.25 mm tongue) |
 | Body | 130.00 x 64.00 mm |
 | Tongue | 83.66 mm wide, 8.25 mm deep, left edge 18.48 mm from the board's left edge, 1.0 mm corner chamfers |
 | Positions | 32 at 2.54 mm pitch, 31 fingers per side |
@@ -55,30 +55,36 @@ KC=/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli
 $KC sch export bom --output bom/tspico-v3-jlcpcb-bom.csv --fields "Value,Reference,Footprint,LCSC" --labels "Comment,Designator,Footprint,LCSC Part #" --group-by "Value,Footprint" --exclude-dnp tspico-v3.kicad_sch
 ```
 
-Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price.py --boards 10`; the reasoning for each substitution is in `docs/bom-cost-optimization.md` (2026-09-17: parts + fees per board went from $32.95 to $14.93 on a 10-board run, fitted logic packages from 16 to 8). **The PCB file predates these substitutions** (new footprints for J2, J4, D4, C40/C41/C46, the 10 uF caps, L1, U7; U5, U10, U11, U14, U16, R4-as-POR, C9-as-POR, D1 and C11-C16 deleted; U15 is now a TSSOP-24 I2C expander; U8, U12, U13, C7-C9 are DNP DMA-option footprints; R6-R13, R28, R41, C39 added) and must be laid out again before new fab outputs are generated; `fab/` is stale.
+Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price.py --boards 10`; the reasoning for each substitution is in `docs/bom-cost-optimization.md` (2026-09-17: parts + fees per board went from $32.95 to $14.93 on a 10-board run, fitted logic packages from 16 to 8). The board was laid out again for these parts on 2026-09-17 (see the routing section).
 
 ## Fab outputs
 
 `python3 scripts/gen_fab.py` writes `fab/jlcpcb/`: `tspico-v3-gerbers.zip` (4-layer Gerbers + Excellon drill), `tspico-v3-bom.csv` and `tspico-v3-cpl.csv` (JLCPCB assembly format), and refreshes the two BOMs in `bom/`. `fab/NOTES.md` lists what to check on upload (L1 has no LCSC number yet; rotations of QFN/SOT/connector parts need checking in JLC's placement preview; J3 and J5 are through-hole).
 
-## Layout notes (placement pass)
+## Layout notes
 
-- Buttons left to right: TS Reset, NMI, RUN, BOOTSEL. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
-- Z80 transceivers U1-U4 directly above the fingers; gating and muxes above them; registers above those; RP2350B cluster in the centre with crystal, QSPI flash and PSRAM around it; power block below the OLED header.
-- Joystick conditioning is one row per line (series R, pull-up, cap) beside the DE-9 pins; audio parts are in signal order per channel next to the op-amp, left of the jack; SD pull-ups and series resistors sit just below the SD socket.
-- Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, confirm the SD socket's card-detect switch polarity, and add 3D models if wanted for the jack and the TS-1187A switches (KiCad ships none for them).
+- Body 130 x 56 mm (the register row of the first layout is gone). Left edge, top to bottom: ESP32-C3 antenna, USB-C, micro SD. The TF-01A socket's shell is flush with the board edge (its shield pads sit 3 mm back, so nothing needs edge clearance). Right edge: 3.5 mm jack in the corner, DE-9 below it.
+- Top edge: buttons on 0.5 in centres, left to right TS Reset, NMI, RUN, BOOTSEL, then the OLED header. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
+- Row above the fingers: data, address group X, address group Y and control 74LVC245s in finger order. Row above that: DMA-option footprints (U12, U13, U8, not fitted), strobe OR gates U6, open-drain drivers U7. I2C expander U15 and the joystick conditioning network sit beside the DE-9; audio and the two LDOs above them.
+- RP2350B core regulator copied from "Hardware design with RP2350" figure 4: input cap C22 and output cap C20 (0402) straddle the VREG_LX pin, LX runs 3.7 mm under both to L1, VIN and PGND go straight into C22, feedback senses at C20, the AVDD filter R28/C39 sits above. L1 is the polarised Abracon part: pad 2 (dot) is the DVDD end, away from the top edge of the board.
+- Crystal 6.5 mm from its pins with R20 between chip and crystal; XOUT_R runs under the crystal to pad 3. XIN and XOUT drop one pad lane after leaving the chip so DVDD pin 32 has room for its via.
+- Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, check `lib/tspico.pretty/microSD_TF-01A` and `L_Abracon_AOTA-B201610` against the parts' drawings (both were generated from LCSC's land patterns), confirm the TF-01A card-detect polarity.
 
-## Routing state and hand-finish list
+## Routing flow and state
 
-Autorouted headlessly with Freerouting 2.4.1 via `scripts/autoroute.py` (GND/+3V3 pads pre-stitched to the inner planes, planes extended under the fingers, keepout on B.Cu under the RP2350B body, single-threaded optimizer, GUI disabled in `~/Library/Application Support/freerouting/freerouting.json` because its plane renderer crashes). Default net class 0.2 mm track, 0.127 mm clearance (JLCPCB 5 mil), 0.6/0.3 via.
+```bash
+cd hardware
+PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
+$PY scripts/gen_layout.py     # placement, keepouts, planes (discards all routing)
+$PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD pin 32, corner supply pins
+$PY scripts/autoroute.py --jar <freerouting-2.4.1.jar> --passes 100     # about 25 minutes
+$PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets
+```
 
-72 mm board, transceivers in finger order, SD shell 0.35 mm inside the edge (its front shield tabs need 0.3 mm copper-to-edge), flash/PSRAM 2 mm off the chip, thinner left decoupling column: Freerouting reached 524 of 532 connections with zero rule violations, and `scripts/finish_route.py` (plane-via placement, clearance-checked stubs, A* on a single layer) hand-finished the last eight. **The board is fully routed with zero DRC errors.**
+Rules: 0.15 mm signal tracks, 0.4 mm on the 5 V rails and +3V3_WIFI, 0.127 mm clearance, every via 0.6/0.3 mm (JLCPCB's no-surcharge size; the ESP32 footprint's 0.2 mm thermal vias are opened to 0.3 mm by `gen_layout.py`). The pre-stitch step skips the RP2350B: a via 0.9 mm out of a 0.4 mm pitch pin blocks both neighbours' escape lanes.
 
-Hand-finish notes:
+State on 2026-09-17: zero DRC rule violations, everything that is populated is fully routed. Two connections are open, both belonging only to the unfitted DMA option: **nMRD** (U20 pin 28 to U8) and **nWR_ALO** (U20 pin 27 to U12). Their pins sit in a dead-end corridor between the crystal track and the I2C pair, and the bottom layer east of the chip is too dense to give them a via. Fitting the DMA option on this board revision would take two bodge wires; `DMA_OPTION = False` in `scripts/config.py` removes the option and frees six RP2350B pins in the most congested area.
 
-- Five signals run partly on In2.Cu, the +3V3 plane layer; the zone fills around them, so they cut slits in the plane (about 125 mm in total: SD_MISO 58, nMWR 26, MA14 24, WIFI_TX 10, MA6 8). Nothing runs on the GND plane (In1.Cu). To keep the +3V3 plane whole, these are the tracks to move to F.Cu/B.Cu by hand.
-- SD_MISO moved from GP36 to GP32 (both SPI0 RX): the GP36 pad is boxed in by the SD_CS/SD_SCK fan-out vias outside the package and by DVDD and SWDIO inside it. The schematic, the GPIO table in `docs/v3-architecture.md` and the firmware pin map follow. Pad 45 (GP36) has no net in the PCB file; "Update PCB from Schematic" in pcbnew names it.
-- RP2350B IOVDD pins 50, 61 and 64 are joined inside the package to IOVDD pads that already have plane vias; pins 41 and 68 and U11 pin 16 got 0.5 mm vias of their own (the U11 one sits inside the U11 body).
-- WIFI_TX leaves pad 55 straight up to a via and continues on In2 to its old F.Cu track near (51, 17.5); MA6 leaves U11 pin 14 through a via and runs on In2 to its existing via near (46.2, 46.6).
+After the autorouter, by hand (clearance-checked with `scripts/finish_route.py`): the RP2350B supply pins the router had linked under the package but left without a via were joined to connected copper, SD_MOSI's run under the top pad row was lowered 0.4 mm to slip a +3V3 link to pin 50 above it, and DVDD pin 10's island is joined to pin 32's via by an 18 mm track on In2.Cu (the only signal on the +3V3 plane layer; nothing runs on the GND plane).
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.

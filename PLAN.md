@@ -104,7 +104,11 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - **Edge connector fit** remains the hard mechanical constraint; verify the footprint against the old Gerbers and test-fit the first prototype.
 - **Part stock at JLC**: 3.3 V flash, SD socket, ESP32-C3 module, RP2350B. Keep alternates in the BOM.
 
-## Pending rework before ordering: relayout (regulator/crystal fix + cheaper BOM)
+## Relayout done 2026-09-17
+
+Board relaid at 130 x 64.25 mm with the cheaper BOM, the consolidated logic, the RP2350 design guide's regulator layout and a short crystal path; see hardware/README.md ("Routing flow and state"). Open: two DMA-option nets (nMRD, nWR_ALO) are unrouted; decide whether to drop the DMA option (`DMA_OPTION = False`) or spend another placement pass on the east side of the RP2350B. Original notes follow.
+
+## Rework notes (historical)
 
 Schematic side is done as of 2026-09-17 (AOTA inductor with pin 1 on DVDD, VREG_AVDD 33 R + 4.7 uF filter, BOM substitutions in docs/bom-cost-optimization.md). The logic was consolidated the same day (byte mux through the address buffers' enables, 74LVC32 strobes, XL9555 expander, DMA as a DNP option; docs/v3-architecture.md). Remaining: draw the TF-01A footprint, update gen_layout.py for the new/removed parts, place the regulator and crystal per the notes below, reroute, DRC, regenerate fab outputs.
 

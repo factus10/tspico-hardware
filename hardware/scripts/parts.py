@@ -31,7 +31,7 @@ PARTS = {
     ("10n", C6): ("CL10B103KB8NNNC", "C57112", "basic; verify (C1710 listed as 0805 in some tables)"),
     ("100n", C6): ("CC0603KRX7R9BB104", "C14663", "basic, X7R 50V"),
     ("1u", C6): ("CL10A105KB8NNNC", "C15849", "basic, X5R 25V"),
-    ("4.7u", C8): ("CL21A475KAQNNNE", "C1779", "basic, X5R 25V"),
+    ("4.7u", "C_0402_1005Metric"): ("CL05A475MP5NRNC", "C23733", "basic, X5R 10V, 0402 as in the RP2350 design guide"),
     ("10u", C6): ("CL10A106KP8NNNC", "C19702", "basic, X5R 10V (all 10u sit on 5 V or 3.3 V rails)"),
     ("220u", "CP_Elec_6.3x5.4"): ("RVT220UF10V67RV0037", "C2833309", "KNSCHA 220uF 10V SMD aluminium, D6.3xL5.4 (extended; was Panasonic polymer at 26x the price)"),
     # ---- semiconductors ------------------------------------------------------
@@ -49,7 +49,7 @@ PARTS = {
     ("74LVC1G86", "SOT-23-5"): ("SN74LVC1G86DBVR", "C402161", "extended, TI"),
     ("SS34", "D_SMA"): ("SS34", "C8678", "basic, MDD"),
     ("green", "LED_0805_2012Metric"): ("KT-0805G", "C2297", "basic, KENTO (the 0603 basic part had 1 in stock)"),
-    ("3.3uH", "L_0806_2016Metric"): ("AOTA-B201610S3R3-101-T", "C42411119", "extended, Abracon polarised inductor from the RP2350 design guide; dot = pin 1 = DVDD side"),
+    ("3.3uH", "L_Abracon_AOTA-B201610"): ("AOTA-B201610S3R3-101-T", "C42411119", "extended, Abracon polarised inductor from the RP2350 design guide; dot = pin 1 = DVDD side"),
     ("12MHz", "Crystal_SMD_3225-4Pin_3.2x2.5mm"): ("ABM8-272-T3", "C20625731", "extended, Abracon, CL 10 pF (RP2350 design guide); basic alternative X322512MSB4SI C9002 needs 27 pF loads"),
     # ---- electromechanical ---------------------------------------------------
     ("USB-C", "USB_C_Receptacle_HRO_TYPE-C-31-M-12"): ("TYPE-C-31-M-12", "C165948", "extended, HRO"),

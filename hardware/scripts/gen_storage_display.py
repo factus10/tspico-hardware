@@ -13,7 +13,7 @@ from schlib import Sheet  # noqa: E402
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-SD_FP = "TSPico:microSD_TF-01A"   # custom footprint for the HRO TF-01A push-push socket (pads 1-8, 9 = CD switch, 10 = CD common, SH)
+SD_FP = "tspico:microSD_TF-01A"   # custom footprint for the HRO TF-01A push-push socket (pads 1-8, 9 = CD switch, 10 = CD common, SH)
 HDR7 = "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical"
 
 OUT, IN, BI = "output", "input", "bidirectional"

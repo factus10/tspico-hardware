@@ -21,7 +21,8 @@ from config import DMA_OPTION  # noqa: E402
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-L_FP = "Inductor_SMD:L_0806_2016Metric"
+L_FP = "tspico:L_Abracon_AOTA-B201610"
+C0402 = "Capacitor_SMD:C_0402_1005Metric"
 SW_FP = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
 TP_FP = "TestPoint:TestPoint_Pad_1.5x1.5mm"
 
@@ -86,14 +87,14 @@ def main():
 
     # ---- core regulator: VREG_LX -> L1 -> DVDD, 4.7 uF x2, 4.7 uF on VREG_VIN --------
     L1 = s.place("Device:L", "L1", "3.3uH", L_FP, 250, 60)
-    s.label("DVDD", L1.pin("1")); s.label("VREG_LX", L1.pin("2"))   # AOTA dot = pin 1 = DVDD side (design guide fig. 4)
-    for k, (ref, net, val, fp) in enumerate([("C20", "DVDD", "4.7u", C0805), ("C21", "DVDD", "4.7u", C0805), ("C22", "+3V3", "4.7u", C0805)]):
+    s.label("VREG_LX", L1.pin("1")); s.label("DVDD", L1.pin("2"))   # LCSC numbering: dot-marked terminal = pad 2 = DVDD (1.1 V) side
+    for k, (ref, net, val, fp) in enumerate([("C20", "DVDD", "4.7u", C0402), ("C22", "+3V3", "4.7u", C0402), ("C21", "DVDD", "100n", C0603), ("C47", "DVDD", "100n", C0603), ("C48", "DVDD", "100n", C0603)]):
         C = s.place("Device:C", ref, val, fp, 265 + 10 * k, 60)
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
-    s.text("L1 (Abracon AOTA-B201610S3R3-101-T, polarised: dot/pin 1 to DVDD)/C20/C21: RP2350 1.1 V core regulator. C22 at VREG_VIN.", 245, 75, 1.5)
+    s.text("L1 (Abracon AOTA-B201610S3R3-101-T, polarised: dot = pad 2 to DVDD), C20 output, C22 at VREG_VIN (0402 as in the design guide). C21/C47/C48: 100 nF at DVDD pins 51, 32, 10.", 245, 75, 1.5)
     R28 = s.place("Device:R", "R28", "33", R0603, 300, 85)
     s.label("+3V3", R28.pin("1")); s.label("VREG_AVDD", R28.pin("2"))
-    C39 = s.place("Device:C", "C39", "4.7u", C0805, 315, 85)
+    C39 = s.place("Device:C", "C39", "4.7u", C0402, 315, 85)
     s.label("VREG_AVDD", C39.pin("1")); s.label("GND", C39.pin("2"))
     s.text("R28/C39: 33 R + 4.7 uF filter on VREG_AVDD (design guide R3/C9).", 245, 95, 1.5)
     FL2 = s.place("power:PWR_FLAG", "#FLG08", "PWR_FLAG", "", 330, 85)
@@ -102,10 +103,10 @@ def main():
     s.label("DVDD", FL.pin("1"))
 
     # ---- IOVDD and analog decoupling: 12 x 100 nF ----------------------------------
-    for k in range(11):
+    for k in range(9):
         C = s.place("Device:C", f"C{23 + k}", "100n", C0603, 250 + 9 * k, 100)
         s.label("+3V3", C.pin("1")); s.label("GND", C.pin("2"))
-    s.text("C23-C33: one per IOVDD, QSPI_IOVDD, USB_OTP_VDD, ADC_AVDD pin, placed at the pin.", 245, 115, 1.5)
+    s.text("C23-C31: one per 3.3 V supply pin or adjacent pair (5, 15, 24, 29, 41, 50, 59/60, 68/69, 76); pin 64 has C22.", 245, 115, 1.5)
 
     # ---- crystal ---------------------------------------------------------------------
     Y1 = s.place("Device:Crystal_GND24", "Y1", "12MHz", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", 270, 150)

@@ -10,7 +10,7 @@ KiCad or project library, assign nets, place parts per PLACEMENT below, add
 GND (In1.Cu) and +3V3 (In2.Cu) zones, save tspico-v3.kicad_pcb.
 
 Coordinates: mm, board origin at the top-left corner of the body, y down.
-Body 130 x 64; tongue below y = 64 between x = 18.48 and 102.14.
+Body 130 x 56; tongue below y = 56 between x = 18.48 and 102.14.
 Rotation: degrees counter-clockwise as in KiCad.
 """
 import os
@@ -38,77 +38,87 @@ def row(refs, x0, y, dx, rot=0):
         P[r] = (x0 + i * dx, y, rot)
 
 
-# Body is 130 x 64 mm (tongue below y = 64). Rows above the fingers at 8 mm pitch.
-# Left edge: ESP32 antenna (top corner), USB-C, micro SD. Right edge: audio jack, DE-9.
-# Row 3 (y 58.5): transceivers in finger order: data (fingers x 29-52), address low
-# (44-62), address high (64-82), control (54-92). Bit order inside each is set in the schematic.
-P["U3"], P["C3"] = (40, 58.5, 270), (48, 58.5, 90)
-P["U1"], P["C1"] = (56, 58.5, 270), (64, 58.5, 90)
-P["U2"], P["C2"] = (74, 58.5, 270), (82, 58.5, 90)
-P["U4"], P["C4"] = (92, 58.5, 270), (100, 58.5, 90)
-# Row 2 (y 50.5): XOR, DMA drivers, inverters, ANDs, open-drain drivers
-P["U9"] = (30, 50.5, 0)
-row(["U8", "U5", "U6", "U7"], 42, 50.5, 12, 270)
-row(["C8", "C5", "C6", "C7"], 48, 50.5, 12, 90)
-# Row 1 (y 42.5): address muxes and the registers, the MD bus block
-row(["U10", "U11", "U12", "U13", "U14", "U15", "U16"], 26, 42.5, 12, 270)
-row(["C10", "C11", "C12", "C13", "C14", "C15", "C16"], 32.5, 42.5, 12, 90)
-P["R4"], P["C9"], P["D1"] = (98, 62, 0), (101.5, 62, 0), (105.5, 62, 0)
-P["JP10"] = (85, 62.5, 0)
+BODY_H = 56.0
+R3Y, R2Y = BODY_H - 5.5, BODY_H - 13.5      # transceiver row, glue/DMA row
+
+# Body is 130 x 56 mm (tongue below). Left edge: ESP32 antenna (top corner), USB-C,
+# micro SD (shell flush with the edge). Right edge: audio jack, DE-9.
+# Row 3: transceivers in finger order: data (fingers x 29-52), address group X
+# (44-62), address group Y (64-82), control (54-92).
+P["U3"], P["C3"] = (40, R3Y, 270), (48, R3Y, 90)
+P["U1"], P["C1"] = (56, R3Y, 270), (64, R3Y, 90)
+P["U2"], P["C2"] = (74, R3Y, 270), (82, R3Y, 90)
+P["U4"], P["C4"] = (92, R3Y, 270), (100, R3Y, 90)
+# Row 2: DMA option (U12, U13, U8: DNP) then strobes U6 and open-drain drivers U7
+P["U12"], P["C8"] = (42, R2Y, 270), (47.7, R2Y, 90)
+P["U13"], P["C9"] = (53, R2Y, 270), (58.7, R2Y, 90)
+P["U8"], P["C7"] = (64, R2Y, 270), (69.4, R2Y, 90)
+P["U6"], P["C5"] = (74.5, R2Y, 270), (78.6, R2Y, 90)
+P["U7"], P["C6"] = (85.5, R2Y, 270), (92.3, R2Y - 1.5, 90)
+P["R1"] = (92.3, R2Y + 3.2, 0)
+P["U9"], P["R4"] = (32, R2Y + 4, 0), (32, R2Y + 1, 0)
+P["R9"], P["R10"] = (94.6, 37.2, 0), (94.6, 34.6, 0)          # BUSRQ / NMI_REQ pull-downs by U7 and the expander
+# I2C expander and the joystick network beside the DE-9
+P["U15"], P["C10"] = (101, 41.5, 0), (106.4, 35.8, 0)
+P["R6"], P["R7"], P["R8"] = (109.8, 35.8, 0), (113.2, 35.8, 0), (101, 35.8, 0)
+for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
+                                    ["R96", "R97", "R98", "R99", "R100", "R101"],
+                                    ["C90", "C91", "C92", "C93", "C94", "C95"])):
+    x = 106.6 + 2.0 * i
+    P[rs], P[rp], P[c] = (x, 38.7, 90), (x, 41.7, 90), (x, 44.7, 90)
+P["JP10"] = (105.5, 50.2, 0)
 # RP2350B core, rotated so GPIO0-7 (MD bus) sit at the bottom-left corner, the
-# control GPIOs along the bottom, QSPI/USB on the left, crystal on the right
+# control GPIOs along the bottom, QSPI/USB/regulator on the left, crystal on the right
 P["U20"] = (62, 26, 90)
-for i, r in enumerate(["C23", "C24", "C25"]):
-    P[r] = (51.5, 20 + 4 * i, 0)          # thinner left column: room for the QSPI/USB/MD escapes
-P["C26"], P["C27"] = (57, 33.5, 90), (67, 33.5, 90)   # under the bottom edge, where IOVDD pins 5 and 15 are
-for i, r in enumerate(["C28", "C29", "C30", "C31", "C32"]):
-    P[r] = (71.5, 19 + 3.5 * i, 0)
-P["C33"], P["C34"] = (58, 17, 90), (66, 17, 90)
-row(["L1", "C20", "C21", "C22"], 52, 37, 4.5, 0)
-P["Y1"], P["C35"], P["C36"], P["R20"] = (77, 26, 0), (77, 21.5, 0), (77, 30.5, 0), (81, 26, 90)
+# core regulator, copied from the design guide's figure 4 (rotated): VIN cap C22 and
+# output cap C20 straddle the VREG_LX pin so LX runs under them to L1; AVDD filter above
+P["C22"], P["C20"], P["L1"] = (55.25, 22.8, 90), (54.05, 22.8, 90), (52.25, 22.8, 270)
+P["C39"], P["R28"] = (55.1, 21.2, 180), (55.6, 19.2, 270)
+# crystal 6.5 mm from XIN/XOUT (leaving a via ring for the neighbouring pins), series resistor between chip and crystal, load caps at the pads
+P["Y1"], P["R20"], P["C35"], P["C36"] = (75.5, 26.0, 0), (71.7, 25.2, 0), (74.4, 29.3, 270), (76.6, 22.7, 90)
+# decoupling: left 68/69, 76; bottom 5, DVDD 10, 15; right 29, 24, DVDD 32; top 41, 50, DVDD 51, 59/60
+P["C23"], P["C24"] = (51.2, 26.4, 0), (51.2, 29.4, 0)
+P["C25"], P["C48"], P["C26"] = (56.4, 33.2, 90), (56.4, 36.4, 90), (67.6, 33.2, 90)      # clear of the bottom-row fan-out
+P["C28"], P["C29"], P["C47"] = (69.4, 30.6, 0), (71.0, 33.4, 0), (70.6, 19.8, 0)
+P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (60.6, 14.0, 0), (57.4, 16.4, 0)     # clear of the top-row fan-out
 P["U21"], P["C37"], P["R21"] = (44, 20, 0), (38, 20, 90), (38, 25, 0)
 P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
-P["TP1"], P["TP2"], P["TP3"] = (6, 46, 0), (9.5, 46, 0), (13, 46, 0)
-# top edge: ESP32-C3 (antenna over the edge), LED, buttons on 0.5 in centres, OLED header
+P["R27"], P["R26"] = (47.6, 24.0, 0), (47.6, 26.0, 0)          # USB series resistors on the way out to J1
+P["TP1"], P["TP2"], P["TP3"] = (6, 45.8, 0), (9.5, 45.8, 0), (13, 45.8, 0)
+P["R2"], P["R3"] = (20, 47.5, 0), (23.5, 47.5, 0)
+# top edge: ESP32-C3 (antenna over the edge), WiFi bulk cap, LED, buttons on 0.5 in centres, OLED header
 P["U40"] = (20, 8, 0)
-P["C60"], P["C61"], P["R40"] = (34, 19, 0), (34, 23, 0), (34, 27, 0)
-P["D4"], P["R5"] = (37, 8, 0), (37, 12, 0)
-row(["SW1", "SW2", "SW3", "SW4"], 50, 4, 12.7, 0)
-P["R22"], P["R23"] = (72, 9.5, 0), (92, 9, 0)
-P["J3"] = (95, 4, 90)
+P["C46"] = (35.5, 9, 0)
+P["C60"], P["C61"], P["R40"], P["R41"], P["R12"], P["R13"] = (34, 19, 0), (34, 22, 0), (34, 25, 0), (34, 28, 0), (34, 31, 0), (34, 34, 0)
+P["D4"], P["R5"] = (43.5, 8, 0), (43.5, 11, 0)
+row(["SW1", "SW2", "SW3", "SW4"], 47, 4, 12.7, 0)
+P["R22"], P["R23"] = (72, 9.5, 0), (78.5, 9.5, 0)
+P["J3"], P["R11"] = (93, 4, 90), (112.6, 9.5, 90)
 # left edge: USB-C below the ESP32, micro SD below that (both open to the left)
 P["J1"] = (3.2, 21, 270)
-row(["R24", "R25", "R26", "R27"], 12, 21, 3, 0)
-P["J2"] = (8.75, 35, 270)      # shell 0.35 mm inside the edge: its front shield tabs need 0.3 mm copper-to-edge (fab outline includes the card)
+P["R24"], P["R25"] = (12, 21, 0), (15, 21, 0)
+P["J2"] = (9.58, 35.5, 270)    # TF-01A: shell front 9.576 mm from the origin, so the shell is flush with the board edge
 for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
     P[r] = (23.5, 27 + 2.5 * i, 0)
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
     P[r] = (27, 27 + 2.5 * i, 0)
 P["C50"], P["C51"] = (30.5, 30, 0), (30.5, 34, 0)
-# power block, top right, below the OLED header; LDOs right of the crystal
-P["D2"], P["D3"] = (98, 12, 0), (98, 17, 0)
-P["C40"], P["C41"] = (106.5, 14, 0), (117, 14, 0)
-P["U30"], P["C42"], P["C43"] = (86.5, 23, 0), (82, 15, 0), (91, 15, 0)
-P["U31"], P["C44"], P["C45"], P["C46"] = (86.5, 31, 0), (82, 36, 0), (91, 36, 0), (107.5, 23, 0)
-# right edge: audio jack, then the DE-9 (face 7.7 mm beyond the pin-1 row)
-P["J4"] = (121.9, 24, 270)
-P["J5"] = (122.3, 41, 90)
-# audio: op-amp below the power caps, passives in signal order in three rows of six
-P["U50"], P["C79"] = (99.5, 27, 0), (105, 28, 0)
+# power block, top right below the OLED header
+P["D2"], P["D3"] = (84, 11, 0), (84, 15.5, 0)
+P["C40"], P["C41"] = (93.5, 13.5, 0), (104, 13.5, 0)
+P["U30"], P["C42"], P["C43"] = (88, 23.5, 0), (82.2, 21, 90), (82.2, 25.5, 90)
+P["U31"], P["C44"], P["C45"] = (88, 32.5, 0), (82.2, 30, 90), (82.2, 34.5, 90)
+# right edge: audio jack in the corner (opening to the right), DE-9 below it
+P["J4"] = (123.7, 7, 180)
+P["J5"] = (122.3, 34, 90)
+# audio: op-amp, passives in signal order in three rows
+P["U50"], P["C79"] = (99, 22.5, 0), (104.6, 21, 0)
 for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):
-    P[r] = (97 + 3.4 * i, 32, 0)
+    P[r] = (94 + 3.4 * i, 27.4, 0)
 for i, r in enumerate(["R75", "C75", "R76", "C76", "R77", "R78"]):
-    P[r] = (97 + 3.4 * i, 35, 0)
-for i, r in enumerate(["C70", "R70", "C80", "R80", "C81"]):
-    P[r] = (103 + 3.4 * i, 38, 0)
-P["R81"] = (92, 38.5, 0)
-# joystick: one row per line beside the DE-9 pins
-for i, (rs, rp, c) in enumerate(zip(["R90", "R91", "R92", "R93", "R94", "R95"],
-                                    ["R96", "R97", "R98", "R99", "R100", "R101"],
-                                    ["C90", "C91", "C92", "C93", "C94", "C95"])):
-    P[rs], P[rp], P[c] = (108, 45.5 + 2.5 * i, 0), (112, 45.5 + 2.5 * i, 0), (116, 45.5 + 2.5 * i, 0)
-# misc interface passives in the left margin below the SD
-P["R1"], P["R2"], P["R3"] = (10, 59, 0), (10, 55, 0), (10, 51, 0)
+    P[r] = (94 + 3.4 * i, 30.1, 0)
+for i, r in enumerate(["C70", "R70", "C80", "R80", "C81", "R81"]):
+    P[r] = (94 + 3.4 * i, 32.8, 0)
 
 # ---------------------------------------------------------------------------
 
@@ -142,7 +152,8 @@ def load_netlist(path):
     comps = {}
     for c in find(first(root, "components"), "comp"):
         ref = first(c, "ref")[1]
-        comps[ref] = {"value": first(c, "value")[1], "footprint": (first(c, "footprint") or ["", ""])[1]}
+        dnp = any(len(pr) > 1 and isinstance(pr[1], list) and pr[1][:2] == ["name", "dnp"] for pr in find(c, "property"))
+        comps[ref] = {"value": first(c, "value")[1], "footprint": (first(c, "footprint") or ["", ""])[1], "dnp": dnp}
     nets = []
     for n in find(first(root, "nets"), "net"):
         name = first(n, "name")[1]
@@ -191,6 +202,8 @@ def main():
         fp = load_footprint(c["footprint"])
         fp.SetReference(ref)
         fp.SetValue(c["value"])
+        if c.get("dnp"):
+            fp.SetDNP(True)
         if ref in P:
             x, y, rot = P[ref]
         else:
@@ -200,6 +213,13 @@ def main():
         fp.SetOrientationDegrees(rot)
         board.Add(fp)
         fps[ref] = fp
+
+    # the stock ESP32-C3-WROOM-02 footprint has 0.2 mm thermal vias; 0.3 mm keeps the board on JLCPCB's standard drill list
+    for pad in fps["U40"].Pads():
+        if 0 < pad.GetDrillSize().x < pcbnew.FromMM(0.3):
+            pad.SetDrillSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.3), pcbnew.FromMM(0.3)))
+            if pad.GetSize().x < pcbnew.FromMM(0.6):
+                pad.SetSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.6), pcbnew.FromMM(0.6)))
 
     # pad nets
     pad_index = {}
@@ -237,8 +257,22 @@ def main():
             kop.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
         board.Add(ko)
 
+    # fiducials: the router does not see their 0.6 mm pad clearance, so give each a keepout square
+    for fp in board.GetFootprints():
+        if not fp.GetReference().startswith("FID"):
+            continue
+        cx, cy = pcbnew.ToMM(fp.GetPosition().x), pcbnew.ToMM(fp.GetPosition().y)
+        ko = pcbnew.ZONE(board)
+        ko.SetIsRuleArea(True); ko.SetDoNotAllowTracks(True); ko.SetDoNotAllowVias(True)
+        ko.SetDoNotAllowPads(False); ko.SetDoNotAllowFootprints(False); ko.SetDoNotAllowZoneFills(False)
+        ko.SetLayer(pcbnew.F_Cu); ko.SetZoneName(fp.GetReference() + "_keepout")
+        kop = ko.Outline(); kop.NewOutline()
+        for x, y in ((cx - 1.3, cy - 1.3), (cx + 1.3, cy - 1.3), (cx + 1.3, cy + 1.3), (cx - 1.3, cy + 1.3)):
+            kop.Append(pcbnew.FromMM(x), pcbnew.FromMM(y))
+        board.Add(ko)
+
     # zones: GND on In1.Cu, +3V3 on In2.Cu, covering the body and the tongue
-    body_h = 64.0
+    body_h = BODY_H
     for layer, netname in ((pcbnew.In1_Cu, "GND"), (pcbnew.In2_Cu, "+3V3")):
         z = pcbnew.ZONE(board)
         z.SetLayer(layer)
