@@ -92,7 +92,7 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - `TS_IO` becomes a port classifier: reads A0 to A7 (plus A14, A15) and responds only to enabled ports; gains /WAIT side-set.
 - SD moves to its own SPI; no bus hand-off.
 - Reset is a GPIO the firmware releases once ready and can pulse on demand.
-- New: Pico-direct flash/SRAM access, PSRAM-backed caching, OLED UI, WiFi via AT commands over UART, Kempston service, AY emulation in C on core 1, tape playback/capture, optional DMA snapshot support.
+- New: Pico-direct flash/SRAM access, PSRAM-backed caching, OLED UI, WiFi via AT commands over UART (dual-role bridge proposal in section 7), Kempston service, AY emulation in C on core 1, tape playback/capture, optional DMA snapshot support.
 
 ## 6. Risks
 
@@ -103,6 +103,59 @@ Emulating the memories in the RP2350B (decided 2026-09-16) removes the memory ch
 - **AY emulation load.** Core 1 in C is required; MicroPython cannot do it. Plan the C user-module build into the existing docker firmware build.
 - **Edge connector fit** remains the hard mechanical constraint; verify the footprint against the old Gerbers and test-fit the first prototype.
 - **Part stock at JLC**: 3.3 V flash, SD socket, ESP32-C3 module, RP2350B. Keep alternates in the BOM.
+
+## 7. ESP32 dual-role bridge (proposal, 2026-09-18)
+
+Status: proposal, not built or reviewed with the firmware maintainers. No hardware changes needed: `WIFI_EN`, `WIFI_DL`/`nWIFI_BOOT` and UART0 (section 1's WiFi row; `docs/v3-architecture.md` GPIO map) already give the RP2350B everything it needs to put the ESP32-C3 into a chosen role and talk to it.
+
+Motivation: USB-C to the RP2350B already carries board updates via a browser page. The natural complement is fetching files onto the Pico's own storage over WiFi, using a PC/Mac on the same network as the source, without losing Zimodem's modem role. The ESP32-C3 needs to run as either a Hayes modem (today's stock Zimodem) or a local WiFi-to-UART file bridge, switching between the two on request.
+
+### 7.1 Role switching
+
+Two ESP-IDF OTA app partitions on the ESP32-C3's own 4 MB flash: Zimodem (forked to add one AT command) in one, a new "bridge" firmware in the other. A switch sets the OTA boot partition and reboots; no in-field reflash of either image is needed just to change roles.
+
+- Modem to bridge: `AT$SWROLE=BRIDGE\r`. Zimodem must be idle (not connected to a remote host) or it replies `ERROR`; on `OK` it calls `esp_ota_set_boot_partition()` and `esp_restart()`.
+- Bridge to modem: a `SWITCH_ROLE` frame in the protocol below, refused with `BUSY` if a transfer is in flight.
+- Both images announce `$TSPICO,ROLE=<MODEM|BRIDGE>,VER=<gitsha>` on boot, so the RP2350 confirms the switch actually landed instead of trusting the ACK alone. The `WIFI_EN` pulse (already wired for production flashing) is the recovery path if a role fails to come up.
+
+### 7.2 Bridge-role framed protocol
+
+Point-to-point framing over the same UART0 pair (GP44/45), used for everything the bridge role does once running:
+
+```
+0xA5 0x5A  LEN(2,LE)  CMD(1)  PAYLOAD(LEN)  CKSUM(1, sum of CMD+PAYLOAD mod 256)
+```
+
+Convention: RP2350-to-ESP32 commands leave CMD bit 7 clear; every ESP32 reply sets it (0x80 | related id, or a fresh code in that range for a multi-frame stream).
+
+| Group | CMD | Name | Payload |
+|---|---|---|---|
+| Control | 0x00 / 0x80 | PING / PONG | — |
+| | 0x01 / 0x81 | SWITCH_ROLE / ACK | 1B target role / 1B status |
+| WiFi | 0x20 | SCAN_WIFI | — |
+| | 0xA0 / 0xA1 | SCAN_RESULT / SCAN_DONE | RSSI+auth+ssid per AP / count |
+| | 0x21 | SET_WIFI_CREDENTIALS | ssid, password (length-prefixed strings) |
+| | 0x22 / 0x23 | CONNECT_WIFI / DISCONNECT_WIFI | — |
+| | 0x24 | FORGET_WIFI | — |
+| | 0x25 | SET_FILE_SERVER | protocol enum, host, port, path, optional user/pass |
+| | 0x9E | CONFIG_ACK | 1B echoed command id + 1B status |
+| | 0x06 / 0x86 | LINK_STATUS / LINK_STATUS_ACK | wifi_state, fail_reason, IP, RSSI, server_state; also pushed unsolicited on any state change |
+| Files | 0x02 | LIST_DIR | path |
+| | 0x82 / 0x83 | LIST_ENTRY / LIST_DONE | type+size+name per entry / count |
+| | 0x03 | GET_FILE | path |
+| | 0x93 / 0x94 / 0x95 | FILE_META / FILE_DATA / FILE_DONE | size+CRC32 / seq+chunk bytes / — |
+| | 0x14 | DATA_ACK | seq of last chunk written (stop-and-wait) |
+| | 0x05 / 0x85 | CANCEL / CANCEL_ACK | — |
+| Shared | 0x9F | ERROR | 1B code |
+
+Design choices: one request in flight at a time, no pipelining; stop-and-wait chunk ACKs, since the WiFi fetch and the SD write are the expected bottlenecks, not the UART hop; `FILE_META`'s CRC32 doubles as the slot map's checksum (section 5 of `docs/v3-architecture.md`), so a fetched image isn't hashed twice; WiFi and file-server credentials live in the ESP32's NVS partition, which survives both role switches and reflashes of either app partition.
+
+### 7.3 Open questions
+
+1. Does stock Zimodem already have its own WiFi-join AT commands? It has to dial out over WiFi, so it almost certainly does — check before deciding whether the bridge role shares that code or duplicates it.
+2. `FILE_DATA` chunk size (placeholder: 512 B) trades UART framing overhead against the ~100 KB SRAM budget already committed to the active image set (section 5 of `docs/v3-architecture.md`) plus MicroPython's heap.
+3. No resume-from-offset and no directory pagination in this sketch; add only if large files or directories make their absence painful in practice.
+4. NVS holds the WiFi password and file-server credentials in plaintext by default. ESP-IDF's NVS encryption is available if that matters here.
 
 ## Relayout done 2026-09-17
 
