@@ -49,6 +49,27 @@ Nothing here touches a TS2068: RESET_HOLD is left floating (2068 held in
 reset), the bus request, NMI, /BE and /WAIT outputs stay deasserted, and the
 pin test only drives MD0-MD7 with all three local-bus buffers disabled.
 
+## ESP32-C3 bridge
+
+`build/esp_bridge.uf2` is a second program: it turns the card's USB port into
+a USB-serial adapter for the ESP32-C3 module, wired the way an ESP32 dev
+board's USB-UART chip is.
+
+- The module's UART follows whatever baud rate and format the host opens the
+  port with.
+- DTR and RTS drive the module's EN and IO9 (through the expander) with the
+  standard auto-reset logic, so esptool and `pio run -t upload` flash the
+  module without buttons. A terminal program leaves the module running.
+- The LED is on while the bridge runs. The local bus stays disabled and the
+  2068 stays in reset.
+
+```bash
+picotool load -f -x build/esp_bridge.uf2
+```
+
+`../zimodem/` builds Zimodem and flashes it through this bridge. To go back to
+the self-test, load `build/bringup.uf2` the same way.
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350
