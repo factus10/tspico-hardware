@@ -5,13 +5,7 @@
  * connect it runs every automatic test and prints a PASS/FAIL report, then
  * offers a menu for the tests that need a person to look, listen or press.
  *
- * Pin map is taken from the schematic netlist (hardware/*.kicad_sch), which
- * matches docs/v3-architecture.md section 7.
- *
- * Safety: the three 74LVC245s on the local bus (U1, U2, U3) have their /OE
- * pins on GP8-GP10 with no external pull-up, and the RP2350 resets its pads
- * with pull-downs on, so until firmware runs all three buffers are enabled.
- * board_safe_init() is the first thing main() does and turns them off.
+ * Pins and board start-up are in board.c.
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -28,34 +22,7 @@
 #include "hardware/spi.h"
 #include "hardware/uart.h"
 
-// ---- pins -------------------------------------------------------------------
-
-#define PIN_MD0        0   // MD0-MD7 on GP0-GP7
-#define PIN_NAEN_LO    8
-#define PIN_NAEN_HI    9
-#define PIN_NDATA_OE   10
-#define PIN_BE_REQ     11
-#define PIN_WAIT_REQ   12
-#define PIN_Z80_A14    13  // GP13-GP22: inputs from U4 / U6
-#define PIN_TAPE_IN    22
-#define PIN_TAPE_OUT   23
-#define PIN_I2C_SDA    24
-#define PIN_I2C_SCL    25
-#define PIN_RESET_HOLD 29
-#define PIN_AUDIO_R    30
-#define PIN_SD_MISO    32
-#define PIN_OLED_DC    34
-#define PIN_NIOX_INT   35
-#define PIN_SD_CS      37
-#define PIN_SD_SCK     38
-#define PIN_SD_MOSI    39
-#define PIN_OLED_CS    41
-#define PIN_OLED_SCK   42
-#define PIN_OLED_MOSI  43
-#define PIN_WIFI_TX    44
-#define PIN_WIFI_RX    45
-#define PIN_AUDIO_L    46
-#define PIN_PSRAM_CS   47
+#include "board.h"
 
 static const uint SPARE_PINS[] = {26, 27, 28, 31, 33, 36, 40};
 
@@ -64,36 +31,7 @@ static const char *const INPUT_NAMES[] = {
     "nIOWR", "nROSCS_L", "nEXROM_L", "nINT_L", "TAPE_IN",
 };
 
-// ---- XL9555 expander (PCA9555 registers) ------------------------------------
-
-#define IOX_ADDR 0x20
-#define IOX_IN0  0
-#define IOX_IN1  1
-#define IOX_OUT0 2
-#define IOX_POL1 5
-#define IOX_CFG0 6
-#define IOX_CFG1 7
-
-// port 0, outputs
-#define X_BUSRQ     (1u << 0)
-#define X_NMI_REQ   (1u << 1)
-#define X_NOLED_RST (1u << 2)
-#define X_WIFI_EN   (1u << 3)
-#define X_WIFI_DL   (1u << 4)
-#define X_NLED      (1u << 5)
-// port 1, inputs (all active low)
-#define X_JOY_MASK  0x3f
-#define X_NBUSAK    (1u << 6)
-#define X_SD_CD     (1u << 7)
-
 static const char *const JOY_NAMES[] = {"UP", "DOWN", "LEFT", "RIGHT", "FIRE1", "FIRE2"};
-
-// Safe state: no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot,
-// LED off. Bits 6-7 are spare (left as inputs).
-#define IOX_OUT0_SAFE (X_NLED | 0xc0)
-
-static uint8_t iox_out0 = IOX_OUT0_SAFE;
-static bool iox_present;
 
 // ---- reporting --------------------------------------------------------------
 
@@ -115,85 +53,6 @@ static void report(result_t r, const char *name, const char *fmt, ...) {
 }
 
 static void heading(const char *s) { printf("\n== %s\n", s); }
-
-// ---- board init -------------------------------------------------------------
-
-static void board_safe_init(void) {
-    // Local bus buffers off before anything else.
-    const uint high_outs[] = {PIN_NAEN_LO, PIN_NAEN_HI, PIN_NDATA_OE};
-    for (unsigned i = 0; i < count_of(high_outs); i++) {
-        gpio_init(high_outs[i]);
-        gpio_put(high_outs[i], 1);
-        gpio_set_dir(high_outs[i], GPIO_OUT);
-    }
-    const uint low_outs[] = {PIN_BE_REQ, PIN_WAIT_REQ, PIN_TAPE_OUT};
-    for (unsigned i = 0; i < count_of(low_outs); i++) {
-        gpio_init(low_outs[i]);
-        gpio_put(low_outs[i], 0);
-        gpio_set_dir(low_outs[i], GPIO_OUT);
-    }
-    // MD bus: inputs with pull-downs (all three buffers are off).
-    for (uint p = PIN_MD0; p < PIN_MD0 + 8; p++) {
-        gpio_init(p);
-        gpio_pull_down(p);
-    }
-    // Bus-side inputs: plain inputs.
-    for (uint p = PIN_Z80_A14; p <= PIN_TAPE_IN; p++) {
-        gpio_init(p);
-        gpio_disable_pulls(p);
-    }
-    // RESET_HOLD: leave floating so R1 holds the 2068 in reset.
-    gpio_init(PIN_RESET_HOLD);
-    gpio_disable_pulls(PIN_RESET_HOLD);
-    // Expander /INT has its own 10k pull-up.
-    gpio_init(PIN_NIOX_INT);
-    gpio_disable_pulls(PIN_NIOX_INT);
-    // PSRAM is not fitted; keep its CS high anyway.
-    gpio_init(PIN_PSRAM_CS);
-    gpio_pull_up(PIN_PSRAM_CS);
-
-    gpio_init(PIN_SD_CS);
-    gpio_put(PIN_SD_CS, 1);
-    gpio_set_dir(PIN_SD_CS, GPIO_OUT);
-    gpio_init(PIN_OLED_CS);
-    gpio_put(PIN_OLED_CS, 1);
-    gpio_set_dir(PIN_OLED_CS, GPIO_OUT);
-    gpio_init(PIN_OLED_DC);
-    gpio_set_dir(PIN_OLED_DC, GPIO_OUT);
-}
-
-static int iox_write(uint8_t reg, uint8_t v) {
-    uint8_t b[2] = {reg, v};
-    return i2c_write_timeout_us(i2c0, IOX_ADDR, b, 2, false, 10000);
-}
-
-static int iox_read(uint8_t reg, uint8_t *v) {
-    int r = i2c_write_timeout_us(i2c0, IOX_ADDR, &reg, 1, true, 10000);
-    if (r != 1) return r;
-    return i2c_read_timeout_us(i2c0, IOX_ADDR, v, 1, false, 10000);
-}
-
-static bool iox_set(uint8_t mask, bool on) {
-    if (on) iox_out0 |= mask;
-    else iox_out0 &= ~mask;
-    return iox_write(IOX_OUT0, iox_out0) == 2;
-}
-
-static void iox_init(void) {
-    i2c_init(i2c0, 400 * 1000);
-    gpio_set_function(PIN_I2C_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(PIN_I2C_SCL, GPIO_FUNC_I2C);
-    // R6/R7 are the pull-ups; leave the internal ones off.
-    gpio_disable_pulls(PIN_I2C_SDA);
-    gpio_disable_pulls(PIN_I2C_SCL);
-    // Output register first, then direction: the outputs come up at the safe
-    // values instead of the register's reset value of all ones.
-    iox_out0 = IOX_OUT0_SAFE;
-    iox_present = iox_write(IOX_OUT0, iox_out0) == 2 &&
-                  iox_write(IOX_POL1, 0x00) == 2 &&
-                  iox_write(IOX_CFG1, 0xff) == 2 &&
-                  iox_write(IOX_CFG0, 0xc0) == 2;
-}
 
 // ---- line input -------------------------------------------------------------
 
@@ -329,7 +188,7 @@ static void test_expander(void) {
     uint8_t out0 = 0, cfg0 = 0, cfg1 = 0, in1 = 0;
     bool rd = iox_read(IOX_OUT0, &out0) == 1 && iox_read(IOX_CFG0, &cfg0) == 1 &&
               iox_read(IOX_CFG1, &cfg1) == 1;
-    bool ok = rd && out0 == iox_out0 && cfg0 == 0xc0 && cfg1 == 0xff;
+    bool ok = rd && (out0 | X_NLED) == (iox_out0 | X_NLED) && cfg0 == 0xc0 && cfg1 == 0xff;
     report(ok ? R_PASS : R_FAIL, "i2c", "ACK at 0x%02x, registers read back %s (out0 %02x cfg0 %02x cfg1 %02x)",
            IOX_ADDR, ok ? "correctly" : "WRONG", out0, cfg0, cfg1);
 
@@ -734,14 +593,14 @@ static void test_oled(void) {
 
 static void test_led(void) {
     heading("LED (D4, expander bit 5)");
-    bool ok = true;
-    for (int i = 0; i < 5; i++) {
-        ok &= iox_set(X_NLED, false);
+    bool ok = iox_present;
+    for (int i = 0; i < 5 && ok; i++) {
+        led_set(true);
         sleep_ms(200);
-        ok &= iox_set(X_NLED, true);
+        led_set(false);
         sleep_ms(200);
     }
-    report(ok ? R_LOOK : R_FAIL, "blink", ok ? "D4 should have blinked 5 times" : "I2C write failed");
+    report(ok ? R_LOOK : R_FAIL, "blink", ok ? "D4 should have blinked 5 times (dimmed)" : "expander not found");
 }
 
 static void test_joystick(void) {
@@ -868,11 +727,12 @@ int main(void) {
 
     for (;;) {
         // Heartbeat on D4 until a terminal connects.
+        bool lit = false;
         while (!stdio_usb_connected()) {
-            iox_set(X_NLED, !(iox_out0 & X_NLED));
+            led_set(lit = !lit);
             sleep_ms(500);
         }
-        iox_set(X_NLED, true);
+        led_set(false);
         sleep_ms(300);
         static bool ran;
         if (!ran) {
