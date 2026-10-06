@@ -534,7 +534,135 @@ static void oled_cmd(uint8_t c, const uint8_t *args, int n) {
         oled_cmd(c, a_ + 1, sizeof a_ - 1);                \
     } while (0)
 
-static void test_oled(void) {
+// ---- OLED alternative: 4-pin I2C SSD1306 128x32 on J3 -----------------------
+//
+// J3 pins 3 and 4 (GP43, GP42) are also I2C1 SCL and SDA. Wiring: module VCC
+// to J3.1, GND to J3.2, SCL to J3.3 (DIN), SDA to J3.4 (CLK). The modules
+// carry their own pull-ups.
+
+#define PIN_OLED_I2C_SDA PIN_OLED_SCK   // GP42
+#define PIN_OLED_I2C_SCL PIN_OLED_MOSI  // GP43
+
+// 5x7 glyphs, one byte per column, bit 0 at the top.
+static const struct { char c; uint8_t col[5]; } GLYPHS[] = {
+    {' ', {0x00, 0x00, 0x00, 0x00, 0x00}}, {'-', {0x08, 0x08, 0x08, 0x08, 0x08}},
+    {'3', {0x21, 0x41, 0x45, 0x4b, 0x31}}, {'C', {0x3e, 0x41, 0x41, 0x41, 0x22}},
+    {'D', {0x7f, 0x41, 0x41, 0x22, 0x1c}}, {'E', {0x7f, 0x49, 0x49, 0x49, 0x41}},
+    {'I', {0x00, 0x41, 0x7f, 0x41, 0x00}}, {'K', {0x7f, 0x08, 0x14, 0x22, 0x41}},
+    {'L', {0x7f, 0x40, 0x40, 0x40, 0x40}}, {'O', {0x3e, 0x41, 0x41, 0x41, 0x3e}},
+    {'P', {0x7f, 0x09, 0x09, 0x09, 0x06}}, {'S', {0x46, 0x49, 0x49, 0x49, 0x31}},
+    {'T', {0x01, 0x01, 0x7f, 0x01, 0x01}}, {'V', {0x1f, 0x20, 0x40, 0x20, 0x1f}},
+};
+
+static void fb_text(uint8_t *fb, int page, const char *s) {
+    int x = (128 - 6 * (int)strlen(s)) / 2;
+    for (; *s; s++, x += 6)
+        for (unsigned g = 0; g < count_of(GLYPHS); g++)
+            if (GLYPHS[g].c == *s)
+                for (int k = 0; k < 5; k++) fb[page * 128 + x + k] |= GLYPHS[g].col[k];
+}
+
+static int ssd1306_cmds(uint8_t addr, const uint8_t *cmds, int n) {
+    uint8_t buf[32] = {0x00};  // control byte: commands follow
+    memcpy(buf + 1, cmds, n);
+    return i2c_write_timeout_us(i2c1, addr, buf, n + 1, false, 10000);
+}
+
+// Probes 0x3C and 0x3D with a NOP command; leaves I2C1 on GP42/43 if found.
+static bool ssd1306_probe(uint8_t *addr) {
+    gpio_put(PIN_OLED_CS, 1);
+    i2c_init(i2c1, 400 * 1000);
+    gpio_set_function(PIN_OLED_I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(PIN_OLED_I2C_SCL, GPIO_FUNC_I2C);
+    // Weak internal pull-ups keep the lines idle when nothing is plugged in.
+    gpio_pull_up(PIN_OLED_I2C_SDA);
+    gpio_pull_up(PIN_OLED_I2C_SCL);
+    static const uint8_t nop[] = {0xe3};
+    for (uint8_t a = 0x3c; a <= 0x3d; a++) {
+        if (ssd1306_cmds(a, nop, 1) == 2) {
+            *addr = a;
+            return true;
+        }
+    }
+    i2c_deinit(i2c1);
+    gpio_set_function(PIN_OLED_I2C_SDA, GPIO_FUNC_NULL);
+    gpio_set_function(PIN_OLED_I2C_SCL, GPIO_FUNC_NULL);
+    return false;
+}
+
+// rows = 32: SSD1306 128x32 (0.91in). rows = 64: SSD1309 128x64 (2.42in), which
+// takes its panel supply from the module's boost converter, so no charge pump.
+// The two cannot be told apart over I2C, so the caller says which is fitted.
+static void test_i2c_oled(uint8_t addr, int rows) {
+    static const uint8_t init32[] = {
+        0xae,        // display off
+        0xd5, 0x80,  // clock
+        0xa8, 0x1f,  // multiplex: 32 rows
+        0xd3, 0x00,  // no display offset
+        0x40,        // start line 0
+        0x8d, 0x14,  // charge pump on
+        0x20, 0x00,  // horizontal addressing
+        0xa1, 0xc8,  // flip so the header is at the top
+        0xda, 0x02,  // COM pins for 128x32
+        0x81, 0x8f,  // contrast
+        0xd9, 0xf1,  // precharge
+        0xdb, 0x40,  // VCOMH
+        0xa4, 0xa6,  // show RAM, not inverted
+        0xaf,        // display on
+    };
+    static const uint8_t init64[] = {
+        0xae,        // display off
+        0xd5, 0xa0,  // clock
+        0xa8, 0x3f,  // multiplex: 64 rows
+        0xd3, 0x00,  // no display offset
+        0x40,        // start line 0
+        0x20, 0x00,  // horizontal addressing
+        0xa1, 0xc8,  // flip so the header is at the top
+        0xda, 0x12,  // COM pins for 128x64
+        0x81, 0x6f,  // contrast
+        0xd9, 0x82,  // precharge
+        0xdb, 0x34,  // VCOMH
+        0xa4, 0xa6,  // show RAM, not inverted
+        0xaf,        // display on
+    };
+    const int pages = rows / 8;
+    const uint8_t *init = rows == 64 ? init64 : init32;
+    int init_len = rows == 64 ? (int)sizeof init64 : (int)sizeof init32;
+    const uint8_t window[] = {0x21, 0, 127, 0x22, 0, (uint8_t)(pages - 1)};
+    bool ok = ssd1306_cmds(addr, init, init_len) == init_len + 1 &&
+              ssd1306_cmds(addr, window, sizeof window) == (int)sizeof window + 1;
+
+    static uint8_t fb[1 + 1024];
+    uint8_t *px = fb + 1;
+    int len = 1 + pages * 128;
+    memset(fb, 0, sizeof fb);
+    fb[0] = 0x40;  // control byte: data follows
+    for (int x = 0; x < 128; x++) {
+        px[x] |= 0x01;                        // top row
+        px[(pages - 1) * 128 + x] |= 0x80;    // bottom row
+    }
+    for (int p = 0; p < pages; p++) px[p * 128] = px[p * 128 + 127] = 0xff;
+    fb_text(px, pages / 2 - 1, "TS-PICO V3");
+    fb_text(px, pages / 2, "OLED OK");
+    ok = ok && i2c_write_timeout_us(i2c1, addr, fb, len, false, 100000) == len;
+
+    const char *chip = rows == 64 ? "SSD1309" : "SSD1306";
+    if (ok)
+        report(R_LOOK, rows == 64 ? "128x64" : "128x32",
+               "%s at 0x%02x: border with TS-PICO V3 / OLED OK%s", chip, addr,
+               rows == 32 ? " (a 128x64 SSD1309 needs 'o 64')" : "");
+    else
+        report(R_FAIL, rows == 64 ? "128x64" : "128x32", "%s at 0x%02x stopped answering", chip, addr);
+}
+
+// rows: 32 or 64 for an I2C panel; the SPI SSD1351 is used if none answers.
+static void test_oled(int rows) {
+    uint8_t addr;
+    if (ssd1306_probe(&addr)) {
+        heading(rows == 64 ? "OLED (J3, I2C SSD1309 128x64 on I2C1)" : "OLED (J3, I2C SSD1306 128x32 on I2C1)");
+        test_i2c_oled(addr, rows);
+        return;
+    }
     heading("OLED (J3, SSD1351 128x96 on SPI1)");
     if (!iox_present) {
         report(R_SKIP, "oled", "needs the expander for reset");
@@ -704,7 +832,7 @@ static void run_auto(void) {
     test_pins();
     test_sd();
     test_wifi();
-    test_oled();
+    test_oled(32);
     printf("\n== Summary: %d pass, %d fail, %d to check by eye\n", n_pass, n_fail, n_look);
 }
 
@@ -712,7 +840,8 @@ static void help(void) {
     printf("\nCommands:\n"
            "  a       all automatic tests\n"
            "  s f x b system, flash, expander, pins/bridges\n"
-           "  d w o   SD card, ESP32-C3, OLED\n"
+           "  d w     SD card, ESP32-C3\n"
+           "  o [64]  OLED: I2C 128x32, or 'o 64' for I2C 128x64; SPI SSD1351 if neither\n"
            "  l       blink the LED\n"
            "  j       joystick monitor (20 s)\n"
            "  t       audio test tones\n"
@@ -753,7 +882,12 @@ int main(void) {
             case 'b': test_pins(); break;
             case 'd': test_sd(); break;
             case 'w': test_wifi(); break;
-            case 'o': test_oled(); break;
+            case 'o': {
+                int rows = 32;
+                sscanf(line + 1, "%d", &rows);
+                test_oled(rows == 64 ? 64 : 32);
+                break;
+            }
             case 'l': test_led(); break;
             case 'j': test_joystick(); break;
             case 't': test_audio(); break;

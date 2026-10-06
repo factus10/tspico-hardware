@@ -39,7 +39,7 @@ rest.
 | `b` | pins | solder bridges and stuck lines on MD0-MD7 and the spares, RESET_HOLD pull-up |
 | `d` | microSD | card detect, SPI init, CSD capacity, block reads at 400 kHz and 25 MHz |
 | `w` | ESP32-C3 | EN control and ROM boot banner, AT reply, IO9 download-mode strap |
-| `o` | OLED | SSD1351 init and colour bars (look) |
+| `o [64]` | OLED | I2C SSD1306 128x32 (or SSD1309 128x64 with `o 64`) if one answers at 0x3C/0x3D, else SPI SSD1351 colour bars (look) |
 | `l` | LED | blinks D4 five times (look) |
 | `j` | joystick | 20 s monitor of all six inputs and the /INT line |
 | `t` | audio | sine tones left, right, both (listen) |
@@ -48,6 +48,20 @@ rest.
 Nothing here touches a TS2068: RESET_HOLD is left floating (2068 held in
 reset), the bus request, NMI, /BE and /WAIT outputs stay deasserted, and the
 pin test only drives MD0-MD7 with all three local-bus buffers disabled.
+
+## I2C OLED on J3
+
+J3 is wired for the SPI SSD1351 module, but its DIN and CLK pins (GP43,
+GP42) double as I2C1 SCL and SDA, so a 4-pin I2C SSD1306 (128x32) or SSD1309
+(128x64) module works with jumper wires. Power and ground are swapped relative
+to most modules' headers, so wire by name:
+
+| Module | J3 |
+|---|---|
+| VCC | 1 (+3V3) |
+| GND | 2 |
+| SCL | 3 (DIN) |
+| SDA | 4 (CLK) |
 
 ## ESP32-C3 bridge
 
