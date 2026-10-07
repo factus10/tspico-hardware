@@ -259,6 +259,42 @@ asserting those pins, so programs sharing pins must not side-set on their idle
 `wait`. With side-set on both idle waits, io_snoop (the higher-numbered state
 machine) held U1 and U2 off and broke bus_fetch's address capture.
 
+## bus_card: serving from the bank shadow (board 1, 2026-10-07)
+
+`build/bus_card.uf2` is the second bus design (`bus_card.pio`, `bus_card.c`).
+The class of each read comes from the card's shadow of ports F4h and FFh, so
+/BE goes out about 50 ns into the cycle without waiting for /EXROM or /ROSCS.
+
+| Block | Owns | Programs |
+|---|---|---|
+| PIO0 | MD0-MD7, BE_REQ | `serve`: reads the address off MD, decides through an 8-entry chunk table core 1 rewrites from the shadow, asserts /BE, pushes the pointer, drives the byte (32 instructions) |
+| PIO1 | U1/U2/U3 enables | `addr_read`: buffer windows around serve's samples, U3 on as soon as serve asks; `io_snoop`: every I/O write, for the shadow (23 instructions together) |
+| PIO2 | J3.4 | READY marker |
+
+The DMA fetches only the byte needed (slot 0 HOME, 1 EXROM, 2 DOCK).
+Synchronisers are bypassed on MD and the strobes. Shadow mode (the default)
+patches serve's /BE and U3 requests out; `e 1` serves, `y 1` adds EXROM-bank
+chunks, `k 1` DOCK-bank chunks.
+
+Results:
+
+- The byte is on MD about 124 ns after the read strobe is seen (48 ns after
+  serve's request, every one of 159 million reads; worst 60 ns). Before:
+  156-180 ns.
+- **HOME with early /BE works.** The 2068 boots, passes its memory test, shows
+  "(c) 1983 TS-Pico v3 ROM Corp" and runs BASIC. The internal ROM is off from
+  about 50 ns into each read, so every opcode comes from the card.
+- **EXROM with /BE works.** The boot's 1988 EXROM reads come from the card,
+  and the EXROM-to-RAM copy sums to 210966, the same as a stock 2068.
+- **DOCK works.** With `k 1`, BASIC mapping chunk 4 to the dock read
+  "TS-PICO DOCK".
+- The earlier EXROM crash and RAM-test failure came from late /BE and tight
+  opcode timing, both gone in this design.
+
+Still to do: DOCK RAM writes (PIO1 has 9 instructions free), and the
+$0E/$0F I/O ports, which need MD and so instruction space in PIO0, which is
+full.
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350
