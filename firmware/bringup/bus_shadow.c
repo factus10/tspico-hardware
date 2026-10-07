@@ -73,11 +73,21 @@ static volatile bool boot_logging;
 static bool boot_armed;   // a release has happened since power-up
 static bool held_2068 = true;
 
+// PIO cycles from enabling an address buffer to the `in pins` that samples it,
+// beyond the minimum; each extra loop is one cycle. Measured on proto1 board 1
+// in a 2068 (2026-10-07): a buffer needs about 20 ns from enable to a good
+// sample (13 ns fails, 20 ns works for both). The defaults give 33 ns each, one
+// cycle of margin: U2 at 3 + 2 cycles, U1 at 1 + 4.
+static uint hi_delay = 2, lo_delay = 4;
+
 // When both programs sample /ROSCS and /EXROM, in PIO cycles after the strobe
-// is seen. 14 is the earliest bus_fetch can (it reads the address first).
-#define SETTLE_MIN 14
+// is seen. bus_fetch reads the address first, so its earliest is settle_min()
+// (20 with the delays above). On board 1 the boot's EXROM and DOCK counts were
+// the same from 14 cycles (93 ns) to 24, so the earliest is used.
 #define SETTLE_MAX 34
-static uint settle = SETTLE_MIN;
+static uint settle = 20;
+
+static uint settle_min(void) { return 14 + hi_delay + lo_delay; }
 
 static volatile uint32_t counts[4];
 
@@ -107,12 +117,20 @@ static void load_images(void) {
 // ---- PIO --------------------------------------------------------------------
 
 static void set_settle(uint cycles) {
-    if (cycles < SETTLE_MIN) cycles = SETTLE_MIN;
+    if (cycles < settle_min()) cycles = settle_min();
     if (cycles > SETTLE_MAX) cycles = SETTLE_MAX;
     settle = cycles;
-    // Instruction counts before each program's `mov osr, pins` (see bus.pio).
-    pio_fetch->instr_mem[off_fetch + bus_fetch_offset_class_settle] = pio_encode_set(pio_y, cycles - 14);
+    // Cycles before each program's `mov osr, pins` (see bus.pio).
+    pio_fetch->instr_mem[off_fetch + bus_fetch_offset_class_settle] = pio_encode_set(pio_y, cycles - settle_min());
     pio_decide->instr_mem[off_decide + bus_decide_offset_decide_settle] = pio_encode_set(pio_y, cycles - 3);
+}
+
+static void set_mux_delays(uint hi, uint lo) {
+    hi_delay = hi > 15 ? 15 : hi;
+    lo_delay = lo > 15 ? 15 : lo;
+    pio_fetch->instr_mem[off_fetch + bus_fetch_offset_hi_delay] = pio_encode_set(pio_y, hi_delay);
+    pio_fetch->instr_mem[off_fetch + bus_fetch_offset_lo_delay] = pio_encode_set(pio_y, lo_delay);
+    set_settle(settle);   // the class sample moves with them
 }
 
 static uint start_marker(const pio_program_t *prog, pio_sm_config (*get_config)(uint), uint pin) {
@@ -178,7 +196,7 @@ static void bus_start(void) {
     sm_config_set_jmp_pin(&c, 15);
     pio_sm_init(pio_fetch, sm_strobe, off_strobe, &c);
 
-    set_settle(settle);
+    set_mux_delays(hi_delay, lo_delay);
 
     // DMA: ch_ptr takes each pointer from bus_fetch's RX FIFO and writes it to
     // ch_data's read-address trigger; ch_data copies that one byte into
@@ -372,10 +390,11 @@ static void help(void) {
            "  m        timing: strobe length, strobe-to-byte, worst-case margin (then resets)\n"
            "  a        the last 32 addresses captured\n"
            "  b [n]    reads n to n+63 after the last release from reset (default 0)\n"
-           "  t [n]    show or set when /ROSCS and /EXROM are sampled: %d-%d PIO cycles (6.67 ns) after the strobe\n"
+           "  t [n]    show or set when /ROSCS and /EXROM are sampled, in PIO cycles (6.67 ns) after the strobe\n"
+           "  x [h l]  show or set the address-buffer delays (0-15 extra cycles); then 'r' and 'b' to check\n"
            "  ?        this help\n"
            "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
-           SETTLE_MIN, SETTLE_MAX, settle, settle * 1000 / (clock_get_hz(clk_sys) / 1000000));
+           settle, settle * 1000 / (clock_get_hz(clk_sys) / 1000000));
 }
 
 static int read_line(char *buf, int len) {
@@ -447,6 +466,15 @@ int main(void) {
                 print_stats(last, &since);
             }
             break;
+        case 'x': {
+            uint h, l;
+            if (sscanf(line + 1, "%u %u", &h, &l) == 2) set_mux_delays(h, l);
+            // Enable to sampled pin state (see bus.pio): 3 + delay cycles for U2, 1 + delay for U1.
+            printf("  U2 (A15..A8) sampled %u ns after enable, U1 (A7..A0) %u ns; class at %u cycles\n",
+                   (3 + hi_delay) * 1000 / (clock_get_hz(clk_sys) / 1000000),
+                   (1 + lo_delay) * 1000 / (clock_get_hz(clk_sys) / 1000000), settle);
+            break;
+        }
         case 't': {
             uint n = 0;
             if (sscanf(line + 1, "%u", &n) == 1) set_settle(n);

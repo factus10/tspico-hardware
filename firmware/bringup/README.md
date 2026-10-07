@@ -112,6 +112,9 @@ drives the 2068: the 2068 runs on its own ROM.
 - `a` prints the last 32 addresses the card captured, from a third DMA
   channel that logs every pointer. ROM code shows up as runs of nearly
   consecutive addresses, which checks both address bytes.
+- `x [h l]` sets how long each address buffer is given between being enabled
+  and being sampled. On board 1 a buffer needs about 20 ns; the defaults give
+  33 ns each.
 - `b [n]` prints the first reads after the last release from reset (`g` or
   `r`): the first 4096 are kept separately, with the byte served for each.
   The Z80 starts fetching at 0000, so this checks address capture from the
@@ -139,6 +142,23 @@ Each marker lags the event inside the chip by two or three PIO cycles (about
 | 5 | /EXROM | | |
 | 6 | A14 | | |
 | 7 | A15 | | |
+
+### First run in a 2068 (board 1, 2026-10-07)
+
+- The 2068 boots normally with the card following it; about 600,000 to
+  750,000 reads a second, roughly 80% ROM. The boot reads EXROM 1988 times and
+  the dock 12 times, then neither.
+- The original address timing sampled each buffer only 13 ns after enabling
+  it, which caught MD before the buffer drove it. A sweep showed about 20 ns is
+  needed; at 33 ns each the boot log matches the ROM exactly (0000-0007, then
+  the memory loop at 0D42-0D47).
+- With that timing the byte is on MD 200 ns after the read strobe is seen,
+  every time. In normal running the shortest strobe (M1) is 400 ns, so the
+  byte is ready 200 ns before the strobe ends. The analyser still has to place
+  that against the Z80's clock.
+- At boot the 2068's reset line rises slowly after release, so the Z80 fetches
+  0000 a couple of hundred times, with some reads cut short (down to about
+  250 ns), before it starts properly. That happens at power-on too.
 
 ## Board notes from proto1
 

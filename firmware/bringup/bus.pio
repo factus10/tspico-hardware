@@ -33,9 +33,17 @@
     wait 0 gpio 15          side 0b11       ; nMEMRD: /MREQ and /RD both low
     in x, 14                side 0b01       ; image region; U2 puts A15..A8 on MD
     irq next set 0
-    irq next set 2                    [1]
+    irq next set 2
+public hi_delay:
+    set y, 5                                ; patched from C: U2 enable to sample
+hi_wait:
+    jmp y-- hi_wait
     in pins, 8              side 0b11 [1]   ; A15..A8 (pins as of two cycles ago); U2 off
-    nop                     side 0b10 [3]   ; U1 puts A7..A0 on MD
+    nop                     side 0b10       ; U1 puts A7..A0 on MD
+public lo_delay:
+    set y, 5                                ; patched from C: U1 enable to sample
+lo_wait:
+    jmp y-- lo_wait
     in pins, 8              side 0b11       ; A7..A0; U1 off
 public class_settle:
     set y, 0                                ; patched from C: wait for /ROSCS, /EXROM
