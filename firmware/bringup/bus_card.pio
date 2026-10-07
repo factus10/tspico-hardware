@@ -4,14 +4,14 @@
 ;
 ; PIO0 owns MD0-MD7 and BE_REQ (GP11): `serve` reads the address off MD, decides
 ; through a chunk table that core 1 rewrites from the bank shadow, pushes the
-; pointer, and drives the byte. PIO1 owns the address-buffer enables (GP8, GP9)
+; pointer, and drives the byte; `io_drive` puts replies to IN 0Eh/0Fh on MD. PIO1 owns the address-buffer enables (GP8, GP9)
 ; and U3's enable (GP10): `addr_read` sequences U2, U1 and U3 for each memory
 ; read; `mem_write` reads every memory write (DOCK RAM); `io_snoop` reads every
-; I/O write for the bank shadow. PIO1 is full: 13 + 11 + 8 instructions. PIO2 (GPIO base 16)
-; runs the READY marker on J3.4.
+; I/O write for the bank shadow. PIO1 is full: 13 + 11 + 8 instructions; PIO0
+; too: 27 + 5.
 ;
 ; Flags: PIO0 flag 1 (addr_read -> serve: U2 is on); PIO1 flag 2 (serve ->
-; addr_read: enable U3); PIO2 flags 2 and 3 (serve -> marker: READY start, end).
+; addr_read: enable U3).
 ;
 ; Programs that share pins must not side-set on an idle `wait`: a stalled
 ; instruction keeps asserting its side-set.
@@ -24,14 +24,15 @@
 ; patches them whenever port F4h or FFh changes; an I/O write lasts over a
 ; microsecond, so the table is current before the next read.
 ;
-; X = image region prefix (pointer bits 31..18). in/out base GP0 (MD, 8 pins);
-; set base GP11 (BE_REQ). ISR shifts left, autopush at 18 (8 + 8 + 2 bits shifted
-; in on top of the prefix); OSR shifts right.
-; Pointer = X << 18 | A15..A0 << 2 | slot; slot 0 HOME, 1 EXROM, 2 DOCK.
-; In shadow mode `be` and `req` are patched to nops: the byte still goes onto MD
-; and is timed, but /BE and U3 stay off.
+; X = image region prefix. in/out base GP0 (MD, 8 pins); side-set GP11
+; (BE_REQ). ISR shifts left, autopush at 18 (8 + 8 + 2 bits shifted in on top of
+; the prefix); OSR shifts right. Pointer = X << 18 | A15..A0 << 2 | slot; slot 0
+; HOME, 1 EXROM, 2 DOCK. In shadow mode the /BE side-sets on path_e and path_h
+; and the request at `req` are patched out: the byte still goes onto MD, but
+; /BE and U3 stay off.
 ; -----------------------------------------------------------------------------
 .program serve
+.side_set 1 opt
     jmp tail                                ; chunk 0
     jmp tail                                ; chunk 1
     jmp tail                                ; chunk 2
@@ -48,32 +49,40 @@ public entry:
     in pins, 8                              ; A15..A8
     mov osr, isr
     out null, 5
-    out y, 3                                ; chunk: A15..A13
-    mov pc, y                               ; through the table
+    out pc, 3                               ; A15..A13: through the table
 public path_e:
-    set y, 1                                ; EXROM: slot 1, with /BE
-    jmp be
+    set y, 1                side 1          ; EXROM: slot 1, /BE on
+    jmp req
 public path_d:
     set y, 2                                ; DOCK: slot 2, no /BE
     jmp req
 public path_h:
-    set y, 0                                ; HOME: slot 0, with /BE
-public be:
-    set pins, 1                             ; /BE on
+    set y, 0                side 1          ; HOME: slot 0, /BE on
 public req:
-    irq next set 2                          ; ask addr_read to enable U3
-public lo_wait:
-    irq prev set 2                          ; READY marker start; then A7..A0 (delay patched)
+    irq next set 2                    [3]   ; ask addr_read for U3; then A7..A0 (delay patched)
     in pins, 8                              ; A7..A0
     in y, 2                                 ; slot; autopush the pointer
     pull block                              ; the byte, from the DMA chain
     mov pindirs, ~null
     out pins, 8                             ; onto MD
-    irq prev set 3                          ; READY marker end
 public tail:
     wait 1 gpio 15
+    mov pindirs, null       side 0          ; MD released, /BE off
+.wrap
+
+; -----------------------------------------------------------------------------
+; io_drive (PIO0): for an IN from port 0Eh or 0Fh, core 1 decodes the port
+; (forcing U1 on through a GPIO override), pushes the reply, and forces U3 on;
+; this puts the reply on MD until the I/O read strobe ends. I/O reads leave the
+; Z80 about 600 ns before it samples the data, so the core has time.
+; -----------------------------------------------------------------------------
+.program io_drive
+.wrap_target
+    pull block
+    mov pindirs, ~null
+    out pins, 8
+    wait 1 gpio 17                          ; nIORD
     mov pindirs, null
-    set pins, 0                             ; /BE off
 .wrap
 
 ; -----------------------------------------------------------------------------
@@ -157,25 +166,3 @@ data_wait:
     wait 1 gpio 18
 .wrap
 
-; -----------------------------------------------------------------------------
-; marker_ready (PIO2, GPIO base 16): READY on J3.4 from serve's request to the
-; byte on MD; pushes the number of 3-cycle loops in between. `mov y, status`
-; reads PIO2 flag 3 (set from C).
-; -----------------------------------------------------------------------------
-.program marker_ready
-.wrap_target
-    wait 1 irq 2
-    set pins, 1
-    mov x, ~null
-count:
-    mov y, status
-    jmp !y more
-    jmp done
-more:
-    jmp x-- count
-done:
-    irq clear 3
-    set pins, 0
-    mov isr, ~x
-    push noblock
-.wrap

@@ -307,8 +307,45 @@ back with 0 errors, over about four runs (992 bytes stored). The boot's memory
 test, 370,000 writes, and 168 million writes since, were all correctly left
 alone.
 
-Still to do: the $0E/$0F I/O ports, which need MD, and so instruction space in
-PIO0, which is full.
+### Ports 0Eh/0Fh (the TS-Pico protocol)
+
+- **OUTs** need no new PIO code. `io_snoop` already reads every I/O write.
+  Core 1 takes the 0Eh/0Fh ones, sets the status byte to 00h (busy, as v2.1's
+  PIO did) and hands the byte on. In echo mode (`p 1`, the default for now) a
+  byte sent to 0Eh is queued to come back on IN 0Eh, and the status returns
+  to FFh.
+- **INs** leave the Z80 about 600 ns before it samples the data, enough for
+  core 1 to do most of the work. A falling edge on nIORD interrupts core 1. It
+  forces U1 on through a GPIO override (which works on a PIO-owned pin), reads
+  the port off MD and releases U1. For 0Eh/0Fh it pushes the reply to
+  `io_drive`, a 5-instruction PIO0 program that puts it on MD, then forces U3
+  on until the strobe ends. IN 0Eh pops the reply queue (00h if empty); IN 0Fh
+  returns the status (`u` sets it). Other ports, the keyboard included, are
+  left alone.
+- **Room in PIO0:** `serve` went from 32 instructions to 27 with no change in
+  behaviour (/BE moved to side-set, the table dispatch uses `out pc`, the READY
+  marker went), leaving room for `io_drive`. Both PIO0 and PIO1 are now full.
+
+What it took on board 1:
+
+- **Holding the 2068 in reset.** nIORD sits low the whole time, and treating
+  that as INs once answered stale MD bytes. INs are now edge-triggered and
+  ignored while the 2068 is held.
+- **Core 1 polling** left gaps of up to 370 ns between checks, enough to miss
+  the reply window (the first IN 0Fh read 7Fh). A GPIO edge interrupt fixed
+  that, with core 1's loop and helpers moved to RAM.
+- **`exrom_on` and `dock_on` were not volatile.** Once the loop moved to RAM,
+  core 1 read them once at start-up, so the chunk table stopped following the
+  switches. They are volatile now.
+
+Result: BASIC printed 255 for `IN 15`, and sent all 256 byte values to port 14
+and read each one back correctly. 257 INs answered, 256 OUTs, none late. The
+worst time from entering the handler to U3 on was 308 ns, mostly the GPIO
+override register writes; with the interrupt entry that is under 400 ns of
+the roughly 600 available.
+
+Next: the real TS-Pico protocol in place of echo mode, so ROM 2.1 can boot
+from the card and complete its SYNC handshake.
 
 ## Board notes from proto1
 
