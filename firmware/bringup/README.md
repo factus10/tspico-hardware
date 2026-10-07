@@ -206,6 +206,36 @@ Results:
 - Serving without /BE only works because the chip and the copy are identical.
   The TS-Pico ROM's own EXROM needs /BE.
 
+### Early /BE and opcode timing (board 1, 2026-10-07)
+
+The 2068 decides which of its banks a low-16K read belongs to, but A15 and A14
+alone say a read is in the ROM region, and they are valid before /MREQ falls.
+`z 1` asserts /BE straight from them, about 60 ns after the strobe, instead of
+after /ROSCS and /EXROM have been sampled (133 ns).
+
+- **This corrects step 3.** With late /BE the 2068's own ROM drives the bus for
+  much of each cycle. The patched copyright line proves the card's bytes reach
+  the Z80 on data reads, but opcode fetches were probably answered by the
+  internal ROM, with identical bytes. Early /BE takes the internal ROM away,
+  and the boot then depends on the card for opcodes.
+- **M1 timing is tight.** With early /BE and the byte on MD 180 ns after the
+  strobe, the Z80 got wrong opcodes: the memory loop at 0D42 never ended
+  (`DEC HL` not executing). At 156 ns (250 MHz, class sampled at 112 ns) it got
+  through.
+- **Then the RAM test failed.** The test at 0D48 never ended: RAM did not hold
+  what had just been written. Writes straight after a card-served read seem to
+  be lost, the same signature as the EXROM-with-/BE crash. Either /BE (open
+  drain, pulled up inside the 2068) rises too slowly after the card releases
+  it, or the SCLD samples it at a point in the cycle we don't know yet. The
+  logic analyser should show which.
+- `bus_shadow` now runs at 250 MHz (flash divider 3, core 1.20 V), with the
+  same nanosecond delays: 36 ns per address buffer, class at 133 ns
+  (`t 28` = 112 ns is the earliest). Early /BE is off by default.
+
+Ways to get the byte out sooner: bypass the input synchronisers on the bus
+pins; track ports F4h and FFh on the card so the class comes from the address
+alone, without waiting for /ROSCS and /EXROM.
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350

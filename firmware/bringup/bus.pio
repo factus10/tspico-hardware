@@ -121,7 +121,9 @@ serve:
 
 ; -----------------------------------------------------------------------------
 ; bus_serve (PIO0, instead of bus_decide): serves reads for real, with the same
-; classification and statistics. HOME and EXROM: assert /BE as soon as the class
+; classification and statistics. With early /BE on ('z 1'), every read in the
+; low 16K asserts /BE from A15:A14 alone, about 60 ns after the strobe instead of
+; once the class is known; the not-ours path releases it at the end of the cycle. HOME and EXROM: assert /BE as soon as the class
 ; is known, enable U3 once bus_fetch has the byte on MD (PIO0 flag 0, raised by
 ; bus_fetch), release both when the strobe ends. DOCK: the same without /BE
 ; (nothing in the 2068 drives the dock bank), and only while DOCK serving is on:
@@ -134,6 +136,15 @@ serve:
 .wrap_target
 top:
     wait 0 gpio 15
+    mov osr, pins
+    out null, 13
+    out x, 2                                ; A15:A14, valid before /MREQ falls
+public early_op:
+    jmp !x early                            ; early /BE; `jmp !x settle_set` when it is off
+    jmp settle_set
+public early:
+    set pins, 1                             ; /BE on for every low-16K read
+public settle_set:
 public serve_settle:
     set y, 0                                ; patched from C
 settle:
@@ -149,10 +160,11 @@ settle:
 public not_ours:                            ; also class 0
     wait 1 irq 0
     wait 1 gpio 15
+    set pins, 0             side 1          ; /BE off (it may have gone on early)
     jmp top
 class_ge1:
 public exrom_op:
-    jmp !y be                               ; EXROM; `jmp !y not_ours` while EXROM serving is off
+    jmp !y be                               ; EXROM; `jmp !y not_ours` / `jmp !y serve` per mode
     jmp y-- class_ge2
 class_ge2:
 public dock_op:

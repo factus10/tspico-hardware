@@ -79,6 +79,7 @@ embed_binary(bus_shadow rom_exrom ${TSPICO_ROM_DIR}/GENUINE-2068-exrom.bin)
 target_link_libraries(bus_shadow
 	pico_stdlib
 	pico_multicore
+	hardware_vreg
 	hardware_dma
 	hardware_i2c
 	hardware_pio
