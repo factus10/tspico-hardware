@@ -22,10 +22,12 @@
  *    after each release from reset are kept separately ('b'): the Z80's start
  *    at 0000 is a known sequence, which checks address capture from cycle one.
  *
- * Serve mode ('e 1', step 3 of the plan): bus_serve replaces bus_decide and
- * serves HOME ROM reads for real, asserting /BE and enabling U3. The served copy
- * of the ROM has its copyright line changed to "TS-Pico v3 ROM", so the boot
- * screen shows whether the card or the 2068's own ROM answered.
+ * Serve mode ('e 1', steps 3 and 4 of the plan): bus_serve replaces bus_decide
+ * and serves reads for real. HOME and EXROM reads assert /BE and enable U3;
+ * DOCK reads enable U3 only, and only with DOCK serving on ('k 1'). The served
+ * copies are marked so the 2068 shows who answered: the HOME ROM's copyright
+ * line reads "TS-Pico v3 ROM" and the DOCK image holds "TS-PICO DOCK" at
+ * 0x8000. The EXROM copy is genuine at boot ('p 1' marks it afterwards).
  *
  * The 2068 is held in reset until the 'g' command. USB serial menu: '?' for help.
  */
@@ -65,6 +67,8 @@ static const PIO pio_decide = pio0, pio_fetch = pio1, pio_mark = pio2;
 static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_strobe, sm_ready;
 static bool sm_fetch_loaded;               // set_settle can patch bus_fetch
 static bool serving;                         // bus_serve loaded in PIO0 instead of bus_decide
+static bool dock_on;                         // bus_serve also answers DOCK reads
+static uint exrom_mode;                      // bus_serve on EXROM reads: 0 leave, 1 serve with /BE, 2 serve without /BE
 static const pio_program_t *prog_pio0;
 static int ch_ptr, ch_data, ch_log;
 
@@ -77,6 +81,14 @@ static uint32_t addr_log[LOG_N] __attribute__((aligned(LOG_N * 4)));
 #define BOOT_N     4096
 #define BOOT_SLACK 256
 static uint32_t boot_log[BOOT_N + BOOT_SLACK];
+
+// A window of the ring around the first EXROM read after each release, copied
+// out by core 1: EX_PRE reads before it and EX_POST from it on.
+#define EX_PRE  1024
+#define EX_POST 2048
+static uint32_t ex_log[EX_PRE + EX_POST];
+static volatile int ex_state;      // 0 idle, 1 armed, 2 waiting for EX_POST more, 3 captured
+static uint32_t ex_trigger;        // ring index of the trigger
 static volatile bool boot_logging;
 static bool boot_armed;   // a release has happened since power-up
 static bool held_2068 = true;
@@ -115,11 +127,17 @@ static volatile bool timing_reset;
 static void load_images(void) {
     uint8_t *r = (uint8_t *)IMAGE_REGION;
     memset(r, 0xff, 256 * 1024);
+
+    // EXROM, mirrored across the 64K window (the 8K chip answers in whichever
+    // chunk the HSR maps it to).
     for (uint a = 0; a < 0x10000; a++) {
         if (a < rom_home_len) r[4 * a + CLASS_HOME] = rom_home[a];
         r[4 * a + CLASS_EXROM] = rom_exrom[a % rom_exrom_len];
     }
-    // No cartridge: DOCK reads find 0xff.
+
+    // DOCK: an empty dock reads 0xff, apart from a marker at 0x8000.
+    static const char dock_mark[] = "TS-PICO DOCK";
+    for (uint k = 0; k < sizeof dock_mark - 1; k++) r[4 * (0x8000 + k) + CLASS_DOCK] = (uint8_t)dock_mark[k];
 
     // Mark the served copy so the boot screen shows who answered: the 2068's
     // "(c) 1983 Timex Computer Corp" becomes "(c) 1983 TS-Pico v3 ROM Corp".
@@ -153,6 +171,39 @@ static void set_mux_delays(uint hi, uint lo) {
     set_settle(settle);   // the class sample moves with them
 }
 
+// Writes (or removes) "TS-PICO EXROM" at EXROM offset 0x1800, in every
+// mirror; a command for after boot.
+#define EXROM_MARK_AT 0x1800
+static const char exrom_mark[] = "TS-PICO EXROM";
+static void set_exrom_mark(bool on) {
+    uint8_t *r = (uint8_t *)IMAGE_REGION;
+    for (uint a = 0; a < 0x10000; a++) {
+        uint off = a % rom_exrom_len;
+        if (off >= EXROM_MARK_AT && off < EXROM_MARK_AT + sizeof exrom_mark - 1)
+            r[4 * a + CLASS_EXROM] = on ? (uint8_t)exrom_mark[off - EXROM_MARK_AT] : rom_exrom[off];
+    }
+}
+
+// Points bus_serve's EXROM branch at leaving the read to the 2068's own EXROM
+// (0), serving it with /BE (1, as v2.1 did), or serving it without /BE (2),
+// where the 2068's EXROM drives the same bytes alongside U3. On board 1, mode 1
+// crashed the boot after the EXROM-to-RAM copy at 0E0Bh.
+static void set_exrom(uint mode) {
+    exrom_mode = mode > 2 ? 2 : mode;
+    if (!serving) return;
+    uint label = exrom_mode == 1 ? bus_serve_offset_be : exrom_mode == 2 ? bus_serve_offset_serve : bus_serve_offset_not_ours;
+    uint target = off_decide + label;
+    pio_decide->instr_mem[off_decide + bus_serve_offset_exrom_op] = pio_encode_jmp_not_y(target);
+}
+
+// Points bus_serve's DOCK branch at serving the read, or at leaving it alone.
+static void set_dock(bool on) {
+    dock_on = on;
+    if (!serving) return;
+    uint target = off_decide + (on ? bus_serve_offset_serve : bus_serve_offset_not_ours);
+    pio_decide->instr_mem[off_decide + bus_serve_offset_dock_op] = pio_encode_jmp_not_y(target);
+}
+
 // Loads bus_decide (shadow) or bus_serve into PIO0. Only while the 2068 is held:
 // no reads are happening, so nothing is half-served.
 static void load_pio0(bool serve) {
@@ -173,7 +224,8 @@ static void load_pio0(bool serve) {
     sm_config_set_out_shift(&c, true, false, 32);
     if (serve) {
         const uint32_t pins = (1u << PIN_NDATA_OE) | (1u << PIN_BE_REQ);
-        sm_config_set_set_pins(&c, PIN_NDATA_OE, 2);
+        sm_config_set_set_pins(&c, PIN_BE_REQ, 1);
+        sm_config_set_sideset_pin_base(&c, PIN_NDATA_OE);
         pio_sm_set_pins_with_mask(pio_decide, sm_decide, 1u << PIN_NDATA_OE, pins);
         pio_sm_set_pindirs_with_mask(pio_decide, sm_decide, pins, pins);
         pio_gpio_init(pio_decide, PIN_NDATA_OE);
@@ -183,6 +235,10 @@ static void load_pio0(bool serve) {
     pio_decide->irq = 1;   // bus_fetch's byte-ready flag, left set by shadow mode
     serving = serve;
     set_settle(settle);
+    if (serve) {
+        set_dock(dock_on);
+        set_exrom(exrom_mode);
+    }
     pio_sm_set_enabled(pio_decide, sm_decide, true);
 }
 
@@ -314,18 +370,42 @@ static void log_boot(void) {
     boot_armed = true;
 }
 
+// bus_decide and bus_serve push GP13-GP20: bit 0 A14, bit 1 A15, bit 6
+// nROSCS, bit 7 nEXROM.
+static uint class_code(uint32_t v) {
+    uint sel = (v >> 6) & 3;   // nEXROM:nROSCS
+    if (sel == CLASS_EXROM || sel == CLASS_DOCK) return sel;
+    if (sel == CLASS_HOME && (v & 3) == 0) return CLASS_HOME;
+    return CLASS_NONE;
+}
+
 static void core1_main(void) {
     for (;;) {
         if (boot_logging && dma_hw->ch[ch_log].write_addr >= (uint32_t)&boot_log[BOOT_N]) {
             log_to_ring();
             boot_logging = false;
         }
+        if (ex_state == 2) {
+            uint32_t now = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+            if (((now - ex_trigger) & (LOG_N - 1)) >= EX_POST) {
+                for (uint i = 0; i < EX_PRE + EX_POST; i++) ex_log[i] = addr_log[(ex_trigger - EX_PRE + i) & (LOG_N - 1)];
+                ex_state = 3;
+            }
+        }
         if (timing_reset) {
             memset(&t_strobe, 0, sizeof t_strobe);
             memset(&t_ready, 0, sizeof t_ready);
             timing_reset = false;
         }
-        if (!pio_sm_is_rx_fifo_empty(pio_decide, sm_decide)) counts[pio_decide->rxf[sm_decide] & 3]++;
+        if (!pio_sm_is_rx_fifo_empty(pio_decide, sm_decide)) {
+            uint cls = class_code(pio_decide->rxf[sm_decide]);
+            counts[cls]++;
+            // Trigger only once the boot log is done, so ch_log is on the ring.
+            if (cls == CLASS_EXROM && ex_state == 1 && !boot_logging) {
+                ex_trigger = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+                ex_state = 2;
+            }
+        }
         // Loop lengths in bus.pio: two cycles per strobe count, three per ready count.
         if (!pio_sm_is_rx_fifo_empty(pio_fetch, sm_strobe)) timing_add(&t_strobe, 2 * pio_fetch->rxf[sm_strobe]);
         if (!pio_sm_is_rx_fifo_empty(pio_mark, sm_ready)) timing_add(&t_ready, 3 * pio_mark->rxf[sm_ready]);
@@ -399,6 +479,27 @@ static void print_boot(uint start) {
     }
 }
 
+static void print_ex(int start) {
+    if (ex_state != 3) {
+        printf("  no EXROM capture yet (state %d)\n", ex_state);
+        return;
+    }
+    // Indices relative to the trigger; the trigger is a few reads late (FIFO).
+    int first = start < -EX_PRE ? -EX_PRE : start;
+    int last = first + 64 < EX_POST ? first + 64 : EX_POST;
+    printf("  reads %d to %d around the first EXROM read ('c %d' for more):\n", first, last - 1, last);
+    const uint8_t *img = (const uint8_t *)IMAGE_REGION;
+    for (int i = first; i < last; i++) {
+        if ((i - first) % 8 == 0) printf("  %5d ", i);
+        uint32_t p = ex_log[i + EX_PRE];
+        uint addr = (p >> 2) & 0xffff, cls = p & 3;
+        char tag = cls == CLASS_EXROM ? 'E' : cls == CLASS_DOCK ? 'D' : cls == CLASS_HOME ? (addr < 0x4000 ? 'H' : 'r') : '?';
+        if (tag == 'r' || tag == '?') printf(" %04x%c --", addr, tag);
+        else printf(" %04x%c %02x", addr, tag, img[p & 0x3ffff]);
+        printf((i - first) % 8 == 7 || i == last - 1 ? "\n" : "");
+    }
+}
+
 static void print_stats(uint32_t *last, absolute_time_t *since) {
     uint32_t now[4];
     for (int i = 0; i < 4; i++) now[i] = counts[i];
@@ -423,6 +524,7 @@ static void hold_2068(bool hold) {
         // Releasing: record the boot from the first read, and time it fresh.
         log_boot();
         timing_reset = true;
+        ex_state = 1;
     }
     held_2068 = hold;
     gpio_put(PIN_RESET_HOLD, hold);
@@ -438,9 +540,13 @@ static void help(void) {
            "  w        read counts every second until a key is pressed\n"
            "  m        timing: strobe length, strobe-to-byte, worst-case margin (then resets)\n"
            "  a        the last 32 addresses captured\n"
+           "  c [n]    reads around the first EXROM read after the last release (n from -1024)\n"
            "  b [n]    reads n to n+63 after the last release from reset (default 0)\n"
            "  t [n]    show or set when /ROSCS and /EXROM are sampled, in PIO cycles (6.67 ns) after the strobe\n"
-           "  e [0|1]  show or set serve mode: 1 serves HOME ROM reads with /BE (2068 must be held)\n"
+           "  e [0|1]  show or set serve mode: 1 serves HOME reads (and EXROM with 'y 1') with /BE (2068 must be held)\n"
+           "  p [0|1]  mark EXROM 0x1800 with TS-PICO EXROM (after boot only)\n"
+           "  y [0-2]  EXROM serving in serve mode: 0 leave to the 2068, 1 serve with /BE, 2 serve without /BE\n"
+           "  k [0|1]  show or set DOCK serving (in serve mode): 1 answers DOCK reads from the card\n"
            "  x [h l]  show or set the address-buffer delays (0-15 extra cycles); then 'r' and 'b' to check\n"
            "  ?        this help\n"
            "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
@@ -503,6 +609,12 @@ int main(void) {
         case 's': print_stats(last, &since); break;
         case 'm': print_margin(); break;
         case 'a': print_addresses(); break;
+        case 'c': {
+            int n = -32;
+            sscanf(line + 1, "%d", &n);
+            print_ex(n);
+            break;
+        }
         case 'b': {
             uint n = 0;
             sscanf(line + 1, "%u", &n);
@@ -522,8 +634,28 @@ int main(void) {
                 if (!held_2068) printf("  hold the 2068 first ('h')\n");
                 else load_pio0(v != 0);
             }
-            printf("  %s\n", serving ? "SERVE: HOME ROM reads come from the card (/BE asserted)"
+            printf("  %s\n", serving ? "SERVE: HOME reads come from the card (/BE asserted); see 'y' and 'k' for EXROM and DOCK"
                                     : "shadow: the card follows reads but never drives the 2068");
+            break;
+        }
+        case 'p': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1) set_exrom_mark(v != 0);
+            printf("  EXROM 0x%04x: %s\n", EXROM_MARK_AT,
+                   ((uint8_t *)IMAGE_REGION)[4 * EXROM_MARK_AT + CLASS_EXROM] == (uint8_t)exrom_mark[0] ? "marked" : "genuine");
+            break;
+        }
+        case 'y': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1) set_exrom(v);
+            static const char *const what[] = {"off", "on, with /BE", "on, without /BE"};
+            printf("  EXROM serving %s%s\n", what[exrom_mode], serving ? "" : " (takes effect in serve mode)");
+            break;
+        }
+        case 'k': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1) set_dock(v != 0);
+            printf("  DOCK serving %s%s\n", dock_on ? "on" : "off", serving ? "" : " (takes effect in serve mode)");
             break;
         }
         case 'x': {

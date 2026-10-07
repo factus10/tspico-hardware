@@ -79,10 +79,11 @@ done:
 .wrap
 
 ; -----------------------------------------------------------------------------
-; bus_decide (PIO0): classify every memory read the way the v2.1 set_ctrl rule
-; does, and push one code per read for the CPU's statistics:
-;   0 not ours, 1 EXROM (/EXROM low), 2 DOCK (/ROSCS low), 3 HOME (neither, A15:A14 = 0)
-; HOME and EXROM would assert /BE; DOCK would not.
+; bus_decide (PIO0, shadow mode): classify every memory read the way the v2.1
+; set_ctrl rule does. For the CPU's statistics it pushes GP13-GP20 as sampled:
+; bit 0 A14, bit 1 A15, bit 6 nROSCS, bit 7 nEXROM; core 1 works out the class.
+;   EXROM (/EXROM low) and HOME (neither select, A15:A14 = 0) would assert /BE;
+;   DOCK (/ROSCS low) would be served without it.
 ; -----------------------------------------------------------------------------
 .program bus_decide
 .wrap_target
@@ -94,50 +95,42 @@ settle:
     jmp y-- settle
     mov osr, pins
     out null, 13
+    in osr, 8                               ; GP13-GP20 for the statistics
+    push noblock
     out x, 2                                ; A15:A14
     out null, 4
     out y, 2                                ; nEXROM:nROSCS
     jmp y-- class_ge1
 not_ours:                                   ; also class 0, both selects low
-    in null, 2
-    push noblock
     wait 1 gpio 15
     jmp top
 class_ge1:
-    jmp !y exrom                            ; class 1
+    jmp !y be                               ; EXROM
     jmp y-- class_ge2
 class_ge2:
-    jmp !y dock                             ; class 2
-    jmp !x home                             ; class 3 in the low 16K
+    jmp !y serve                            ; DOCK
+    jmp !x be                               ; HOME: neither select, low 16K
     jmp not_ours
-dock:
-    set x, 2
-    jmp serve
-exrom:
-    set x, 1
-    jmp be
-home:
-    set x, 3
-be:
+public be:
     irq prev set 6
 serve:
     irq prev set 4
-    in x, 2
-    push noblock
     wait 1 gpio 15
     irq prev set 5
 .wrap
 
 ; -----------------------------------------------------------------------------
-; bus_serve (PIO0, instead of bus_decide): serves HOME ROM reads for real. Same
-; classification and statistics codes as bus_decide. For a HOME read it asserts
-; /BE as soon as the class is known, enables U3 once bus_fetch has the byte on
-; MD (PIO0 flag 0, from bus_fetch), and releases both when the strobe ends.
-; Every other read is left to the 2068.
+; bus_serve (PIO0, instead of bus_decide): serves reads for real, with the same
+; classification and statistics. HOME and EXROM: assert /BE as soon as the class
+; is known, enable U3 once bus_fetch has the byte on MD (PIO0 flag 0, raised by
+; bus_fetch), release both when the strobe ends. DOCK: the same without /BE
+; (nothing in the 2068 drives the dock bank), and only while DOCK serving is on:
+; dock_op is patched from C. Every path consumes bus_fetch's flag.
 ;
-; set pins: GP10 nDATA_OE (bit 0), GP11 BE_REQ (bit 1). Idle 0b01: U3 off, /BE off.
+; set pin GP11 BE_REQ; side-set GP10 nDATA_OE. Idle: /BE off, U3 off.
 ; -----------------------------------------------------------------------------
 .program bus_serve
+.side_set 1 opt
 .wrap_target
 top:
     wait 0 gpio 15
@@ -147,32 +140,32 @@ settle:
     jmp y-- settle
     mov osr, pins
     out null, 13
+    in osr, 8                               ; GP13-GP20 for the statistics
+    push noblock
     out x, 2                                ; A15:A14
     out null, 4
     out y, 2                                ; nEXROM:nROSCS
-    jmp !x low16k
-    set x, 2                                ; above 16K: DOCK (code 2) or not ours (0)
-    jmp x!=y not_ours
-    jmp report
-not_ours:
-    set y, 0
-    jmp report
-low16k:
-    set x, 3
-    jmp x!=y report                         ; EXROM (1) or DOCK (2): the 2068's
-    set pins, 0b11                          ; HOME: assert /BE, U3 still off
-    wait 1 irq 0                            ; byte on MD
-    set pins, 0b10                          ; U3 on: the byte goes to the Z80
-    in y, 2
-    push noblock
+    jmp y-- class_ge1
+public not_ours:                            ; also class 0
+    wait 1 irq 0
     wait 1 gpio 15
-    set pins, 0b01                          ; U3 off, /BE released
     jmp top
-report:
-    in y, 2
-    push noblock
-    wait 1 irq 0                            ; consume bus_fetch's flag
+class_ge1:
+public exrom_op:
+    jmp !y be                               ; EXROM; `jmp !y not_ours` while EXROM serving is off
+    jmp y-- class_ge2
+class_ge2:
+public dock_op:
+    jmp !y serve                            ; DOCK; `jmp !y not_ours` while DOCK serving is off
+    jmp !x be                               ; HOME
+    jmp not_ours
+public be:
+    set pins, 1                             ; /BE on, U3 still off
+public serve:
+    wait 1 irq 0                            ; byte on MD
+    nop                     side 0          ; U3 on: the byte goes to the Z80
     wait 1 gpio 15
+    set pins, 0             side 1          ; U3 off, /BE off
 .wrap
 
 ; -----------------------------------------------------------------------------

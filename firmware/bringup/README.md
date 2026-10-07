@@ -173,6 +173,39 @@ On board 1 the 2068 booted to "(c) 1983 TS-Pico v3 ROM Corp" and settled in
 its normal idle loop: about 2.5 million HOME reads served in five seconds,
 with the byte on MD 200 ns after the strobe, the same as in shadow mode.
 
+### EXROM and DOCK reads (step 4, board 1, 2026-10-07)
+
+`bus_serve` now covers EXROM and DOCK reads too, each switchable while running:
+
+- `y 0|1|2`: EXROM reads left to the 2068 (0, the default), served with /BE
+  (1, as v2.1 does), or served without /BE (2), with the 2068's own EXROM
+  driving the same bytes alongside U3.
+- `k 0|1`: DOCK reads left alone (0, the default, so a real cartridge is never
+  fought) or served from the card's dock image (1), without /BE.
+- `c [n]`: the reads around the first EXROM read after each release.
+- `p 0|1`: marks EXROM 0x1800 with "TS-PICO EXROM", for use after boot.
+
+Results:
+
+- **DOCK reads work.** With `k 1`, mapping chunk 4 to the dock bank in BASIC
+  (`OUT 244,16`) and PEEKing 32768 onward printed "TS-PICO DOCK" from the
+  card's image.
+- **EXROM served without /BE works.** The 2068 boots normally, and the
+  EXROM-to-RAM copy the boot makes at 0E0Bh (EXROM 1000h-162Fh to RAM
+  6200h-682Fh) sums to 210966, the same as a stock boot.
+- **EXROM served with /BE crashes the boot.** The 2068 ends up in the dock bank
+  at 0038h (RST 38h on 0xFF). The reads are identical to a stock boot through
+  the copy, so the corruption is after it, most likely in the copy's writes
+  or the bank state. This 2068's EXROM chip matches `GENUINE-2068-exrom.bin`
+  (sum 969547), so wrong data was ruled out. /BE is asserted about 133 ns
+  into the cycle, after the class is known; v2.1 asserted it much earlier.
+  The logic analyser should show what the 2068 does with a late /BE on an
+  EXROM cycle.
+- After that crash the 2068 needs a power cycle. The SCLD's bank registers
+  (ports F4h and FFh) survive /RESET, so chunk 0 stays mapped to the dock.
+- Serving without /BE only works because the chip and the copy are identical.
+  The TS-Pico ROM's own EXROM needs /BE.
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350
