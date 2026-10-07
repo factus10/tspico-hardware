@@ -55,7 +55,8 @@ class_wait:
     irq next set 1
     pull block                              ; the byte, from the DMA chain
     mov pindirs, ~null
-    out pins, 8                             ; onto MD (U1, U2, U3 all off)
+    out pins, 8                             ; onto MD; U3 is off unless bus_serve enables it
+    irq prev set 0                          ; tell bus_serve (PIO0) the byte is ready
     irq next set 3
     wait 1 gpio 15
     mov pindirs, null
@@ -125,6 +126,53 @@ serve:
     push noblock
     wait 1 gpio 15
     irq prev set 5
+.wrap
+
+; -----------------------------------------------------------------------------
+; bus_serve (PIO0, instead of bus_decide): serves HOME ROM reads for real. Same
+; classification and statistics codes as bus_decide. For a HOME read it asserts
+; /BE as soon as the class is known, enables U3 once bus_fetch has the byte on
+; MD (PIO0 flag 0, from bus_fetch), and releases both when the strobe ends.
+; Every other read is left to the 2068.
+;
+; set pins: GP10 nDATA_OE (bit 0), GP11 BE_REQ (bit 1). Idle 0b01: U3 off, /BE off.
+; -----------------------------------------------------------------------------
+.program bus_serve
+.wrap_target
+top:
+    wait 0 gpio 15
+public serve_settle:
+    set y, 0                                ; patched from C
+settle:
+    jmp y-- settle
+    mov osr, pins
+    out null, 13
+    out x, 2                                ; A15:A14
+    out null, 4
+    out y, 2                                ; nEXROM:nROSCS
+    jmp !x low16k
+    set x, 2                                ; above 16K: DOCK (code 2) or not ours (0)
+    jmp x!=y not_ours
+    jmp report
+not_ours:
+    set y, 0
+    jmp report
+low16k:
+    set x, 3
+    jmp x!=y report                         ; EXROM (1) or DOCK (2): the 2068's
+    set pins, 0b11                          ; HOME: assert /BE, U3 still off
+    wait 1 irq 0                            ; byte on MD
+    set pins, 0b10                          ; U3 on: the byte goes to the Z80
+    in y, 2
+    push noblock
+    wait 1 gpio 15
+    set pins, 0b01                          ; U3 off, /BE released
+    jmp top
+report:
+    in y, 2
+    push noblock
+    wait 1 irq 0                            ; consume bus_fetch's flag
+    wait 1 gpio 15
 .wrap
 
 ; -----------------------------------------------------------------------------
