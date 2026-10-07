@@ -37,6 +37,8 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
+#include "hardware/structs/qmi.h"
+#include "hardware/vreg.h"
 #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "hardware/structs/busctrl.h"
@@ -68,6 +70,7 @@ static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_strobe, sm_ready;
 static bool sm_fetch_loaded;               // set_settle can patch bus_fetch
 static bool serving;                         // bus_serve loaded in PIO0 instead of bus_decide
 static bool dock_on;                         // bus_serve also answers DOCK reads
+static bool early_be;                        // bus_serve asserts /BE from A15:A14 alone
 static uint exrom_mode;                      // bus_serve on EXROM reads: 0 leave, 1 serve with /BE, 2 serve without /BE
 static const pio_program_t *prog_pio0;
 static int ch_ptr, ch_data, ch_log;
@@ -98,13 +101,13 @@ static bool held_2068 = true;
 // in a 2068 (2026-10-07): a buffer needs about 20 ns from enable to a good
 // sample (13 ns fails, 20 ns works for both). The defaults give 33 ns each, one
 // cycle of margin: U2 at 3 + 2 cycles, U1 at 1 + 4.
-static uint hi_delay = 2, lo_delay = 4;
+static uint hi_delay = 2, lo_delay = 4;   // at 150 MHz; recomputed for BUS_CLOCK_KHZ in main()
 
 // When both programs sample /ROSCS and /EXROM, in PIO cycles after the strobe
 // is seen. bus_fetch reads the address first, so its earliest is settle_min()
 // (20 with the delays above). On board 1 the boot's EXROM and DOCK counts were
 // the same from 14 cycles (93 ns) to 24, so the earliest is used.
-#define SETTLE_MAX 34
+#define SETTLE_MAX 34   // bus_decide's settle loop counts at most 31
 static uint settle = 20;
 
 static uint settle_min(void) { return 14 + hi_delay + lo_delay; }
@@ -159,8 +162,11 @@ static void set_settle(uint cycles) {
     // Cycles before each program's `mov osr, pins` (see bus.pio).
     if (sm_fetch_loaded)
         pio_fetch->instr_mem[off_fetch + bus_fetch_offset_class_settle] = pio_encode_set(pio_y, cycles - settle_min());
-    uint at = serving ? bus_serve_offset_serve_settle : bus_decide_offset_decide_settle;
-    pio_decide->instr_mem[off_decide + at] = pio_encode_set(pio_y, cycles - 3);
+    // bus_serve tests A15:A14 first, so its `mov osr, pins` comes five cycles later.
+    if (serving)
+        pio_decide->instr_mem[off_decide + bus_serve_offset_serve_settle] = pio_encode_set(pio_y, cycles - 8);
+    else
+        pio_decide->instr_mem[off_decide + bus_decide_offset_decide_settle] = pio_encode_set(pio_y, cycles - 3);
 }
 
 static void set_mux_delays(uint hi, uint lo) {
@@ -182,6 +188,16 @@ static void set_exrom_mark(bool on) {
         if (off >= EXROM_MARK_AT && off < EXROM_MARK_AT + sizeof exrom_mark - 1)
             r[4 * a + CLASS_EXROM] = on ? (uint8_t)exrom_mark[off - EXROM_MARK_AT] : rom_exrom[off];
     }
+}
+
+// Early /BE: every low-16K read asserts /BE straight from A15:A14. Only
+// sensible with EXROM served with /BE ('y 1'); in the other EXROM modes the
+// 2068's own EXROM would be switched off for part of the cycle.
+static void set_early_be(bool on) {
+    early_be = on;
+    if (!serving) return;
+    uint target = off_decide + (on ? bus_serve_offset_early : bus_serve_offset_settle_set);
+    pio_decide->instr_mem[off_decide + bus_serve_offset_early_op] = pio_encode_jmp_not_x(target);
 }
 
 // Points bus_serve's EXROM branch at leaving the read to the 2068's own EXROM
@@ -238,6 +254,7 @@ static void load_pio0(bool serve) {
     if (serve) {
         set_dock(dock_on);
         set_exrom(exrom_mode);
+        set_early_be(early_be);
     }
     pio_sm_set_enabled(pio_decide, sm_decide, true);
 }
@@ -546,6 +563,7 @@ static void help(void) {
            "  e [0|1]  show or set serve mode: 1 serves HOME reads (and EXROM with 'y 1') with /BE (2068 must be held)\n"
            "  p [0|1]  mark EXROM 0x1800 with TS-PICO EXROM (after boot only)\n"
            "  y [0-2]  EXROM serving in serve mode: 0 leave to the 2068, 1 serve with /BE, 2 serve without /BE\n"
+           "  z [0|1]  early /BE: assert it from A15:A14 for every low-16K read (use with 'y 1')\n"
            "  k [0|1]  show or set DOCK serving (in serve mode): 1 answers DOCK reads from the card\n"
            "  x [h l]  show or set the address-buffer delays (0-15 extra cycles); then 'r' and 'b' to check\n"
            "  ?        this help\n"
@@ -574,8 +592,35 @@ static int read_line(char *buf, int len) {
     }
 }
 
+// System clock for the bus programs. At 150 MHz the byte reached the Z80 too
+// late for M1 opcode fetches once early /BE switched the 2068's own ROM off
+// (board 1, 2026-10-07); 250 MHz makes every PIO and DMA step 40% shorter.
+#define BUS_CLOCK_KHZ 250000
+
+// Flash clock divider. Runs from RAM: it changes how flash is read.
+static void __no_inline_not_in_flash_func(set_flash_clkdiv)(uint div) {
+    qmi_hw->m[0].timing = (qmi_hw->m[0].timing & ~QMI_M0_TIMING_CLKDIV_BITS) | (div << QMI_M0_TIMING_CLKDIV_LSB);
+}
+
+static uint cycles_for_ns(uint ns) {
+    uint64_t hz = clock_get_hz(clk_sys);
+    return (uint)((ns * hz + 999999999u) / 1000000000u);
+}
+
 int main(void) {
     board_safe_init();   // 2068 held in reset (RESET_HOLD floating, R1 pull-up)
+
+    // Keep the flash near 83 MHz, then raise the core voltage and the clock.
+    set_flash_clkdiv(3);
+    vreg_set_voltage(VREG_VOLTAGE_1_20);
+    sleep_ms(2);
+    set_sys_clock_khz(BUS_CLOCK_KHZ, true);
+    // The same delays in nanoseconds as measured at 150 MHz: 33 ns from buffer
+    // enable to sample (3 + hi and 1 + lo cycles), class at 133 ns.
+    uint buf = cycles_for_ns(33);
+    hi_delay = buf > 3 ? buf - 3 : 0;
+    lo_delay = buf > 1 ? buf - 1 : 0;
+    settle = cycles_for_ns(133);
     iox_init();
     led_set(true);
     stdio_init_all();
@@ -643,6 +688,16 @@ int main(void) {
             if (sscanf(line + 1, "%u", &v) == 1) set_exrom_mark(v != 0);
             printf("  EXROM 0x%04x: %s\n", EXROM_MARK_AT,
                    ((uint8_t *)IMAGE_REGION)[4 * EXROM_MARK_AT + CLASS_EXROM] == (uint8_t)exrom_mark[0] ? "marked" : "genuine");
+            break;
+        }
+        case 'z': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1) {
+                if (!held_2068) printf("  hold the 2068 first ('h')\n");
+                else set_early_be(v != 0);
+            }
+            printf("  early /BE %s%s\n", early_be ? "on: every low-16K read" : "off: /BE once the class is known",
+                   serving ? "" : " (takes effect in serve mode)");
             break;
         }
         case 'y': {
