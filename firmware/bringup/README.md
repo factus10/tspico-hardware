@@ -311,9 +311,9 @@ alone.
 
 - **OUTs** need no new PIO code. `io_snoop` already reads every I/O write.
   Core 1 takes the 0Eh/0Fh ones, sets the status byte to 00h (busy, as v2.1's
-  PIO did) and hands the byte on. In echo mode (`p 1`, the default for now) a
-  byte sent to 0Eh is queued to come back on IN 0Eh, and the status returns
-  to FFh.
+  PIO did) and hands the byte on to the protocol responder. In echo mode
+  (`p 1`) a byte sent to 0Eh is queued to come back on IN 0Eh instead, and the
+  status returns to FFh.
 - **INs** leave the Z80 about 600 ns before it samples the data, enough for
   core 1 to do most of the work. A falling edge on nIORD interrupts core 1. It
   forces U1 on through a GPIO override (which works on a PIO-owned pin), reads
@@ -344,10 +344,67 @@ worst time from entering the handler to U3 on was 308 ns, mostly the GPIO
 override register writes; with the interrupt entry that is under 400 ns of
 the roughly 600 available.
 
-Next: the real TS-Pico protocol in place of echo mode, so ROM 2.1 can boot
-from the card and complete its SYNC handshake.
+### The TS-Pico protocol responder, and ROM 2.2
+
+The card serves the TS-Pico ROM by default (`m 1`; `m 0` is the stock 2068
+set): HOME, plus the 16K EXROM over chunks 0-1. CMake takes
+`src/rom/TSPICO-22.ROM` from the firmware repo's `origin/main` with `git show`,
+so the checkout is left alone (`TSPICO_ROM` overrides it).
+
+The responder follows `docs/PROTOCOL.md` in the firmware repo (firmware
+2.2.1). Core 0 runs it from the menu loop. Core 1 makes the status busy on
+every OUT and queues the byte, port 0Fh as `0x100 | data`.
+
+- **SYNC:** any OUT to 0Fh empties both queues, stages exactly one 0x01 (the
+  pre-load the ROM reads straight after the pre-header) and says idle (FFh).
+- **Pre-header:** 10 bytes. `'B'` with TADDR 0-3 opens a command. Status F7h
+  (ready, transaction open), then the body: `'D'`, LEN, the text, and an XOR,
+  which is checked (a mismatch answers status 2, Report R).
+- **The answer** is queued, then READY. `tpi:info` prints through response
+  function 81h, `tpi:nop` answers status 1, and `LOAD "tpi:name"` answers F
+  (no files yet). Anything else prints "is not here yet" with Report C.
+- **The tail:** once the Z80 has read the answer, the next 0x01 is staged.
+  A half-received pre-header or body is dropped after 1 s, and an answer
+  nobody reads after 10 s, both with status FBh (RECOVERED, Report T).
+- LOAD/SAVE blocks and the printer are not handled yet: they answer
+  RECOVERED.
+
+`t` shows the responder's state and counts. `l` shows a trace core 1 keeps of
+every OUT, every IN 0Eh and every change in the status read. `z` arms a
+snapshot (`Z` prints it): the read log, memory writes and I/O writes around
+the first beep with the EXROM paged in.
+
+On board 1 (with the /BE pull-up below), `SAVE "tpi:info"` printed its lines
+and `SAVE "tpi:hello"` stopped with "is not here yet" and Report C. Both went
+SYNC, pre-header, pre-load, F7h, body, answer, tail as specified, with no bad
+XORs, timeouts or lost bytes. Typing works.
+
+**The /BE bug.** Without the pull-up, ROM 2.2 crashed on its first keypress:
+mostly a cold restart, sometimes a corrupted screen or a G cursor. ROM 2.2's
+key click runs BEEPER in the EXROM through the RAM bank-switch code at $65D0
+(copied from EXROM $13D0 at boot). The `z` snapshot showed the opcode fetch at
+$65D0, right after the card had served the last byte of `JP $65D0` with /BE,
+reading wrong: `EX (SP),HL` (E3h) ran as `EX DE,HL` (EBh). The bank stack got
+$C8C8 as a return address, and on the way out SP landed in ROM. The stock ROM
+failed the same way after two `SAVE` loops, since its SAVE takes the same
+route into the EXROM. /BE comes from the open-drain 74LVC06, and nBE has no
+pull-up on proto1, so it rose too slowly for a RAM fetch about 700 ns after a
+served byte. (v2 drove /BE push-pull, high within about 30 ns.) A 2.2k from /BE
+(edge A29) to +5V fixed it: 50 SAVE loops on the stock ROM, then
+ROM 2.2 typing and commands.
+
+MD0-MD7 no longer have pad pull-downs: MD is only sampled while a buffer
+drives it, and RP2350 erratum E9 can latch a pad with its input and pull-down
+both on at about 2 V.
+
+Next: LOAD and SAVE blocks, and the files behind them.
 
 ## Board notes from proto1
+
+- nBE (edge A29) needs a pull-up, or a push-pull drive. The 74LVC06 only pulls
+  it low; without a pull-up it rises too slowly, and a RAM opcode fetch right
+  after a served ROM byte reads wrong bits (see the /BE bug above). Proto1
+  runs with a 2.2k bodge from A29 to +5V.
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350
   resets its pads with pull-downs on, so while the chip is in reset or in
