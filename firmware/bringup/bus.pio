@@ -7,7 +7,6 @@
 ; the J3 header (GP34, GP41-43). Fetch and decide signal the markers through
 ; PIO2's IRQ flags (irq next / irq prev).
 ;
-;   flag 0/1  fetch: strobe seen / address captured     -> FRONT marker (GP43, J3.3)
 ;   flag 2/3  fetch: strobe seen / byte on MD           -> READY marker (GP42, J3.4)
 ;   flag 4/5  decide: cycle served / cycle over         -> SERVE marker (GP41, J3.5)
 ;   flag 6    decide: /BE would be asserted             -> BE marker    (GP34, J3.6)
@@ -30,9 +29,11 @@
 .program bus_fetch
 .side_set 2 opt
 .wrap_target
-    wait 0 gpio 15          side 0b11       ; nMEMRD: /MREQ and /RD both low
+    wait 0 gpio 15                          ; nMEMRD: /MREQ and /RD both low. No side-set:
+                                            ; a stalled instruction keeps asserting it, and
+                                            ; io_snoop shares these pins. Both enables are
+                                            ; already off from the last cycle.
     in x, 14                side 0b01       ; image region; U2 puts A15..A8 on MD
-    irq next set 0
     irq next set 2
 public hi_delay:
     set y, 5                                ; patched from C: U2 enable to sample
@@ -52,7 +53,6 @@ class_wait:
     mov osr, pins
     out null, 19
     in osr, 2                               ; nEXROM:nROSCS; autopush the pointer
-    irq next set 1
     pull block                              ; the byte, from the DMA chain
     mov pindirs, ~null
     out pins, 8                             ; onto MD; U3 is off unless bus_serve enables it
@@ -63,19 +63,30 @@ class_wait:
 .wrap
 
 ; -----------------------------------------------------------------------------
-; stopwatch_strobe (PIO1): pushes how long each read strobe stays low, in
-; 2-cycle loops. jmp pin = GP15 (nMEMRD).
+; io_snoop (PIO1): on every Z80 I/O write, read the port's low address byte
+; through U1 and the data through U3, and push port << 8 | data for core 1,
+; which keeps a shadow of the 2068's bank registers (ports F4h and FFh). U3 is
+; enabled only during I/O writes, when /RD is high, so it points from the Z80's
+; data bus onto MD and cannot drive the 2068. I/O cycles have a wait state and
+; plenty of time, so the delays are generous.
+;
+; side-set GP8 nAEN_LO (bit 0), GP9 nAEN_HI (bit 1), GP10 nDATA_OE (bit 2); ISR
+; shifts left with autopush at 16. Needs GP10, so it runs only in shadow mode.
 ; -----------------------------------------------------------------------------
-.program stopwatch_strobe
+.program io_snoop
+.side_set 3 opt
 .wrap_target
-    wait 0 gpio 15
-    mov x, ~null
-low:
-    jmp pin done
-    jmp x-- low
-done:
-    mov isr, ~x
-    push noblock
+    wait 0 gpio 18                          ; nIOWR: /IORQ and /WR low. No side-set while
+                                            ; waiting (see bus_fetch); all off already.
+    set y, 15               side 0b110      ; U1 puts the port's A7..A0 on MD
+lo_wait:
+    jmp y-- lo_wait
+    in pins, 8              side 0b111 [1]  ; port; U1 off, one cycle clear
+    set y, 15               side 0b011      ; U3 puts the Z80's data on MD
+data_wait:
+    jmp y-- data_wait
+    in pins, 8              side 0b111      ; data; U3 off; autopush
+    wait 1 gpio 18
 .wrap
 
 ; -----------------------------------------------------------------------------
@@ -183,14 +194,6 @@ public serve:
 ; -----------------------------------------------------------------------------
 ; Markers (PIO2, GPIO base 16): one pin each, set by the flags above.
 ; -----------------------------------------------------------------------------
-.program marker_front
-.wrap_target
-    wait 1 irq 0
-    set pins, 1
-    wait 1 irq 1
-    set pins, 0
-.wrap
-
 .program marker_ready
 ; Also times the interval: pushes the number of 3-cycle loops between flag 2
 ; (strobe seen) and flag 3 (byte on MD). `mov y, status` reads flag 3: bus_shadow.c

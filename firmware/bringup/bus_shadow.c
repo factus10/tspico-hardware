@@ -10,14 +10,15 @@
  *    U3 (nDATA_OE) stays off, so MD never reaches the 2068's data bus.
  *  - bus_decide (PIO0) applies the v2.1 HOME / EXROM / DOCK rule and reports
  *    each read to core 1, which counts them. BE_REQ stays low.
- *  - Four marker state machines (PIO2) show the timing on J3 for the logic
- *    analyser: FRONT (GP43, J3.3) strobe seen to address captured, READY
- *    (GP42, J3.4) strobe seen to byte on MD, SERVE (GP41, J3.5) the cycle
- *    would be served, BE (GP34, J3.6) /BE would be asserted. Remove the OLED
- *    from J3.
- *  - Self-timing, without an analyser: stopwatch_strobe (PIO1) times every
- *    read strobe and the READY marker times strobe-to-byte, so 'm' reports how
- *    early the byte is ready. A third DMA channel logs every pointer into a
+ *  - Three marker state machines (PIO2) show the timing on J3 for the logic
+ *    analyser: READY (GP42, J3.4) strobe seen to byte on MD, SERVE (GP41,
+ *    J3.5) the cycle would be served, BE (GP34, J3.6) /BE would be asserted.
+ *    Remove the OLED from J3.
+ *  - Self-timing, without an analyser: the READY marker times strobe-to-byte,
+ *    so 'm' reports how soon the byte is ready.
+ *  - Bank tracking: io_snoop (PIO1) reads every I/O write; core 1 keeps a
+ *    shadow of ports F4h (HSR) and FFh and checks every logged read's class
+ *    (from /ROSCS and /EXROM) against the class the shadow predicts ('v'). A third DMA channel logs every pointer into a
  *    ring, so 'a' shows the addresses the card captured. The first 4096 reads
  *    after each release from reset are kept separately ('b'): the Z80's start
  *    at 0000 is a known sequence, which checks address capture from cycle one.
@@ -60,13 +61,13 @@ extern const unsigned rom_home_len, rom_exrom_len;
 #define CLASS_DOCK  2
 #define CLASS_HOME  3
 
-#define PIN_MARK_FRONT 43
 #define PIN_MARK_READY 42
 #define PIN_MARK_SERVE 41
 #define PIN_MARK_BE    34
 
 static const PIO pio_decide = pio0, pio_fetch = pio1, pio_mark = pio2;
-static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_strobe, sm_ready;
+static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_snoop, off_snoop, sm_ready;
+static bool snoop_loaded;
 static bool sm_fetch_loaded;               // set_settle can patch bus_fetch
 static bool serving;                         // bus_serve loaded in PIO0 instead of bus_decide
 static bool dock_on;                         // bus_serve also answers DOCK reads
@@ -122,7 +123,26 @@ typedef struct {
     uint64_t sum;
     uint32_t hist[HIST_N];
 } timing_t;
-static timing_t t_strobe, t_ready;   // read strobe low; strobe seen to byte on MD
+static timing_t t_ready;   // strobe seen to byte on MD
+
+// Shadow of the 2068's bank registers, from io_snoop: port F4h, the HSR (one
+// bit per 8K chunk, 1 = take the chunk from the cartridge bus), and port FFh
+// (bit 7: 1 EXROM, 0 DOCK). Assumed 0 at each release; the SCLD keeps them
+// across /RESET, so they are only right after a power-up.
+static volatile uint8_t sh_hsr, sh_ff;
+static volatile uint32_t io_writes, f4_writes, ff_writes;
+
+// Every logged read's class (from the pins) checked against the shadow's.
+static volatile uint32_t ring_seen;          // next addr_log index core 1 checks
+static volatile uint32_t pred_checked, pred_mismatch;
+static volatile bool pred_reset;
+#define MISS_N 16
+static struct { uint16_t addr; uint8_t cls, pred, hsr, ff; } miss[MISS_N];
+
+static uint predict_class(uint addr) {
+    if (!((sh_hsr >> (addr >> 13)) & 1)) return 3;   // HOME bank: no select (ROM or RAM)
+    return (sh_ff & 0x80) ? 1 : 2;                    // EXROM or DOCK
+}
 static volatile bool timing_reset;
 
 // ---- images -----------------------------------------------------------------
@@ -220,9 +240,26 @@ static void set_dock(bool on) {
     pio_decide->instr_mem[off_decide + bus_serve_offset_dock_op] = pio_encode_jmp_not_y(target);
 }
 
+// U3's enable belongs to io_snoop (PIO1) in shadow mode and to bus_serve
+// (PIO0) when serving; io_snoop stops while serving. Only while the 2068 is
+// held, so no I/O write is in progress.
+static void snoop_enable(bool on) {
+    if (!snoop_loaded) return;
+    pio_sm_set_enabled(pio_fetch, sm_snoop, false);
+    if (!on) return;
+    const uint32_t oe = 1u << PIN_NDATA_OE;
+    pio_sm_set_pins_with_mask(pio_fetch, sm_snoop, oe, oe);       // U3 off
+    pio_sm_set_pindirs_with_mask(pio_fetch, sm_snoop, oe, oe);
+    pio_gpio_init(pio_fetch, PIN_NDATA_OE);
+    pio_sm_restart(pio_fetch, sm_snoop);
+    pio_sm_exec(pio_fetch, sm_snoop, pio_encode_jmp(off_snoop));
+    pio_sm_set_enabled(pio_fetch, sm_snoop, true);
+}
+
 // Loads bus_decide (shadow) or bus_serve into PIO0. Only while the 2068 is held:
 // no reads are happening, so nothing is half-served.
 static void load_pio0(bool serve) {
+    snoop_enable(false);
     pio_sm_set_enabled(pio_decide, sm_decide, false);
     if (prog_pio0) pio_remove_program(pio_decide, prog_pio0, off_decide);
     // U3 off and /BE released through the SIO while the programs change over.
@@ -255,6 +292,8 @@ static void load_pio0(bool serve) {
         set_dock(dock_on);
         set_exrom(exrom_mode);
         set_early_be(early_be);
+    } else {
+        snoop_enable(true);
     }
     pio_sm_set_enabled(pio_decide, sm_decide, true);
 }
@@ -281,7 +320,6 @@ static void bus_start(void) {
 
     // Markers first, with their flags clear.
     pio_mark->irq = 0xff;
-    start_marker(&marker_front_program, marker_front_program_get_default_config, PIN_MARK_FRONT);
     sm_ready = start_marker(&marker_ready_program, marker_ready_program_get_default_config, PIN_MARK_READY);
     start_marker(&marker_serve_program, marker_serve_program_get_default_config, PIN_MARK_SERVE);
     start_marker(&marker_be_program, marker_be_program_get_default_config, PIN_MARK_BE);
@@ -312,12 +350,16 @@ static void bus_start(void) {
     pio_sm_exec(pio_fetch, sm_fetch, pio_encode_pull(false, true));
     pio_sm_exec(pio_fetch, sm_fetch, pio_encode_mov(pio_x, pio_osr));
 
-    // stopwatch_strobe: times nMEMRD low.
-    sm_strobe = pio_claim_unused_sm(pio_fetch, true);
-    uint off_strobe = pio_add_program(pio_fetch, &stopwatch_strobe_program);
-    c = stopwatch_strobe_program_get_default_config(off_strobe);
-    sm_config_set_jmp_pin(&c, 15);
-    pio_sm_init(pio_fetch, sm_strobe, off_strobe, &c);
+    // io_snoop: every I/O write, for the bank-register shadow. Shares the
+    // address-buffer enables with bus_fetch; owns U3's enable in shadow mode.
+    sm_snoop = pio_claim_unused_sm(pio_fetch, true);
+    off_snoop = pio_add_program(pio_fetch, &io_snoop_program);
+    c = io_snoop_program_get_default_config(off_snoop);
+    sm_config_set_in_pin_base(&c, PIN_MD0);
+    sm_config_set_sideset_pin_base(&c, PIN_NAEN_LO);
+    sm_config_set_in_shift(&c, false, true, 16);
+    pio_sm_init(pio_fetch, sm_snoop, off_snoop, &c);
+    snoop_loaded = true;
 
     set_mux_delays(hi_delay, lo_delay);
 
@@ -355,7 +397,7 @@ static void bus_start(void) {
     dma_channel_configure(ch_ptr, &p, &dma_hw->ch[ch_data].al3_read_addr_trig, &pio_fetch->rxf[sm_fetch],
                           (DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB) | 1, true);
 
-    pio_sm_set_enabled(pio_fetch, sm_strobe, true);
+    snoop_enable(!serving);
     pio_sm_set_enabled(pio_fetch, sm_fetch, true);
 }
 
@@ -373,6 +415,7 @@ static void timing_add(timing_t *t, uint32_t cycles) {
 #define RING_BITS (DMA_CH0_CTRL_TRIG_RING_SEL_BITS | DMA_CH0_CTRL_TRIG_RING_SIZE_BITS)
 
 static void log_to_ring(void) {
+    ring_seen = 0;
     hw_write_masked(&dma_hw->ch[ch_log].al1_ctrl,
                     DMA_CH0_CTRL_TRIG_RING_SEL_BITS | (14u << DMA_CH0_CTRL_TRIG_RING_SIZE_LSB), RING_BITS);
     dma_channel_set_write_addr(ch_log, addr_log, false);
@@ -410,9 +453,40 @@ static void core1_main(void) {
             }
         }
         if (timing_reset) {
-            memset(&t_strobe, 0, sizeof t_strobe);
             memset(&t_ready, 0, sizeof t_ready);
             timing_reset = false;
+        }
+        if (pred_reset) {
+            pred_checked = pred_mismatch = 0;
+            pred_reset = false;
+        }
+        // Bank writes first, so they apply to the reads that follow them.
+        while (snoop_loaded && !pio_sm_is_rx_fifo_empty(pio_fetch, sm_snoop)) {
+            uint32_t w = pio_fetch->rxf[sm_snoop];
+            uint port = (w >> 8) & 0xff, data = w & 0xff;
+            io_writes++;
+            if (port == 0xf4) { sh_hsr = (uint8_t)data; f4_writes++; }
+            if (port == 0xff) { sh_ff = (uint8_t)data; ff_writes++; }
+        }
+        // One logged read per pass, checked against the shadow's prediction.
+        if (!boot_logging && !serving) {
+            uint32_t now = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+            if (ring_seen != now) {
+                uint32_t p = addr_log[ring_seen];
+                ring_seen = (ring_seen + 1) & (LOG_N - 1);
+                uint addr = (p >> 2) & 0xffff, cls = p & 3, pred = predict_class(addr);
+                pred_checked++;
+                if (cls != pred) {
+                    if (pred_mismatch < MISS_N) {
+                        miss[pred_mismatch].addr = (uint16_t)addr;
+                        miss[pred_mismatch].cls = (uint8_t)cls;
+                        miss[pred_mismatch].pred = (uint8_t)pred;
+                        miss[pred_mismatch].hsr = sh_hsr;
+                        miss[pred_mismatch].ff = sh_ff;
+                    }
+                    pred_mismatch++;
+                }
+            }
         }
         if (!pio_sm_is_rx_fifo_empty(pio_decide, sm_decide)) {
             uint cls = class_code(pio_decide->rxf[sm_decide]);
@@ -423,8 +497,7 @@ static void core1_main(void) {
                 ex_state = 2;
             }
         }
-        // Loop lengths in bus.pio: two cycles per strobe count, three per ready count.
-        if (!pio_sm_is_rx_fifo_empty(pio_fetch, sm_strobe)) timing_add(&t_strobe, 2 * pio_fetch->rxf[sm_strobe]);
+        // marker_ready counts three cycles per loop (bus.pio).
         if (!pio_sm_is_rx_fifo_empty(pio_mark, sm_ready)) timing_add(&t_ready, 3 * pio_mark->rxf[sm_ready]);
     }
 }
@@ -445,15 +518,33 @@ static void print_timing(const char *what, const timing_t *t) {
 }
 
 static void print_margin(void) {
-    timing_t s = t_strobe, r = t_ready;
-    print_timing("read strobe low (nMEMRD)  ", &s);
-    print_timing("strobe seen to byte on MD ", &r);
-    if (s.n && r.n)
-        printf("  worst case: shortest strobe - slowest byte = %d ns\n"
-               "  (histograms: bin start in ns : count. The strobe ends a little after the Z80\n"
-               "  samples the bus, and the data needs setup time; the analyser pins that down.)\n",
-               (int)ns(s.min) - (int)ns(r.max));
+    timing_t r = t_ready;
+    print_timing("strobe seen to byte on MD", &r);
+    printf("  (histogram: bin start in ns : count. In normal running the shortest read\n"
+           "  strobe, an M1 fetch, is 400 ns; opcode fetches need the byte well before 156 ns.)\n");
     timing_reset = true;
+}
+
+static const char *class_name(uint c) {
+    static const char *const n[] = {"none", "EXROM", "DOCK", "HOME"};
+    return n[c & 3];
+}
+
+static void print_banks(void) {
+    uint hsr = sh_hsr, ff = sh_ff;
+    printf("  shadow: F4h (HSR) = %02x, FFh = %02x -> chunks 0-7:", hsr, ff);
+    for (uint c = 0; c < 8; c++)
+        printf(" %c", (hsr >> c) & 1 ? ((ff & 0x80) ? 'E' : 'D') : 'H');
+    printf("\n  I/O writes seen %lu (F4h %lu, FFh %lu)\n", io_writes, f4_writes, ff_writes);
+    if (serving) {
+        printf("  (reads are checked only in shadow mode)\n");
+        return;
+    }
+    printf("  reads checked against the shadow: %lu, class mismatches: %lu\n", pred_checked, pred_mismatch);
+    uint shown = pred_mismatch < MISS_N ? pred_mismatch : MISS_N;
+    for (uint i = 0; i < shown; i++)
+        printf("    %04x: pins said %s, shadow said %s (F4h %02x, FFh %02x)\n", miss[i].addr,
+               class_name(miss[i].cls), class_name(miss[i].pred), miss[i].hsr, miss[i].ff);
 }
 
 static void print_addresses(void) {
@@ -541,6 +632,10 @@ static void hold_2068(bool hold) {
         // Releasing: record the boot from the first read, and time it fresh.
         log_boot();
         timing_reset = true;
+        // The SCLD powers up with both registers clear; assume that.
+        sh_hsr = sh_ff = 0;
+        io_writes = f4_writes = ff_writes = 0;
+        pred_reset = true;
         ex_state = 1;
     }
     held_2068 = hold;
@@ -555,7 +650,8 @@ static void help(void) {
            "  r        reset the 2068 (200 ms pulse)\n"
            "  s        read counts since the last 's'\n"
            "  w        read counts every second until a key is pressed\n"
-           "  m        timing: strobe length, strobe-to-byte, worst-case margin (then resets)\n"
+           "  m        timing: strobe seen to byte on MD (then resets)\n"
+           "  v [0]    bank-register shadow (ports F4h, FFh) and how well it predicts each read; 'v 0' resets\n"
            "  a        the last 32 addresses captured\n"
            "  c [n]    reads around the first EXROM read after the last release (n from -1024)\n"
            "  b [n]    reads n to n+63 after the last release from reset (default 0)\n"
@@ -567,7 +663,7 @@ static void help(void) {
            "  k [0|1]  show or set DOCK serving (in serve mode): 1 answers DOCK reads from the card\n"
            "  x [h l]  show or set the address-buffer delays (0-15 extra cycles); then 'r' and 'b' to check\n"
            "  ?        this help\n"
-           "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
+           "Markers on J3: READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
            settle, settle * 1000 / (clock_get_hz(clk_sys) / 1000000));
 }
 
@@ -653,6 +749,12 @@ int main(void) {
             break;
         case 's': print_stats(last, &since); break;
         case 'm': print_margin(); break;
+        case 'v': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1 && v == 0) pred_reset = true;
+            print_banks();
+            break;
+        }
         case 'a': print_addresses(); break;
         case 'c': {
             int n = -32;

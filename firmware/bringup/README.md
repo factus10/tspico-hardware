@@ -124,7 +124,6 @@ Timing markers on J3 (take the OLED off):
 
 | J3 pin | GPIO | Marker | High from ... to ... |
 |---|---|---|---|
-| 3 | GP43 | FRONT | read strobe seen, to address captured |
 | 4 | GP42 | READY | read strobe seen, to byte on MD |
 | 5 | GP41 | SERVE | cycle classified as ours, to end of cycle |
 | 6 | GP34 | BE | cycle would assert /BE (HOME, EXROM), to end of cycle |
@@ -134,7 +133,7 @@ Each marker lags the event inside the chip by two or three PIO cycles (about
 
 | Ch | Signal | Ch | Signal |
 |---|---|---|---|
-| 0 | /CLK | 8 | FRONT (J3.3) |
+| 0 | /CLK | 8 | spare |
 | 1 | /M1 | 9 | READY (J3.4) |
 | 2 | /MREQ | 10 | SERVE (J3.5) |
 | 3 | /RD | 11 | BE (J3.6) |
@@ -235,6 +234,30 @@ after /ROSCS and /EXROM have been sampled (133 ns).
 Ways to get the byte out sooner: bypass the input synchronisers on the bus
 pins; track ports F4h and FFh on the card so the class comes from the address
 alone, without waiting for /ROSCS and /EXROM.
+
+### Bank tracking (board 1, 2026-10-07)
+
+`io_snoop` (PIO1) reads every Z80 I/O write: the port's low address byte
+through U1 and the data through U3, which only points from the Z80 onto MD
+during writes. Core 1 keeps a shadow of port F4h (the HSR: one bit per 8K
+chunk, 1 = cartridge bus) and port FFh (bit 7: EXROM 1, DOCK 0). For every
+logged read it predicts the class from the shadow and the address, and
+compares it with what /ROSCS and /EXROM said. `v` shows the shadow and the
+count of mismatches.
+
+A shadow boot on board 1 made 11 writes to F4h and 9 to FFh. All 3.2 million
+reads matched the prediction, including the bank switching around the
+EXROM-to-RAM copy. This lets the card classify a read from its address alone,
+early enough for early /BE, without waiting for (or depending on) /EXROM and
+/ROSCS. io_snoop needs U3's enable, so it runs in shadow mode only for now.
+
+Two diagnostics went to make room in PIO1: the strobe stopwatch (the
+400 ns minimum is known) and the FRONT marker on J3.3.
+
+PIO note: a state machine stalled on an instruction with side-set keeps
+asserting those pins, so programs sharing pins must not side-set on their idle
+`wait`. With side-set on both idle waits, io_snoop (the higher-numbered state
+machine) held U1 and U2 off and broke bus_fetch's address capture.
 
 ## Board notes from proto1
 
