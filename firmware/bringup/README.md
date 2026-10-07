@@ -291,9 +291,24 @@ Results:
 - The earlier EXROM crash and RAM-test failure came from late /BE and tight
   opcode timing, both gone in this design.
 
-Still to do: DOCK RAM writes (PIO1 has 9 instructions free), and the
-$0E/$0F I/O ports, which need MD and so instruction space in PIO0, which is
-full.
+### DOCK RAM writes
+
+`mem_write` (PIO1) reads every Z80 memory write: A15..A8 through U2, A7..A0
+through U1, the data through U3 (pointing from the Z80 onto MD, since /RD is
+high). /WR is low for about 250 ns; the capture takes about 130. Core 1 stores
+the byte in the DOCK image when the shadow maps that chunk to the dock and
+DOCK serving is on (`k 1`). Its RX FIFO is joined (8 deep) so it never stalls
+holding the shared pins. Two instructions came out of `addr_read` to make room
+(the stale U3 request is cleared at the end of a read, and "U1 off" shares an
+instruction), so PIO1 is full: 13 + 11 + 8.
+
+On board 1, BASIC wrote 256 bytes into the dock through chunk 4 and read them
+back with 0 errors, over about four runs (992 bytes stored). The boot's memory
+test, 370,000 writes, and 168 million writes since, were all correctly left
+alone.
+
+Still to do: the $0E/$0F I/O ports, which need MD, and so instruction space in
+PIO0, which is full.
 
 ## Board notes from proto1
 

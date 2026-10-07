@@ -6,7 +6,8 @@
 ; through a chunk table that core 1 rewrites from the bank shadow, pushes the
 ; pointer, and drives the byte. PIO1 owns the address-buffer enables (GP8, GP9)
 ; and U3's enable (GP10): `addr_read` sequences U2, U1 and U3 for each memory
-; read; `io_snoop` reads every I/O write for the bank shadow. PIO2 (GPIO base 16)
+; read; `mem_write` reads every memory write (DOCK RAM); `io_snoop` reads every
+; I/O write for the bank shadow. PIO1 is full: 13 + 11 + 8 instructions. PIO2 (GPIO base 16)
 ; runs the READY marker on J3.4.
 ;
 ; Flags: PIO0 flag 1 (addr_read -> serve: U2 is on); PIO1 flag 2 (serve ->
@@ -87,8 +88,7 @@ public tail:
 .side_set 3 opt
 .wrap_target
     wait 0 gpio 15                          ; nMEMRD (no side-set while idle)
-    irq clear 2             side 0b101      ; U2 on; drop any stale U3 request
-    irq prev set 1                          ; tell serve
+    irq prev set 1          side 0b101      ; U2 on; tell serve
 public hi_hold:
     set y, 5                                ; patched
 hi_wait:
@@ -98,15 +98,42 @@ public lo_hold:
     set y, 8                side 0b110      ; U1 on (patched)
 lo_wait:
     jmp y-- lo_wait
-    nop                     side 0b111      ; U1 off
 drive_wait:
-    jmp pin cycle_end                       ; strobe over without a request: not ours
+    jmp pin cycle_end       side 0b111      ; U1 off; strobe over without a request: not ours
     mov y, status                           ; flag 2: serve wants U3
     jmp !y drive_wait
-    irq clear 2             side 0b011      ; U3 on: MD goes to the Z80
+    nop                     side 0b011      ; U3 on: MD goes to the Z80
     wait 1 gpio 15
 cycle_end:
-    nop                     side 0b111      ; U3 off
+    irq clear 2             side 0b111      ; U3 off; the request is spent (serve raises it
+                                            ; about 60 ns into a read, long before the end)
+.wrap
+
+; -----------------------------------------------------------------------------
+; mem_write (PIO1): on every Z80 memory write, A15..A8 through U2, A7..A0
+; through U1 and the data through U3 (pointing from the Z80 onto MD, since /RD
+; is high). Pushes address << 8 | data for core 1, which stores the byte if the
+; chunk is mapped to the dock. /WR is low for about 250 ns; this takes about
+; 130. ISR shifts left, autopush at 24; RX FIFO joined (8 deep) so it never
+; stalls holding the shared pins.
+; -----------------------------------------------------------------------------
+.program mem_write
+.side_set 3 opt
+.wrap_target
+    wait 0 gpio 16                          ; nMEMWR (no side-set while idle)
+    set y, 7                side 0b101      ; U2: A15..A8
+hi_w:
+    jmp y-- hi_w
+    in pins, 8              side 0b111 [1]  ; U2 off, one cycle clear
+    set y, 7                side 0b110      ; U1: A7..A0
+lo_w:
+    jmp y-- lo_w
+    in pins, 8              side 0b111 [1]  ; U1 off, one cycle clear
+    set y, 7                side 0b011      ; U3: the data
+data_w:
+    jmp y-- data_w
+    in pins, 8              side 0b111      ; U3 off; autopush
+    wait 1 gpio 16
 .wrap
 
 ; -----------------------------------------------------------------------------

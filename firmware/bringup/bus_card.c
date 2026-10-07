@@ -7,7 +7,9 @@
  * bits through a chunk table core 1 keeps current, asserts /BE straight away
  * for HOME and EXROM, and drives the byte; addr_read (PIO1) sequences the
  * address buffers and enables U3 when serve asks. The DMA chain fetches only
- * the byte that is needed.
+ * the byte that is needed. mem_write (PIO1) reads every memory write; core 1
+ * stores the byte in the DOCK image when the shadow maps that chunk to the dock
+ * and DOCK serving is on, so DOCK RAM works.
  *
  * Shadow mode (the default) patches serve's /BE and U3 requests out: the card
  * follows every read and times itself without driving the 2068. 'e 1' serves.
@@ -47,7 +49,7 @@ extern const unsigned rom_home_len, rom_exrom_len;
 #define BUS_CLOCK_KHZ 250000
 
 static const PIO pio_serve = pio0, pio_addr = pio1, pio_mark = pio2;
-static uint sm_serve, sm_addr, sm_snoop, sm_ready, off_addr, off_snoop;
+static uint sm_serve, sm_addr, sm_write, sm_snoop, sm_ready, off_addr, off_write, off_snoop;
 static int ch_ptr, ch_data, ch_log;
 
 static bool serving;     // /BE and U3 requests live
@@ -77,6 +79,7 @@ static volatile uint32_t ring_seen;
 static volatile uint8_t sh_hsr, sh_ff;
 static volatile uint32_t io_writes, f4_writes, ff_writes, table_updates;
 static volatile uint32_t served[3];
+static volatile uint32_t mem_writes, dock_writes;
 
 // ---- timing -----------------------------------------------------------------
 
@@ -217,6 +220,15 @@ static void bus_start(void) {
     pio_gpio_init(pio_addr, PIN_NDATA_OE);
     pio_sm_init(pio_addr, sm_addr, off_addr, &c);
 
+    sm_write = pio_claim_unused_sm(pio_addr, true);
+    off_write = pio_add_program(pio_addr, &mem_write_program);
+    c = mem_write_program_get_default_config(off_write);
+    sm_config_set_in_pin_base(&c, PIN_MD0);
+    sm_config_set_sideset_pin_base(&c, PIN_NAEN_LO);
+    sm_config_set_in_shift(&c, false, true, 24);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio_addr, sm_write, off_write, &c);
+
     sm_snoop = pio_claim_unused_sm(pio_addr, true);
     off_snoop = pio_add_program(pio_addr, &io_snoop_program);
     c = io_snoop_program_get_default_config(off_snoop);
@@ -262,6 +274,7 @@ static void bus_start(void) {
 
     pio_sm_set_enabled(pio_serve, sm_serve, true);
     pio_sm_set_enabled(pio_addr, sm_addr, true);
+    pio_sm_set_enabled(pio_addr, sm_write, true);
     pio_sm_set_enabled(pio_addr, sm_snoop, true);
 }
 
@@ -304,6 +317,18 @@ static void core1_main(void) {
             if (port == 0xf4) { changed = sh_hsr != data; sh_hsr = (uint8_t)data; f4_writes++; }
             if (port == 0xff) { changed = (sh_ff ^ data) & 0x80; sh_ff = (uint8_t)data; ff_writes++; }
             if (changed) write_table();
+        }
+        // Memory writes: into the DOCK image when the shadow maps the chunk to
+        // the dock. First in the loop: the Z80 may read the byte back about a
+        // microsecond later.
+        while (!pio_sm_is_rx_fifo_empty(pio_addr, sm_write)) {
+            uint32_t w = pio_addr->rxf[sm_write];
+            uint addr = (w >> 8) & 0xffff;
+            mem_writes++;
+            if (dock_on && ((sh_hsr >> (addr >> 13)) & 1) && !(sh_ff & 0x80)) {
+                ((uint8_t *)IMAGE_REGION)[4 * addr + SLOT_DOCK] = (uint8_t)w;
+                dock_writes++;
+            }
         }
         if (boot_logging && dma_hw->ch[ch_log].write_addr >= (uint32_t)&boot_log[BOOT_N]) {
             log_to_ring();
@@ -396,6 +421,7 @@ static void print_banks(void) {
     }
     printf("\n  I/O writes %lu (F4h %lu, FFh %lu), table rewrites %lu\n", io_writes, f4_writes, ff_writes,
            table_updates);
+    printf("  memory writes %lu, into the DOCK image %lu\n", mem_writes, dock_writes);
 }
 
 static void print_stats(uint32_t *last, absolute_time_t *since) {
@@ -418,6 +444,7 @@ static void hold_2068(bool hold) {
         // The SCLD powers up with both registers clear; assume that.
         sh_hsr = sh_ff = 0;
         io_writes = f4_writes = ff_writes = 0;
+        mem_writes = dock_writes = 0;
         write_table();
     }
     held_2068 = hold;
@@ -435,7 +462,7 @@ static void help(void) {
            "  v           bank shadow and chunk table\n"
            "  e [0|1]     serve mode: 1 asserts /BE and enables U3 (2068 must be held)\n"
            "  y [0|1]     serve EXROM-bank chunks (with /BE)\n"
-           "  k [0|1]     serve DOCK-bank chunks (no /BE)\n"
+           "  k [0|1]     serve DOCK-bank chunks (no /BE), and store writes to them\n"
            "  x [a b c d] delays in cycles: serve's U2 wait, serve's U1 wait, U2 hold, U1 hold\n"
            "  q [0|1]     input synchroniser bypass on MD and the strobes\n"
            "  ?           this help\n"
@@ -542,7 +569,7 @@ int main(void) {
                 dock_on = v != 0;
                 write_table();
             }
-            printf("  DOCK-bank chunks %s\n", dock_on ? "served (no /BE)" : "left alone");
+            printf("  DOCK-bank chunks %s\n", dock_on ? "served (no /BE), writes stored" : "left alone");
             break;
         case 'x': {
             uint a, b, c, d;
