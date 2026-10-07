@@ -90,3 +90,21 @@ pico_set_linker_script(bus_shadow ${CMAKE_CURRENT_LIST_DIR}/memmap_bus.ld)
 pico_enable_stdio_usb(bus_shadow 1)
 pico_enable_stdio_uart(bus_shadow 0)
 pico_add_extra_outputs(bus_shadow)
+
+# Bus test, second design: class from the bank-register shadow, early /BE.
+add_executable(bus_card bus_card.c board.c)
+pico_generate_pio_header(bus_card ${CMAKE_CURRENT_LIST_DIR}/bus_card.pio)
+embed_binary(bus_card rom_home ${TSPICO_ROM_DIR}/GENUINE-2068-home.bin)
+embed_binary(bus_card rom_exrom ${TSPICO_ROM_DIR}/GENUINE-2068-exrom.bin)
+target_link_libraries(bus_card
+	pico_stdlib
+	pico_multicore
+	hardware_dma
+	hardware_i2c
+	hardware_pio
+	hardware_vreg
+)
+pico_set_linker_script(bus_card ${CMAKE_CURRENT_LIST_DIR}/memmap_bus.ld)
+pico_enable_stdio_usb(bus_card 1)
+pico_enable_stdio_uart(bus_card 0)
+pico_add_extra_outputs(bus_card)
