@@ -103,13 +103,22 @@ drives the 2068: the 2068 runs on its own ROM.
   byte for (address, class) is at `0x20040000 + 4 * address + class`.
 - The 2068 is held in reset until `g`. `t n` moves the point where /ROSCS and
   /EXROM are sampled, once capture 0 shows how long they take to settle.
+- It times itself, so the margin can be measured without the analyser. `m`
+  reports how long the read strobe stays low (`stopwatch_strobe`) and how long
+  the card takes from seeing it to having the byte on MD (the READY marker),
+  with histograms and the worst case (shortest strobe minus slowest byte).
+  The strobe ends a little after the Z80 samples the data, and the data needs
+  setup time, so the analyser still has to confirm the real margin.
+- `a` prints the last 32 addresses the card captured, from a third DMA
+  channel that logs every pointer. ROM code shows up as runs of nearly
+  consecutive addresses, which checks both address bytes.
 
 Timing markers on J3 (take the OLED off):
 
 | J3 pin | GPIO | Marker | High from ... to ... |
 |---|---|---|---|
 | 3 | GP43 | FRONT | read strobe seen, to address captured |
-| 4 | GP42 | DMA | pointer pushed, to byte on MD |
+| 4 | GP42 | READY | read strobe seen, to byte on MD |
 | 5 | GP41 | SERVE | cycle classified as ours, to end of cycle |
 | 6 | GP34 | BE | cycle would assert /BE (HOME, EXROM), to end of cycle |
 
@@ -119,7 +128,7 @@ Each marker lags the event inside the chip by two or three PIO cycles (about
 | Ch | Signal | Ch | Signal |
 |---|---|---|---|
 | 0 | /CLK | 8 | FRONT (J3.3) |
-| 1 | /M1 | 9 | DMA (J3.4) |
+| 1 | /M1 | 9 | READY (J3.4) |
 | 2 | /MREQ | 10 | SERVE (J3.5) |
 | 3 | /RD | 11 | BE (J3.6) |
 | 4 | /ROSCS | 12-15 | D0-D3 |
