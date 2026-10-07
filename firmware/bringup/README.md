@@ -84,6 +84,49 @@ picotool load -f -x build/esp_bridge.uf2
 `../zimodem/` builds Zimodem and flashes it through this bridge. To go back to
 the self-test, load `build/bringup.uf2` the same way.
 
+## Bus shadow test (phase 1)
+
+`build/bus_shadow.uf2` is step 2 of phase 1 in
+[docs/v3-firmware-port-plan.md](../../docs/v3-firmware-port-plan.md). With the
+card in the 2068's expansion bus, it follows every Z80 memory read but never
+drives the 2068: the 2068 runs on its own ROM.
+
+- `bus_fetch` (PIO1) reads the address through U1/U2, adds the class from
+  /ROSCS and /EXROM, and pushes a pointer to a DMA chain. The chain fetches
+  the byte from the images, and the program puts it on MD. U3 stays off, so
+  MD never reaches the 2068's data bus.
+- `bus_decide` (PIO0) applies the v2.1 HOME / EXROM / DOCK rule to every
+  read. Core 1 counts the results (`s`, `w`). BE_REQ stays low.
+- The images are the stock 2068 ROMs, from `TSPICO_ROM_DIR`. The default is
+  `~/Documents/github/tspico-firmware-build/ROMs`. They sit at 0x20040000,
+  above everything the C runtime uses (`memmap_bus.ld`), interleaved so the
+  byte for (address, class) is at `0x20040000 + 4 * address + class`.
+- The 2068 is held in reset until `g`. `t n` moves the point where /ROSCS and
+  /EXROM are sampled, once capture 0 shows how long they take to settle.
+
+Timing markers on J3 (take the OLED off):
+
+| J3 pin | GPIO | Marker | High from ... to ... |
+|---|---|---|---|
+| 3 | GP43 | FRONT | read strobe seen, to address captured |
+| 4 | GP42 | DMA | pointer pushed, to byte on MD |
+| 5 | GP41 | SERVE | cycle classified as ours, to end of cycle |
+| 6 | GP34 | BE | cycle would assert /BE (HOME, EXROM), to end of cycle |
+
+Each marker lags the event inside the chip by two or three PIO cycles (about
+15-20 ns). For the LA2016:
+
+| Ch | Signal | Ch | Signal |
+|---|---|---|---|
+| 0 | /CLK | 8 | FRONT (J3.3) |
+| 1 | /M1 | 9 | DMA (J3.4) |
+| 2 | /MREQ | 10 | SERVE (J3.5) |
+| 3 | /RD | 11 | BE (J3.6) |
+| 4 | /ROSCS | 12-15 | D0-D3 |
+| 5 | /EXROM | | |
+| 6 | A14 | | |
+| 7 | A15 | | |
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350

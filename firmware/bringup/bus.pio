@@ -1,0 +1,142 @@
+; TS-Pico v3 bus programs, shadow mode: everything a served memory read does
+; except driving the 2068. U3 (nDATA_OE) and /BE (BE_REQ) are never enabled, so
+; the 2068 runs on its own ROM while these programs follow every read.
+;
+; Pin numbers are absolute GPIOs. bus_fetch and bus_decide run in PIO blocks
+; with GPIO base 0; the markers run in PIO2 with GPIO base 16 so they can reach
+; the J3 header (GP34, GP41-43). Fetch and decide signal the markers through
+; PIO2's IRQ flags (irq next / irq prev).
+;
+;   flag 0/1  fetch: strobe seen / address captured     -> FRONT marker (GP43, J3.3)
+;   flag 2/3  fetch: pointer pushed / byte on MD        -> DMA marker   (GP42, J3.4)
+;   flag 4/5  decide: cycle served / cycle over         -> SERVE marker (GP41, J3.5)
+;   flag 6    decide: /BE would be asserted             -> BE marker    (GP34, J3.6)
+;   flag 7    SERVE marker to BE marker: cycle over
+
+.pio_version 1
+
+; -----------------------------------------------------------------------------
+; bus_fetch (PIO1): on every memory read, read the Z80 address through the byte
+; mux, append the cycle class, push a pointer into the byte images for the DMA
+; chain, and put the byte it returns on MD.
+;
+; Pointer = X (14 bits) << 18 | A15..A0 << 2 | nEXROM:nROSCS, so the images are
+; interleaved with a stride of four: the byte for (address, class) is at
+; region + 4 * address + class.
+;
+; in/out base GP0 (MD0-MD7, 8 out pins); side-set GP8 nAEN_LO (bit 0) and GP9
+; nAEN_HI (bit 1); ISR shifts left with autopush at 32; OSR shifts right.
+; -----------------------------------------------------------------------------
+.program bus_fetch
+.side_set 2 opt
+.wrap_target
+    wait 0 gpio 15          side 0b11       ; nMEMRD: /MREQ and /RD both low
+    in x, 14                side 0b01       ; image region; U2 puts A15..A8 on MD
+    irq next set 0
+    nop                               [1]
+    in pins, 8              side 0b11 [1]   ; A15..A8 (pins as of two cycles ago); U2 off
+    nop                     side 0b10 [3]   ; U1 puts A7..A0 on MD
+    in pins, 8              side 0b11       ; A7..A0; U1 off
+public class_settle:
+    set y, 0                                ; patched from C: wait for /ROSCS, /EXROM
+class_wait:
+    jmp y-- class_wait
+    mov osr, pins
+    out null, 19
+    in osr, 2                               ; nEXROM:nROSCS; autopush the pointer
+    irq next set 1
+    irq next set 2
+    pull block                              ; the byte, from the DMA chain
+    mov pindirs, ~null
+    out pins, 8                             ; onto MD (U1, U2, U3 all off)
+    irq next set 3
+    wait 1 gpio 15
+    mov pindirs, null
+.wrap
+
+; -----------------------------------------------------------------------------
+; bus_decide (PIO0): classify every memory read the way the v2.1 set_ctrl rule
+; does, and push one code per read for the CPU's statistics:
+;   0 not ours, 1 EXROM (/EXROM low), 2 DOCK (/ROSCS low), 3 HOME (neither, A15:A14 = 0)
+; HOME and EXROM would assert /BE; DOCK would not.
+; -----------------------------------------------------------------------------
+.program bus_decide
+.wrap_target
+top:
+    wait 0 gpio 15
+public decide_settle:
+    set y, 0                                ; patched from C
+settle:
+    jmp y-- settle
+    mov osr, pins
+    out null, 13
+    out x, 2                                ; A15:A14
+    out null, 4
+    out y, 2                                ; nEXROM:nROSCS
+    jmp y-- class_ge1
+not_ours:                                   ; also class 0, both selects low
+    in null, 2
+    push noblock
+    wait 1 gpio 15
+    jmp top
+class_ge1:
+    jmp !y exrom                            ; class 1
+    jmp y-- class_ge2
+class_ge2:
+    jmp !y dock                             ; class 2
+    jmp !x home                             ; class 3 in the low 16K
+    jmp not_ours
+dock:
+    set x, 2
+    jmp serve
+exrom:
+    set x, 1
+    jmp be
+home:
+    set x, 3
+be:
+    irq prev set 6
+serve:
+    irq prev set 4
+    in x, 2
+    push noblock
+    wait 1 gpio 15
+    irq prev set 5
+.wrap
+
+; -----------------------------------------------------------------------------
+; Markers (PIO2, GPIO base 16): one pin each, set by the flags above.
+; -----------------------------------------------------------------------------
+.program marker_front
+.wrap_target
+    wait 1 irq 0
+    set pins, 1
+    wait 1 irq 1
+    set pins, 0
+.wrap
+
+.program marker_dma
+.wrap_target
+    wait 1 irq 2
+    set pins, 1
+    wait 1 irq 3
+    set pins, 0
+.wrap
+
+.program marker_serve
+.wrap_target
+    wait 1 irq 4
+    set pins, 1
+    wait 1 irq 5
+    set pins, 0
+    irq set 7
+.wrap
+
+.program marker_be
+.wrap_target
+    wait 1 irq 6
+    irq clear 7                             ; left over from a DOCK cycle
+    set pins, 1
+    wait 1 irq 7
+    set pins, 0
+.wrap
