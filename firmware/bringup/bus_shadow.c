@@ -18,7 +18,9 @@
  *  - Self-timing, without an analyser: stopwatch_strobe (PIO1) times every
  *    read strobe and the READY marker times strobe-to-byte, so 'm' reports how
  *    early the byte is ready. A third DMA channel logs every pointer into a
- *    ring, so 'a' shows the addresses the card captured.
+ *    ring, so 'a' shows the addresses the card captured. The first 4096 reads
+ *    after each release from reset are kept separately ('b'): the Z80's start
+ *    at 0000 is a known sequence, which checks address capture from cycle one.
  *
  * The 2068 is held in reset until the 'g' command. USB serial menu: 'h' for help.
  */
@@ -61,6 +63,15 @@ static int ch_ptr, ch_data, ch_log;
 // Every pointer bus_fetch pushes, copied here by ch_log (a 16 KB DMA ring).
 #define LOG_N 4096
 static uint32_t addr_log[LOG_N] __attribute__((aligned(LOG_N * 4)));
+
+// The first BOOT_N reads after each release from reset go here instead; then
+// core 1 points ch_log back at the ring. BOOT_SLACK covers core 1 noticing late.
+#define BOOT_N     4096
+#define BOOT_SLACK 256
+static uint32_t boot_log[BOOT_N + BOOT_SLACK];
+static volatile bool boot_logging;
+static bool boot_armed;   // a release has happened since power-up
+static bool held_2068 = true;
 
 // When both programs sample /ROSCS and /EXROM, in PIO cycles after the strobe
 // is seen. 14 is the earliest bus_fetch can (it reads the address first).
@@ -219,8 +230,29 @@ static void timing_add(timing_t *t, uint32_t cycles) {
     t->hist[b < HIST_N ? b : HIST_N - 1]++;
 }
 
+#define RING_BITS (DMA_CH0_CTRL_TRIG_RING_SEL_BITS | DMA_CH0_CTRL_TRIG_RING_SIZE_BITS)
+
+static void log_to_ring(void) {
+    hw_write_masked(&dma_hw->ch[ch_log].al1_ctrl,
+                    DMA_CH0_CTRL_TRIG_RING_SEL_BITS | (14u << DMA_CH0_CTRL_TRIG_RING_SIZE_LSB), RING_BITS);
+    dma_channel_set_write_addr(ch_log, addr_log, false);
+}
+
+// Only while the 2068 is held, so ch_log is idle.
+static void log_boot(void) {
+    memset(boot_log, 0xff, sizeof boot_log);
+    hw_write_masked(&dma_hw->ch[ch_log].al1_ctrl, 0, RING_BITS);
+    dma_channel_set_write_addr(ch_log, boot_log, false);
+    boot_logging = true;
+    boot_armed = true;
+}
+
 static void core1_main(void) {
     for (;;) {
+        if (boot_logging && dma_hw->ch[ch_log].write_addr >= (uint32_t)&boot_log[BOOT_N]) {
+            log_to_ring();
+            boot_logging = false;
+        }
         if (timing_reset) {
             memset(&t_strobe, 0, sizeof t_strobe);
             memset(&t_ready, 0, sizeof t_ready);
@@ -274,6 +306,32 @@ static void print_addresses(void) {
     printf("\n");
 }
 
+static void print_boot(uint start) {
+    if (!boot_armed) {
+        printf("  the 2068 has not been released yet ('g')\n");
+        return;
+    }
+    uint logged = boot_logging ? (dma_hw->ch[ch_log].write_addr - (uint32_t)boot_log) / 4 : BOOT_N;
+    if (start >= logged) {
+        printf("  %u reads logged since the last release\n", logged);
+        return;
+    }
+    uint end = start + 64 < logged ? start + 64 : logged;
+    printf("  reads %u-%u after the last release (address, class, byte served; 'b %u' for more):\n", start,
+           end - 1, end);
+    const uint8_t *img = (const uint8_t *)IMAGE_REGION;
+    for (uint i = start; i < end; i++) {
+        if ((i - start) % 8 == 0) printf("  %4u ", i);
+        uint32_t p = boot_log[i];
+        uint addr = (p >> 2) & 0xffff, cls = p & 3;
+        char tag = cls == CLASS_EXROM ? 'E' : cls == CLASS_DOCK ? 'D' : cls == CLASS_HOME ? (addr < 0x4000 ? 'H' : 'r') : '?';
+        if ((p >> 18) != IMAGE_PREFIX) printf(" %08lx!   ", p);
+        else if (tag == 'r' || tag == '?') printf(" %04x%c --", addr, tag);
+        else printf(" %04x%c %02x", addr, tag, img[p & 0x3ffff]);
+        printf((i - start) % 8 == 7 || i == end - 1 ? "\n" : "");
+    }
+}
+
 static void print_stats(uint32_t *last, absolute_time_t *since) {
     uint32_t now[4];
     for (int i = 0; i < 4; i++) now[i] = counts[i];
@@ -294,6 +352,12 @@ static void print_stats(uint32_t *last, absolute_time_t *since) {
 // ---- 2068 reset ---------------------------------------------------------------
 
 static void hold_2068(bool hold) {
+    if (!hold && held_2068) {
+        // Releasing: record the boot from the first read, and time it fresh.
+        log_boot();
+        timing_reset = true;
+    }
+    held_2068 = hold;
     gpio_put(PIN_RESET_HOLD, hold);
     gpio_set_dir(PIN_RESET_HOLD, GPIO_OUT);
 }
@@ -307,6 +371,7 @@ static void help(void) {
            "  w        read counts every second until a key is pressed\n"
            "  m        timing: strobe length, strobe-to-byte, worst-case margin (then resets)\n"
            "  a        the last 32 addresses captured\n"
+           "  b [n]    reads n to n+63 after the last release from reset (default 0)\n"
            "  t [n]    show or set when /ROSCS and /EXROM are sampled: %d-%d PIO cycles (6.67 ns) after the strobe\n"
            "  ?        this help\n"
            "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
@@ -369,6 +434,12 @@ int main(void) {
         case 's': print_stats(last, &since); break;
         case 'm': print_margin(); break;
         case 'a': print_addresses(); break;
+        case 'b': {
+            uint n = 0;
+            sscanf(line + 1, "%u", &n);
+            print_boot(n);
+            break;
+        }
         case 'w':
             printf("  any key stops\n");
             while (getchar_timeout_us(0) < 0) {

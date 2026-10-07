@@ -112,6 +112,10 @@ drives the 2068: the 2068 runs on its own ROM.
 - `a` prints the last 32 addresses the card captured, from a third DMA
   channel that logs every pointer. ROM code shows up as runs of nearly
   consecutive addresses, which checks both address bytes.
+- `b [n]` prints the first reads after the last release from reset (`g` or
+  `r`): the first 4096 are kept separately, with the byte served for each.
+  The Z80 starts fetching at 0000, so this checks address capture from the
+  very first cycle against a known sequence.
 
 Timing markers on J3 (take the OLED off):
 
