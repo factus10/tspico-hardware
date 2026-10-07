@@ -22,7 +22,11 @@
  *
  * Images at 0x20040000 (memmap_bus.ld): the byte for (address, slot) is at
  * IMAGE_REGION + 4 * address + slot; slot 0 HOME (copyright line marked), slot
- * 1 EXROM (mirrored), slot 2 DOCK ("TS-PICO DOCK" at 0x8000).
+ * 1 EXROM (mirrored), slot 2 DOCK ("TS-PICO DOCK" at 0x8000). HOME and EXROM
+ * come from the TS-Pico ROM (16K EXROM) or the stock 2068's ('m').
+ *
+ * The TS-Pico protocol responder (docs/PROTOCOL.md in the firmware repo) runs
+ * on core 0 from the menu loop: SYNC, pre-header, command body, answer, tail.
  *
  * The 2068 is held in reset until 'g'. USB serial menu: '?' for help.
  */
@@ -43,8 +47,8 @@
 #include "board.h"
 #include "bus_card.pio.h"
 
-extern const unsigned char rom_home[], rom_exrom[];
-extern const unsigned rom_home_len, rom_exrom_len;
+extern const unsigned char rom_home[], rom_exrom[], rom_tspico[];
+extern const unsigned rom_home_len, rom_exrom_len, rom_tspico_len;
 
 #define IMAGE_REGION 0x20040000u
 #define IMAGE_PREFIX (IMAGE_REGION >> 18)
@@ -93,13 +97,33 @@ static volatile uint32_t mem_writes, dock_writes;
 // ---- ports 0Eh / 0Fh ---------------------------------------------------------
 
 // Reply queue for IN 0Eh (empty reads 00h), and the status byte IN 0Fh returns.
-// Any OUT to 0Eh/0Fh makes the status 00h (busy), as v2.1's PIO did; in echo
-// mode core 1 then queues the byte and sets the status back to FFh.
-#define TXQ_N 256
+// Any OUT to 0Eh/0Fh makes the status 00h (busy), as v2.1's PIO did, and goes
+// to the receive queue for the protocol responder on core 0 (port 0Fh as
+// 0x100 | data). In echo mode core 1 instead queues OUT 0Eh bytes for IN 0Eh
+// and sets the status back to FFh.
+#define TXQ_N 1024
 static volatile uint8_t txq[TXQ_N];
-static volatile uint32_t txq_head, txq_tail;     // head written by core 0 or core 1
+static volatile uint32_t txq_head, txq_tail;     // head: core 0 (core 1 in echo mode); tail: core 1
+#define RXQ_N 1024
+static volatile uint16_t rxq[RXQ_N];
+static volatile uint32_t rxq_head, rxq_tail;     // head: core 1; tail: core 0
+static volatile uint32_t rxq_lost;
 static volatile uint8_t io_status = 0xff;
-static volatile bool echo_mode = true;
+static volatile bool echo_mode = false;
+// Protocol trace, kept by core 1 (it sees every exchange): time in us, and a
+// kind: 'O' OUT 0Eh, 'S' OUT 0Fh, 'I' IN 0Eh, 'F' IN 0Fh when the status read
+// differs from the last one traced.
+#define TRACE_N 512
+static uint32_t trace_t[TRACE_N];
+static uint16_t trace_v[TRACE_N];
+static volatile uint32_t trace_n;
+static uint16_t trace_last_status = 0x100;   // none yet
+static void __not_in_flash_func(trace)(char kind, uint8_t v) {
+    uint32_t i = trace_n % TRACE_N;
+    trace_t[i] = timer_hw->timerawl;
+    trace_v[i] = (uint16_t)(kind << 8 | v);
+    trace_n++;
+}
 static volatile uint32_t io_ins, io_in_ours, io_outs_ours, io_in_late;
 // Core 1's worst gap between checks of nIORD, and worst time from noticing an IN
 // to U3 on, in core cycles (DWT counter).
@@ -109,25 +133,72 @@ static volatile bool in_handling = true;    // 'n 0' leaves every IN alone
 #define IOLOG_N 32
 static volatile uint32_t iolog[IOLOG_N];    // last I/O writes: port << 8 | data
 static volatile uint32_t iolog_n;
+static volatile uint32_t iolog_pos[IOLOG_N];   // read-log position at each, for the snapshot
+
+// Snapshot of the read log around a trigger ('z'): the first OUT to port FEh
+// (the beeper) with the EXROM paged in, then SNAP_AFTER more reads.
+#define SNAP_AFTER 3000
+static uint32_t snap[LOG_N];
+static volatile bool snap_armed, snap_waiting, snap_ready;
+static volatile uint32_t snap_trig;     // ring position of the trigger
+static volatile uint32_t snap_base;     // ring position of snap[0]
+// Memory writes (address << 8 | data) with the read-log position at each; the
+// snapshot copies the last WLOG_N.
+#define WLOG_N 2048
+static uint32_t wlog[WLOG_N], wlog_pos[WLOG_N], wsnap[WLOG_N], wsnap_pos[WLOG_N];
+static volatile uint32_t wlog_n, wsnap_n;
+static uint32_t iosnap[IOLOG_N], iosnap_pos[IOLOG_N];
+static volatile uint32_t iosnap_n;
+static volatile bool side_frozen;
+
+// Copy the write and I/O logs: when the Z80 is seen back at 0000h after the
+// trigger (a restart), or when the read snapshot is taken.
+static void __not_in_flash_func(freeze_side_logs)(void) {
+    uint32_t wn = wlog_n, wf = wn > WLOG_N ? wn - WLOG_N : 0;
+    for (uint32_t i = wf; i < wn; i++) {
+        wsnap[i - wf] = wlog[i % WLOG_N];
+        wsnap_pos[i - wf] = wlog_pos[i % WLOG_N];
+    }
+    wsnap_n = wn - wf;
+    uint32_t n = iolog_n, f = n > IOLOG_N ? n - IOLOG_N : 0;
+    for (uint32_t i = f; i < n; i++) {
+        iosnap[i - f] = iolog[i % IOLOG_N];
+        iosnap_pos[i - f] = iolog_pos[i % IOLOG_N];
+    }
+    iosnap_n = n - f;
+    side_frozen = true;
+}
 
 static uint ns(uint32_t cycles) { return (uint)((uint64_t)cycles * 1000000000u / clock_get_hz(clk_sys)); }
 
 // ---- images -----------------------------------------------------------------
 
-static void load_images(void) {
+// The ROM set the card serves: the TS-Pico ROM (HOME, then a 16K EXROM) or the
+// stock 2068's (8K EXROM, mirrored). Either way the copyright line is marked.
+static bool tspico_rom = true;
+
+static void load_roms(void) {
     uint8_t *r = (uint8_t *)IMAGE_REGION;
-    memset(r, 0xff, 256 * 1024);
+    const uint8_t *home = tspico_rom ? rom_tspico : rom_home;
+    const uint8_t *exrom = tspico_rom ? rom_tspico + 0x4000 : rom_exrom;
+    uint exrom_len = tspico_rom ? rom_tspico_len - 0x4000 : rom_exrom_len;
     for (uint a = 0; a < 0x10000; a++) {
-        if (a < rom_home_len) r[4 * a + SLOT_HOME] = rom_home[a];
-        r[4 * a + SLOT_EXROM] = rom_exrom[a % rom_exrom_len];
+        r[4 * a + SLOT_HOME] = a < 0x4000 ? home[a] : 0xff;
+        r[4 * a + SLOT_EXROM] = exrom[a % exrom_len];
     }
     static const char from[] = "Timex Computer", to[] = "TS-Pico v3 ROM";
-    for (uint a = 0; a + sizeof from - 1 <= rom_home_len; a++) {
-        if (memcmp(&rom_home[a], from, sizeof from - 1) == 0) {
+    for (uint a = 0; a + sizeof from - 1 <= 0x4000; a++) {
+        if (memcmp(&home[a], from, sizeof from - 1) == 0) {
             for (uint k = 0; k < sizeof to - 1; k++) r[4 * (a + k) + SLOT_HOME] = (uint8_t)to[k];
             break;
         }
     }
+}
+
+static void load_images(void) {
+    uint8_t *r = (uint8_t *)IMAGE_REGION;
+    memset(r, 0xff, 256 * 1024);
+    load_roms();
     static const char dock_mark[] = "TS-PICO DOCK";
     for (uint k = 0; k < sizeof dock_mark - 1; k++) r[4 * (0x8000 + k) + SLOT_DOCK] = (uint8_t)dock_mark[k];
 }
@@ -337,7 +408,7 @@ static void __not_in_flash_func(handle_in)(void) {
         uint8_t reply;
         if (port & 1) {
             reply = io_status;
-        } else if (txq_tail != txq_head) {
+        } else if ((int32_t)(txq_head - txq_tail) > 0) {
             reply = txq[txq_tail % TXQ_N];
             txq_tail++;
         } else {
@@ -349,6 +420,12 @@ static void __not_in_flash_func(handle_in)(void) {
         io_in_ours++;
         uint32_t dt = m33_hw->dwt_cyccnt - t0c;
         if (dt > respond_max) respond_max = dt;
+        if (!(port & 1)) {
+            trace('I', reply);
+        } else if (reply != trace_last_status) {
+            trace('F', reply);
+            trace_last_status = reply;
+        }
     }
     // Wait for the strobe to end, with a timeout so U3 can never stay on.
     uint32_t t0 = timer_hw->timerawl;
@@ -386,8 +463,16 @@ static void __not_in_flash_func(core1_main)(void) {
             uint32_t w = pio_addr->rxf[sm_snoop];
             uint port = (w >> 8) & 0xff, data = w & 0xff;
             io_writes++;
+            uint32_t pos = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
             iolog[iolog_n % IOLOG_N] = w & 0xffff;
+            iolog_pos[iolog_n % IOLOG_N] = pos;
             iolog_n++;
+            if (snap_armed && port == 0xfe && (sh_ff & 0x80) && sh_hsr) {
+                snap_armed = false;
+                snap_trig = pos;
+                side_frozen = false;
+                snap_waiting = true;
+            }
             bool changed = false;
             if (port == 0xf4) { changed = sh_hsr != data; sh_hsr = (uint8_t)data; f4_writes++; }
             if (port == 0xff) { changed = (sh_ff ^ data) & 0x80; sh_ff = (uint8_t)data; ff_writes++; }
@@ -395,12 +480,19 @@ static void __not_in_flash_func(core1_main)(void) {
             if ((port & 0xfe) == 0x0e) {
                 io_status = 0x00;             // busy until the firmware answers
                 io_outs_ours++;
+                trace(port & 1 ? 'S' : 'O', (uint8_t)data);
                 if (echo_mode) {
                     if (port == 0x0e) {
                         txq[txq_head % TXQ_N] = (uint8_t)data;
                         txq_head++;
                     }
                     io_status = 0xff;
+                } else if (rxq_head - rxq_tail < RXQ_N) {
+                    rxq[rxq_head % RXQ_N] = (uint16_t)((port & 1) << 8 | data);
+                    __dmb();
+                    rxq_head++;
+                } else {
+                    rxq_lost++;
                 }
             }
             continue;
@@ -411,11 +503,25 @@ static void __not_in_flash_func(core1_main)(void) {
             uint32_t w = pio_addr->rxf[sm_write];
             uint addr = (w >> 8) & 0xffff;
             mem_writes++;
+            wlog[wlog_n % WLOG_N] = w & 0xffffff;
+            wlog_pos[wlog_n % WLOG_N] = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+            wlog_n++;
             if (dock_on && ((sh_hsr >> (addr >> 13)) & 1) && !(sh_ff & 0x80)) {
                 ((uint8_t *)IMAGE_REGION)[4 * addr + SLOT_DOCK] = (uint8_t)w;
                 dock_writes++;
             }
             continue;
+        }
+        if (snap_waiting && !boot_logging) {
+            uint32_t now = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+            if (((now - snap_trig) & (LOG_N - 1)) >= SNAP_AFTER) {
+                for (uint i = 0; i < LOG_N; i++) snap[i] = addr_log[(now + i) & (LOG_N - 1)];
+                snap_trig = (snap_trig - now) & (LOG_N - 1);   // now an index into snap
+                snap_base = now & (LOG_N - 1);
+                if (!side_frozen) freeze_side_logs();
+                snap_waiting = false;
+                snap_ready = true;
+            }
         }
         if (boot_logging && dma_hw->ch[ch_log].write_addr >= (uint32_t)&boot_log[BOOT_N]) {
             log_to_ring();
@@ -425,12 +531,205 @@ static void __not_in_flash_func(core1_main)(void) {
         if (!boot_logging) {
             uint32_t now = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
             if (ring_seen != now) {
-                uint slot = addr_log[ring_seen] & 3;
+                uint32_t e = addr_log[ring_seen];
+                uint slot = e & 3;
                 if (slot < 3) served[slot]++;
+                if (snap_waiting && !side_frozen && slot == SLOT_HOME && ((e >> 2) & 0xffff) < 8) freeze_side_logs();
                 ring_seen = (ring_seen + 1) & (LOG_N - 1);
             }
         }
     }
+}
+
+// ---- the TS-Pico protocol ------------------------------------------------------
+
+// The responder (docs/PROTOCOL.md in the firmware repo, firmware 2.2.1). Core 0
+// runs it from the menu loop: core 1 has already made the status busy for each
+// OUT and queued the byte. Every transaction opens with a SYNC (any OUT to
+// 0Fh): both queues emptied, exactly one 0x01 staged (the pre-load the ROM reads
+// straight after the pre-header), status idle. Then a 10-byte pre-header; for a
+// command ('B', TADDR 0-3) a body ('D', LEN, text, XOR) and one answer, after
+// which the tail stages the next 0x01. Only tpi:info and tpi:nop are known so
+// far; LOAD/SAVE blocks and the printer are answered RECOVERED (Report T).
+
+#define ST_IDLE      0xff   // READY + IDLE
+#define ST_MID       0xf7   // READY, transaction open
+#define ST_RECOVERED 0xfb   // READY + IDLE, RECOVERED (bit 2) low
+#define BODY_MAX     300
+#define GIVE_UP_US   1000000u     // a half-received pre-header or body
+#define TAIL_MAX_US  10000000u    // an answer nobody reads
+
+enum { P_PRE, P_BODY, P_TAIL };
+static uint p_state = P_PRE;
+static uint8_t pre[10], body[BODY_MAX + 4];
+static uint pre_n, body_n, body_len;
+static uint32_t p_since;
+static uint32_t p_syncs, p_cmds, p_gave_up, p_unsupported, p_xor_bad, p_stray;
+static uint8_t p_last_pre[10], p_last_answer;
+static char p_last_cmd[48];
+
+static void tx_put(uint8_t b) {
+    txq[txq_head % TXQ_N] = b;
+    __dmb();
+    txq_head++;
+}
+
+static void set_status(uint8_t st) {
+    __dmb();   // queued bytes first: the Z80 reads 0Eh the moment it sees READY
+    io_status = st;
+}
+
+// Empty both queues, stage one 0x01, and say idle (or recovered).
+static void to_idle(bool recovered) {
+    uint32_t t;
+    do {
+        t = txq_tail;
+        txq_head = t;
+    } while (txq_tail != t);
+    rxq_tail = rxq_head;
+    tx_put(0x01);
+    pre_n = 0;
+    p_state = P_PRE;
+    set_status(recovered ? ST_RECOVERED : ST_IDLE);
+}
+
+static void answer(const uint8_t *b, uint n) {
+    for (uint i = 0; i < n; i++) tx_put(b[i]);
+    p_last_answer = b[0];
+    set_status(ST_IDLE);
+    p_state = P_TAIL;
+    p_since = time_us_32();
+}
+
+// Response function $81: print the text, then status st.
+static void answer_text(uint8_t st, const char *text) {
+    static uint8_t b[256];
+    uint n = 0;
+    b[n++] = 0x81;
+    b[n++] = st;
+    b[n++] = 0x0d;
+    while (*text && n < sizeof b - 1) b[n++] = (uint8_t)*text++;
+    b[n++] = 0x00;
+    answer(b, n);
+}
+
+static void run_command(void) {
+    uint len = body[1] | body[2] << 8;
+    uint8_t x = 0;
+    for (uint i = 0; i < 3 + len; i++) x ^= body[i];
+    // The command word, upper-cased, up to the first space (as the firmware).
+    uint n = 0;
+    for (; n < len && n < sizeof p_last_cmd - 1 && body[3 + n] != ' '; n++) {
+        char c = (char)body[3 + n];
+        p_last_cmd[n] = c >= 'a' && c <= 'z' ? c - 32 : c;
+    }
+    p_last_cmd[n] = 0;
+    p_cmds++;
+    if (body[0] != 'D' || len + 4 != body_len || x != body[3 + len]) {
+        p_xor_bad++;
+        uint8_t st = 2;   // Report R
+        answer(&st, 1);
+        return;
+    }
+    static char msg[200];
+    if (pre[1] != 0) {
+        // LOAD "tpi:name": mounting; there are no files yet.
+        snprintf(msg, sizeof msg, "TS-Pico v3: no files yet\r(%s)", p_last_cmd);
+        answer_text(3, msg);   // Report F
+    } else if (strcmp(p_last_cmd, "TPI:NOP") == 0) {
+        uint8_t st = 1;
+        answer(&st, 1);
+    } else if (strcmp(p_last_cmd, "TPI:INFO") == 0) {
+        snprintf(msg, sizeof msg,
+                 "TS-Pico v3 card, RP2350B\r"
+                 "Clock %lu MHz\r"
+                 "ROM %s, from the card\r"
+                 "Bring-up responder: tpi:info\r"
+                 "and tpi:nop so far",
+                 clock_get_hz(clk_sys) / 1000000, tspico_rom ? "TS-Pico 2.2" : "stock 2068");
+        answer_text(1, msg);
+    } else {
+        snprintf(msg, sizeof msg, "TS-Pico v3: %.24s\ris not here yet", p_last_cmd);
+        answer_text(5, msg);   // Report C, as an unknown command
+    }
+}
+
+static void pre_done(void) {
+    memcpy(p_last_pre, pre, sizeof pre);
+    uint len = pre[7] | pre[8] << 8;
+    if (pre[0] == 'B' && pre[1] <= 3 && len <= BODY_MAX) {
+        body_len = len + 4;
+        body_n = 0;
+        p_state = P_BODY;
+        p_since = time_us_32();
+        set_status(ST_MID);   // ready for the body
+    } else {
+        p_unsupported++;
+        to_idle(true);
+    }
+}
+
+static void proto_poll(void) {
+    if (echo_mode) return;
+    while (rxq_tail != rxq_head) {
+        uint16_t w = rxq[rxq_tail % RXQ_N];
+        rxq_tail++;
+        if (w & 0x100) {          // any OUT to 0Fh: SYNC / abort
+            p_syncs++;
+            to_idle(false);
+            continue;
+        }
+        uint8_t b = (uint8_t)w;
+        p_since = time_us_32();
+        if (p_state == P_PRE) {
+            pre[pre_n++] = b;
+            if (pre_n == sizeof pre) pre_done();
+        } else if (p_state == P_BODY) {
+            body[body_n++] = b;
+            if (body_n == body_len) run_command();
+        } else {
+            p_stray++;            // a byte while the answer is out (key replies: not yet)
+        }
+    }
+    uint32_t idle = time_us_32() - p_since;
+    if ((p_state == P_PRE && pre_n > 0 && idle > GIVE_UP_US) || (p_state == P_BODY && idle > GIVE_UP_US)) {
+        p_gave_up++;
+        to_idle(true);
+    } else if (p_state == P_TAIL) {
+        if (txq_head == txq_tail) {   // the Z80 has read the answer: stage the next pre-load
+            tx_put(0x01);
+            pre_n = 0;
+            p_state = P_PRE;
+            set_status(ST_IDLE);
+        } else if (idle > TAIL_MAX_US) {
+            p_gave_up++;
+            to_idle(true);
+        }
+    }
+}
+
+static void print_trace(uint n) {
+    uint32_t end = trace_n, first = end > n ? end - n : 0;
+    if (end - first > TRACE_N) first = end - TRACE_N;
+    printf("  protocol trace, %lu events (O OUT 0Eh, S OUT 0Fh, I IN 0Eh, F status read when it changed;\n"
+           "  +us since the previous event):\n",
+           end);
+    for (uint32_t i = first, col = 0; i < end; i++, col++) {
+        uint32_t k = i % TRACE_N, dt = i ? trace_t[k] - trace_t[(i - 1) % TRACE_N] : 0;
+        printf("%s %c%02x+%lu", col % 8 ? "" : "\n ", trace_v[k] >> 8, trace_v[k] & 0xff, dt);
+    }
+    printf("\n");
+}
+
+static void print_proto(void) {
+    static const char *const names[] = {"pre-header", "body", "answer out"};
+    printf("  protocol %s: state %s, status %02x, TX %ld, RX %lu (lost %lu)\n", echo_mode ? "off (echo mode)" : "on",
+           names[p_state], io_status, (long)(txq_head - txq_tail), rxq_head - rxq_tail, rxq_lost);
+    printf("  SYNCs %lu, commands %lu (bad XOR %lu), unsupported %lu, gave up %lu, stray bytes %lu\n", p_syncs, p_cmds,
+           p_xor_bad, p_unsupported, p_gave_up, p_stray);
+    printf("  last pre-header:");
+    for (uint i = 0; i < sizeof p_last_pre; i++) printf(" %02x", p_last_pre[i]);
+    printf("; last command %s, answer %02x\n", p_last_cmd[0] ? p_last_cmd : "-", p_last_answer);
 }
 
 // ---- reports ------------------------------------------------------------------
@@ -549,6 +848,9 @@ static void hold_2068(bool hold) {
         iolog_n = 0;
         mem_writes = dock_writes = 0;
         write_table();
+        if (!echo_mode) to_idle(false);   // as the Pico at power-up: one 0x01 staged
+        trace_n = 0;
+        trace_last_status = 0x100;
     }
     held_2068 = hold;
     gpio_put(PIN_RESET_HOLD, hold);
@@ -561,7 +863,10 @@ static void help(void) {
            "  s / w       reads the card took, since the last 's' / every second until a key\n"
            "  o           ports 0Eh/0Fh: INs, OUTs, status, reply queue\n"
            "  n [0|1]     IN handling (0 leaves every IN to the 2068)\n"
-           "  p [0|1]     echo mode: OUT 0Eh bytes come back on IN 0Eh\n"
+           "  t           the TS-Pico protocol responder: state, counts, last command\n"
+           "  l [n]       the last n protocol events (64)\n"
+           "  p [0|1]     echo mode in place of the responder: OUT 0Eh bytes come back on IN 0Eh\n"
+           "  m [0|1]     ROM set: 1 TS-Pico (default), 0 stock 2068 (2068 must be held)\n"
            "  u [n]       set the status byte IN 0Fh returns (hex)\n"
            "  a           the last 32 reads the card took\n"
            "  b [n]       reads n to n+63 after the last release\n"
@@ -579,7 +884,8 @@ static void help(void) {
 static int read_line(char *buf, int len) {
     int n = 0;
     for (;;) {
-        int c = getchar_timeout_us(100 * 1000);
+        proto_poll();
+        int c = getchar_timeout_us(0);
         if (c == PICO_ERROR_TIMEOUT) continue;
         if (c == '\r' || c == '\n') {
             if (n == 0) continue;
@@ -614,6 +920,7 @@ int main(void) {
 
     busctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
     load_images();
+    to_idle(false);
     bus_start();
     hold_2068(true);
     multicore_launch_core1(core1_main);
@@ -643,7 +950,7 @@ int main(void) {
         case 'w':
             printf("  any key stops\n");
             while (getchar_timeout_us(0) < 0) {
-                sleep_ms(1000);
+                for (absolute_time_t t = make_timeout_time_ms(1000); !time_reached(t);) proto_poll();
                 print_stats(last, &since);
             }
             break;
@@ -657,8 +964,46 @@ int main(void) {
             printf("  IN handling %s\n", in_handling ? "on" : "off: every IN left to the 2068");
             break;
         case 'p':
-            if (sscanf(line + 1, "%u", &v) == 1) echo_mode = v != 0;
+            if (sscanf(line + 1, "%u", &v) == 1) {
+                echo_mode = v != 0;
+                if (!echo_mode) to_idle(false);
+            }
             print_io();
+            break;
+        case 't': print_proto(); break;
+        case 'z':
+            snap_ready = snap_waiting = false;
+            snap_armed = true;
+            printf("  armed: the next beep with the EXROM paged in\n");
+            break;
+        case 'Z':
+            if (!snap_ready) {
+                printf("  no snapshot (%s)\n", snap_armed ? "armed" : snap_waiting ? "filling" : "not armed");
+                break;
+            }
+            printf("SNAP %lu %lu\n", snap_trig, snap_base);
+            for (uint i = 0; i < LOG_N; i++) printf("%08lx%c", snap[i], i % 8 == 7 ? '\n' : ' ');
+            printf("IO");
+            for (uint32_t i = 0; i < iosnap_n; i++) printf(" %04lx@%lu", iosnap[i], iosnap_pos[i]);
+            printf("\nW");
+            for (uint32_t i = 0; i < wsnap_n; i++) printf(" %06lx@%lu", wsnap[i], wsnap_pos[i]);
+            printf("\nEND\n");
+            break;
+        case 'l': {
+            uint n = 64;
+            sscanf(line + 1, "%u", &n);
+            print_trace(n);
+            break;
+        }
+        case 'm':
+            if (sscanf(line + 1, "%u", &v) == 1) {
+                if (!held_2068) printf("  hold the 2068 first ('h')\n");
+                else {
+                    tspico_rom = v != 0;
+                    load_roms();
+                }
+            }
+            printf("  ROM set: %s\n", tspico_rom ? "TS-Pico (HOME + 16K EXROM)" : "stock 2068");
             break;
         case 'u':
             if (sscanf(line + 1, "%x", &v) == 1) io_status = (uint8_t)v;

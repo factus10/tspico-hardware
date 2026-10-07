@@ -96,6 +96,23 @@ add_executable(bus_card bus_card.c board.c)
 pico_generate_pio_header(bus_card ${CMAKE_CURRENT_LIST_DIR}/bus_card.pio)
 embed_binary(bus_card rom_home ${TSPICO_ROM_DIR}/GENUINE-2068-home.bin)
 embed_binary(bus_card rom_exrom ${TSPICO_ROM_DIR}/GENUINE-2068-exrom.bin)
+
+# The TS-Pico ROM (32K: HOME, then the 16K EXROM). By default it comes from the
+# firmware repo's origin/main with `git show`, so the checkout is left alone.
+set(TSPICO_FIRMWARE_REPO "$ENV{HOME}/Documents/github/tspico-firmware-build" CACHE PATH
+	"The TS-Pico firmware repo, for the TS-Pico ROM")
+set(TSPICO_ROM "" CACHE FILEPATH "The TS-Pico ROM image; empty takes src/rom/TSPICO-22.ROM from origin/main")
+if(TSPICO_ROM)
+	set(tspico_rom_file ${TSPICO_ROM})
+else()
+	set(tspico_rom_file ${CMAKE_CURRENT_BINARY_DIR}/TSPICO-22.ROM)
+	execute_process(COMMAND git -C ${TSPICO_FIRMWARE_REPO} show origin/main:src/rom/TSPICO-22.ROM
+		OUTPUT_FILE ${tspico_rom_file} RESULT_VARIABLE git_result)
+	if(NOT git_result EQUAL 0)
+		message(FATAL_ERROR "couldn't take TSPICO-22.ROM from ${TSPICO_FIRMWARE_REPO}; set TSPICO_ROM")
+	endif()
+endif()
+embed_binary(bus_card rom_tspico ${tspico_rom_file})
 target_link_libraries(bus_card
 	pico_stdlib
 	pico_multicore

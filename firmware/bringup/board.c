@@ -21,10 +21,12 @@ void board_safe_init(void) {
         gpio_put(low_outs[i], 0);
         gpio_set_dir(low_outs[i], GPIO_OUT);
     }
-    // MD bus: inputs with pull-downs (all three buffers are off).
+    // MD bus: plain inputs (all three buffers are off). No pulls: MD is only
+    // sampled while a buffer drives it, and RP2350 erratum E9 can latch a pad
+    // with its input and pull-down both enabled at about 2 V.
     for (uint p = PIN_MD0; p < PIN_MD0 + 8; p++) {
         gpio_init(p);
-        gpio_pull_down(p);
+        gpio_disable_pulls(p);
     }
     // Bus-side inputs: plain inputs.
     for (uint p = PIN_Z80_A14; p <= PIN_TAPE_IN; p++) {
