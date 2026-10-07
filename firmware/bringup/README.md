@@ -160,6 +160,19 @@ Each marker lags the event inside the chip by two or three PIO cycles (about
   0000 a couple of hundred times, with some reads cut short (down to about
   250 ns), before it starts properly. That happens at power-on too.
 
+### Serving the HOME ROM (step 3, board 1, 2026-10-07)
+
+`e 1` (with the 2068 held) swaps `bus_decide` for `bus_serve`, which serves
+HOME ROM reads for real: it asserts /BE once the class is known, enables U3
+when `bus_fetch` signals the byte is on MD, and releases both when the strobe
+ends. EXROM, DOCK and RAM reads are left to the 2068. The served copy of the
+ROM reads "TS-Pico v3 ROM" where the 2068's says "Timex Computer", so the boot
+screen shows which one answered.
+
+On board 1 the 2068 booted to "(c) 1983 TS-Pico v3 ROM Corp" and settled in
+its normal idle loop: about 2.5 million HOME reads served in five seconds,
+with the byte on MD 200 ns after the strobe, the same as in shadow mode.
+
 ## Board notes from proto1
 
 - GP8-GP10 (nAEN_LO, nAEN_HI, nDATA_OE) have no external pull-ups. The RP2350

@@ -22,7 +22,12 @@
  *    after each release from reset are kept separately ('b'): the Z80's start
  *    at 0000 is a known sequence, which checks address capture from cycle one.
  *
- * The 2068 is held in reset until the 'g' command. USB serial menu: 'h' for help.
+ * Serve mode ('e 1', step 3 of the plan): bus_serve replaces bus_decide and
+ * serves HOME ROM reads for real, asserting /BE and enabling U3. The served copy
+ * of the ROM has its copyright line changed to "TS-Pico v3 ROM", so the boot
+ * screen shows whether the card or the 2068's own ROM answered.
+ *
+ * The 2068 is held in reset until the 'g' command. USB serial menu: '?' for help.
  */
 #include <stdio.h>
 #include <string.h>
@@ -58,6 +63,9 @@ extern const unsigned rom_home_len, rom_exrom_len;
 
 static const PIO pio_decide = pio0, pio_fetch = pio1, pio_mark = pio2;
 static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_strobe, sm_ready;
+static bool sm_fetch_loaded;               // set_settle can patch bus_fetch
+static bool serving;                         // bus_serve loaded in PIO0 instead of bus_decide
+static const pio_program_t *prog_pio0;
 static int ch_ptr, ch_data, ch_log;
 
 // Every pointer bus_fetch pushes, copied here by ch_log (a 16 KB DMA ring).
@@ -112,6 +120,16 @@ static void load_images(void) {
         r[4 * a + CLASS_EXROM] = rom_exrom[a % rom_exrom_len];
     }
     // No cartridge: DOCK reads find 0xff.
+
+    // Mark the served copy so the boot screen shows who answered: the 2068's
+    // "(c) 1983 Timex Computer Corp" becomes "(c) 1983 TS-Pico v3 ROM Corp".
+    static const char from[] = "Timex Computer", to[] = "TS-Pico v3 ROM";
+    for (uint a = 0; a + sizeof from - 1 <= rom_home_len; a++) {
+        if (memcmp(&rom_home[a], from, sizeof from - 1) == 0) {
+            for (uint k = 0; k < sizeof to - 1; k++) r[4 * (a + k) + CLASS_HOME] = (uint8_t)to[k];
+            break;
+        }
+    }
 }
 
 // ---- PIO --------------------------------------------------------------------
@@ -121,8 +139,10 @@ static void set_settle(uint cycles) {
     if (cycles > SETTLE_MAX) cycles = SETTLE_MAX;
     settle = cycles;
     // Cycles before each program's `mov osr, pins` (see bus.pio).
-    pio_fetch->instr_mem[off_fetch + bus_fetch_offset_class_settle] = pio_encode_set(pio_y, cycles - settle_min());
-    pio_decide->instr_mem[off_decide + bus_decide_offset_decide_settle] = pio_encode_set(pio_y, cycles - 3);
+    if (sm_fetch_loaded)
+        pio_fetch->instr_mem[off_fetch + bus_fetch_offset_class_settle] = pio_encode_set(pio_y, cycles - settle_min());
+    uint at = serving ? bus_serve_offset_serve_settle : bus_decide_offset_decide_settle;
+    pio_decide->instr_mem[off_decide + at] = pio_encode_set(pio_y, cycles - 3);
 }
 
 static void set_mux_delays(uint hi, uint lo) {
@@ -131,6 +151,39 @@ static void set_mux_delays(uint hi, uint lo) {
     pio_fetch->instr_mem[off_fetch + bus_fetch_offset_hi_delay] = pio_encode_set(pio_y, hi_delay);
     pio_fetch->instr_mem[off_fetch + bus_fetch_offset_lo_delay] = pio_encode_set(pio_y, lo_delay);
     set_settle(settle);   // the class sample moves with them
+}
+
+// Loads bus_decide (shadow) or bus_serve into PIO0. Only while the 2068 is held:
+// no reads are happening, so nothing is half-served.
+static void load_pio0(bool serve) {
+    pio_sm_set_enabled(pio_decide, sm_decide, false);
+    if (prog_pio0) pio_remove_program(pio_decide, prog_pio0, off_decide);
+    // U3 off and /BE released through the SIO while the programs change over.
+    gpio_put(PIN_NDATA_OE, 1);
+    gpio_put(PIN_BE_REQ, 0);
+    gpio_set_function(PIN_NDATA_OE, GPIO_FUNC_SIO);
+    gpio_set_function(PIN_BE_REQ, GPIO_FUNC_SIO);
+
+    prog_pio0 = serve ? &bus_serve_program : &bus_decide_program;
+    off_decide = pio_add_program(pio_decide, prog_pio0);
+    pio_sm_config c = serve ? bus_serve_program_get_default_config(off_decide)
+                            : bus_decide_program_get_default_config(off_decide);
+    sm_config_set_in_pin_base(&c, 0);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_out_shift(&c, true, false, 32);
+    if (serve) {
+        const uint32_t pins = (1u << PIN_NDATA_OE) | (1u << PIN_BE_REQ);
+        sm_config_set_set_pins(&c, PIN_NDATA_OE, 2);
+        pio_sm_set_pins_with_mask(pio_decide, sm_decide, 1u << PIN_NDATA_OE, pins);
+        pio_sm_set_pindirs_with_mask(pio_decide, sm_decide, pins, pins);
+        pio_gpio_init(pio_decide, PIN_NDATA_OE);
+        pio_gpio_init(pio_decide, PIN_BE_REQ);
+    }
+    pio_sm_init(pio_decide, sm_decide, off_decide, &c);
+    pio_decide->irq = 1;   // bus_fetch's byte-ready flag, left set by shadow mode
+    serving = serve;
+    set_settle(settle);
+    pio_sm_set_enabled(pio_decide, sm_decide, true);
 }
 
 static uint start_marker(const pio_program_t *prog, pio_sm_config (*get_config)(uint), uint pin) {
@@ -160,19 +213,16 @@ static void bus_start(void) {
     start_marker(&marker_serve_program, marker_serve_program_get_default_config, PIN_MARK_SERVE);
     start_marker(&marker_be_program, marker_be_program_get_default_config, PIN_MARK_BE);
 
-    // bus_decide: reads pins only.
+    // PIO0: bus_decide (shadow) to start with.
     sm_decide = pio_claim_unused_sm(pio_decide, true);
-    off_decide = pio_add_program(pio_decide, &bus_decide_program);
-    pio_sm_config c = bus_decide_program_get_default_config(off_decide);
-    sm_config_set_in_pin_base(&c, 0);
-    sm_config_set_in_shift(&c, false, false, 32);
-    sm_config_set_out_shift(&c, true, false, 32);
-    pio_sm_init(pio_decide, sm_decide, off_decide, &c);
+    load_pio0(false);
+    pio_sm_config c;
 
     // bus_fetch: owns MD0-MD7 and the two address-buffer enables. The enables
     // are already high (board_safe_init); keep them high through the handover.
     sm_fetch = pio_claim_unused_sm(pio_fetch, true);
     off_fetch = pio_add_program(pio_fetch, &bus_fetch_program);
+    sm_fetch_loaded = true;
     c = bus_fetch_program_get_default_config(off_fetch);
     sm_config_set_in_pin_base(&c, PIN_MD0);
     sm_config_set_out_pins(&c, PIN_MD0, 8);
@@ -232,7 +282,6 @@ static void bus_start(void) {
     dma_channel_configure(ch_ptr, &p, &dma_hw->ch[ch_data].al3_read_addr_trig, &pio_fetch->rxf[sm_fetch],
                           (DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB) | 1, true);
 
-    pio_sm_set_enabled(pio_decide, sm_decide, true);
     pio_sm_set_enabled(pio_fetch, sm_strobe, true);
     pio_sm_set_enabled(pio_fetch, sm_fetch, true);
 }
@@ -391,6 +440,7 @@ static void help(void) {
            "  a        the last 32 addresses captured\n"
            "  b [n]    reads n to n+63 after the last release from reset (default 0)\n"
            "  t [n]    show or set when /ROSCS and /EXROM are sampled, in PIO cycles (6.67 ns) after the strobe\n"
+           "  e [0|1]  show or set serve mode: 1 serves HOME ROM reads with /BE (2068 must be held)\n"
            "  x [h l]  show or set the address-buffer delays (0-15 extra cycles); then 'r' and 'b' to check\n"
            "  ?        this help\n"
            "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
@@ -466,6 +516,16 @@ int main(void) {
                 print_stats(last, &since);
             }
             break;
+        case 'e': {
+            uint v;
+            if (sscanf(line + 1, "%u", &v) == 1) {
+                if (!held_2068) printf("  hold the 2068 first ('h')\n");
+                else load_pio0(v != 0);
+            }
+            printf("  %s\n", serving ? "SERVE: HOME ROM reads come from the card (/BE asserted)"
+                                    : "shadow: the card follows reads but never drives the 2068");
+            break;
+        }
         case 'x': {
             uint h, l;
             if (sscanf(line + 1, "%u %u", &h, &l) == 2) set_mux_delays(h, l);
