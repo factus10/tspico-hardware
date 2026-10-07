@@ -11,9 +11,14 @@
  *  - bus_decide (PIO0) applies the v2.1 HOME / EXROM / DOCK rule and reports
  *    each read to core 1, which counts them. BE_REQ stays low.
  *  - Four marker state machines (PIO2) show the timing on J3 for the logic
- *    analyser: FRONT (GP43, J3.3) strobe seen to address captured, DMA (GP42,
- *    J3.4) pointer pushed to byte on MD, SERVE (GP41, J3.5) the cycle would be
- *    served, BE (GP34, J3.6) /BE would be asserted. Remove the OLED from J3.
+ *    analyser: FRONT (GP43, J3.3) strobe seen to address captured, READY
+ *    (GP42, J3.4) strobe seen to byte on MD, SERVE (GP41, J3.5) the cycle
+ *    would be served, BE (GP34, J3.6) /BE would be asserted. Remove the OLED
+ *    from J3.
+ *  - Self-timing, without an analyser: stopwatch_strobe (PIO1) times every
+ *    read strobe and the READY marker times strobe-to-byte, so 'm' reports how
+ *    early the byte is ready. A third DMA channel logs every pointer into a
+ *    ring, so 'a' shows the addresses the card captured.
  *
  * The 2068 is held in reset until the 'g' command. USB serial menu: 'h' for help.
  */
@@ -45,13 +50,17 @@ extern const unsigned rom_home_len, rom_exrom_len;
 #define CLASS_HOME  3
 
 #define PIN_MARK_FRONT 43
-#define PIN_MARK_DMA   42
+#define PIN_MARK_READY 42
 #define PIN_MARK_SERVE 41
 #define PIN_MARK_BE    34
 
 static const PIO pio_decide = pio0, pio_fetch = pio1, pio_mark = pio2;
-static uint sm_decide, sm_fetch, off_decide, off_fetch;
-static int ch_ptr, ch_data;
+static uint sm_decide, sm_fetch, off_decide, off_fetch, sm_strobe, sm_ready;
+static int ch_ptr, ch_data, ch_log;
+
+// Every pointer bus_fetch pushes, copied here by ch_log (a 16 KB DMA ring).
+#define LOG_N 4096
+static uint32_t addr_log[LOG_N] __attribute__((aligned(LOG_N * 4)));
 
 // When both programs sample /ROSCS and /EXROM, in PIO cycles after the strobe
 // is seen. 14 is the earliest bus_fetch can (it reads the address first).
@@ -60,6 +69,17 @@ static int ch_ptr, ch_data;
 static uint settle = SETTLE_MIN;
 
 static volatile uint32_t counts[4];
+
+// Timings in PIO cycles, collected by core 1.
+#define HIST_BIN 4
+#define HIST_N   64
+typedef struct {
+    uint32_t n, min, max;
+    uint64_t sum;
+    uint32_t hist[HIST_N];
+} timing_t;
+static timing_t t_strobe, t_ready;   // read strobe low; strobe seen to byte on MD
+static volatile bool timing_reset;
 
 // ---- images -----------------------------------------------------------------
 
@@ -84,16 +104,19 @@ static void set_settle(uint cycles) {
     pio_decide->instr_mem[off_decide + bus_decide_offset_decide_settle] = pio_encode_set(pio_y, cycles - 3);
 }
 
-static void start_marker(const pio_program_t *prog, pio_sm_config (*get_config)(uint), uint pin) {
+static uint start_marker(const pio_program_t *prog, pio_sm_config (*get_config)(uint), uint pin) {
     uint sm = pio_claim_unused_sm(pio_mark, true);
     uint off = pio_add_program(pio_mark, prog);
     pio_sm_config c = get_config(off);
     sm_config_set_set_pins(&c, pin, 1);
+    // marker_ready polls IRQ flag 3 with `mov y, status` (see bus.pio).
+    if (prog == &marker_ready_program) sm_config_set_mov_status(&c, STATUS_IRQ_SET, 3);
     pio_sm_set_pins_with_mask64(pio_mark, sm, 0, 1ull << pin);
     pio_sm_set_pindirs_with_mask64(pio_mark, sm, 1ull << pin, 1ull << pin);
     pio_gpio_init(pio_mark, pin);
     pio_sm_init(pio_mark, sm, off, &c);
     pio_sm_set_enabled(pio_mark, sm, true);
+    return sm;
 }
 
 static void bus_start(void) {
@@ -104,7 +127,7 @@ static void bus_start(void) {
     // Markers first, with their flags clear.
     pio_mark->irq = 0xff;
     start_marker(&marker_front_program, marker_front_program_get_default_config, PIN_MARK_FRONT);
-    start_marker(&marker_dma_program, marker_dma_program_get_default_config, PIN_MARK_DMA);
+    sm_ready = start_marker(&marker_ready_program, marker_ready_program_get_default_config, PIN_MARK_READY);
     start_marker(&marker_serve_program, marker_serve_program_get_default_config, PIN_MARK_SERVE);
     start_marker(&marker_be_program, marker_be_program_get_default_config, PIN_MARK_BE);
 
@@ -137,19 +160,38 @@ static void bus_start(void) {
     pio_sm_exec(pio_fetch, sm_fetch, pio_encode_pull(false, true));
     pio_sm_exec(pio_fetch, sm_fetch, pio_encode_mov(pio_x, pio_osr));
 
+    // stopwatch_strobe: times nMEMRD low.
+    sm_strobe = pio_claim_unused_sm(pio_fetch, true);
+    uint off_strobe = pio_add_program(pio_fetch, &stopwatch_strobe_program);
+    c = stopwatch_strobe_program_get_default_config(off_strobe);
+    sm_config_set_jmp_pin(&c, 15);
+    pio_sm_init(pio_fetch, sm_strobe, off_strobe, &c);
+
     set_settle(settle);
 
     // DMA: ch_ptr takes each pointer from bus_fetch's RX FIFO and writes it to
     // ch_data's read-address trigger; ch_data copies that one byte into
-    // bus_fetch's TX FIFO. ch_ptr runs endlessly.
+    // bus_fetch's TX FIFO. ch_ptr runs endlessly. After each byte, ch_data
+    // chains to ch_log, which copies the pointer (ch_data's read address)
+    // into addr_log; that is off the critical path.
     ch_ptr = dma_claim_unused_channel(true);
     ch_data = dma_claim_unused_channel(true);
+    ch_log = dma_claim_unused_channel(true);
+    memset(addr_log, 0xff, sizeof addr_log);
+
+    dma_channel_config l = dma_channel_get_default_config(ch_log);
+    channel_config_set_transfer_data_size(&l, DMA_SIZE_32);
+    channel_config_set_read_increment(&l, false);
+    channel_config_set_write_increment(&l, true);
+    channel_config_set_ring(&l, true, 14);
+    dma_channel_configure(ch_log, &l, addr_log, &dma_hw->ch[ch_data].read_addr, 1, false);
 
     dma_channel_config d = dma_channel_get_default_config(ch_data);
     channel_config_set_transfer_data_size(&d, DMA_SIZE_8);
     channel_config_set_read_increment(&d, false);
     channel_config_set_write_increment(&d, false);
     channel_config_set_high_priority(&d, true);
+    channel_config_set_chain_to(&d, ch_log);
     dma_channel_configure(ch_data, &d, &pio_fetch->txf[sm_fetch], NULL, 1, false);
 
     dma_channel_config p = dma_channel_get_default_config(ch_ptr);
@@ -162,15 +204,74 @@ static void bus_start(void) {
                           (DMA_CH0_TRANS_COUNT_MODE_VALUE_ENDLESS << DMA_CH0_TRANS_COUNT_MODE_LSB) | 1, true);
 
     pio_sm_set_enabled(pio_decide, sm_decide, true);
+    pio_sm_set_enabled(pio_fetch, sm_strobe, true);
     pio_sm_set_enabled(pio_fetch, sm_fetch, true);
 }
 
 // ---- statistics (core 1) ----------------------------------------------------
 
+static void timing_add(timing_t *t, uint32_t cycles) {
+    if (t->n == 0 || cycles < t->min) t->min = cycles;
+    if (cycles > t->max) t->max = cycles;
+    t->sum += cycles;
+    t->n++;
+    uint b = cycles / HIST_BIN;
+    t->hist[b < HIST_N ? b : HIST_N - 1]++;
+}
+
 static void core1_main(void) {
     for (;;) {
+        if (timing_reset) {
+            memset(&t_strobe, 0, sizeof t_strobe);
+            memset(&t_ready, 0, sizeof t_ready);
+            timing_reset = false;
+        }
         if (!pio_sm_is_rx_fifo_empty(pio_decide, sm_decide)) counts[pio_decide->rxf[sm_decide] & 3]++;
+        // Loop lengths in bus.pio: two cycles per strobe count, three per ready count.
+        if (!pio_sm_is_rx_fifo_empty(pio_fetch, sm_strobe)) timing_add(&t_strobe, 2 * pio_fetch->rxf[sm_strobe]);
+        if (!pio_sm_is_rx_fifo_empty(pio_mark, sm_ready)) timing_add(&t_ready, 3 * pio_mark->rxf[sm_ready]);
     }
+}
+
+static uint ns(uint32_t cycles) { return (uint)((uint64_t)cycles * 1000000000u / clock_get_hz(clk_sys)); }
+
+static void print_timing(const char *what, const timing_t *t) {
+    if (!t->n) {
+        printf("  %s: no samples\n", what);
+        return;
+    }
+    printf("  %s: %lu samples, min %u ns, avg %u ns, max %u ns\n    ", what, t->n, ns(t->min),
+           ns((uint32_t)(t->sum / t->n)), ns(t->max));
+    for (int b = 0; b < HIST_N; b++)
+        if (t->hist[b])
+            printf("%s%u:%lu ", b == HIST_N - 1 ? ">=" : "", ns(b * HIST_BIN), t->hist[b]);
+    printf("\n");
+}
+
+static void print_margin(void) {
+    timing_t s = t_strobe, r = t_ready;
+    print_timing("read strobe low (nMEMRD)  ", &s);
+    print_timing("strobe seen to byte on MD ", &r);
+    if (s.n && r.n)
+        printf("  worst case: shortest strobe - slowest byte = %d ns\n"
+               "  (histograms: bin start in ns : count. The strobe ends a little after the Z80\n"
+               "  samples the bus, and the data needs setup time; the analyser pins that down.)\n",
+               (int)ns(s.min) - (int)ns(r.max));
+    timing_reset = true;
+}
+
+static void print_addresses(void) {
+    uint32_t next = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+    printf("  last 32 reads, oldest first (H HOME, r RAM or other, E EXROM, D DOCK):\n  ");
+    for (int k = 32; k >= 1; k--) {
+        uint32_t p = addr_log[(next - k) & (LOG_N - 1)];
+        uint addr = (p >> 2) & 0xffff, cls = p & 3;
+        char tag = cls == CLASS_EXROM ? 'E' : cls == CLASS_DOCK ? 'D' : cls == CLASS_HOME ? (addr < 0x4000 ? 'H' : 'r') : '?';
+        if ((p >> 18) != IMAGE_PREFIX) tag = '!';
+        if (p == 0xffffffffu) printf("----  %s", k % 8 == 1 ? "\n  " : "");   // not written yet
+        else printf("%04x%c%s", addr, tag, k % 8 == 1 ? "\n  " : " ");
+    }
+    printf("\n");
 }
 
 static void print_stats(uint32_t *last, absolute_time_t *since) {
@@ -204,9 +305,11 @@ static void help(void) {
            "  r        reset the 2068 (200 ms pulse)\n"
            "  s        read counts since the last 's'\n"
            "  w        read counts every second until a key is pressed\n"
+           "  m        timing: strobe length, strobe-to-byte, worst-case margin (then resets)\n"
+           "  a        the last 32 addresses captured\n"
            "  t [n]    show or set when /ROSCS and /EXROM are sampled: %d-%d PIO cycles (6.67 ns) after the strobe\n"
            "  ?        this help\n"
-           "Markers on J3: FRONT pin 3, DMA pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
+           "Markers on J3: FRONT pin 3, READY pin 4, SERVE pin 5, BE pin 6. Settle now %u cycles (%u ns).\n",
            SETTLE_MIN, SETTLE_MAX, settle, settle * 1000 / (clock_get_hz(clk_sys) / 1000000));
 }
 
@@ -264,6 +367,8 @@ int main(void) {
             printf("  2068 reset.\n");
             break;
         case 's': print_stats(last, &since); break;
+        case 'm': print_margin(); break;
+        case 'a': print_addresses(); break;
         case 'w':
             printf("  any key stops\n");
             while (getchar_timeout_us(0) < 0) {

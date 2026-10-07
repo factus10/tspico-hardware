@@ -8,7 +8,7 @@
 ; PIO2's IRQ flags (irq next / irq prev).
 ;
 ;   flag 0/1  fetch: strobe seen / address captured     -> FRONT marker (GP43, J3.3)
-;   flag 2/3  fetch: pointer pushed / byte on MD        -> DMA marker   (GP42, J3.4)
+;   flag 2/3  fetch: strobe seen / byte on MD           -> READY marker (GP42, J3.4)
 ;   flag 4/5  decide: cycle served / cycle over         -> SERVE marker (GP41, J3.5)
 ;   flag 6    decide: /BE would be asserted             -> BE marker    (GP34, J3.6)
 ;   flag 7    SERVE marker to BE marker: cycle over
@@ -33,7 +33,7 @@
     wait 0 gpio 15          side 0b11       ; nMEMRD: /MREQ and /RD both low
     in x, 14                side 0b01       ; image region; U2 puts A15..A8 on MD
     irq next set 0
-    nop                               [1]
+    irq next set 2                    [1]
     in pins, 8              side 0b11 [1]   ; A15..A8 (pins as of two cycles ago); U2 off
     nop                     side 0b10 [3]   ; U1 puts A7..A0 on MD
     in pins, 8              side 0b11       ; A7..A0; U1 off
@@ -45,13 +45,28 @@ class_wait:
     out null, 19
     in osr, 2                               ; nEXROM:nROSCS; autopush the pointer
     irq next set 1
-    irq next set 2
     pull block                              ; the byte, from the DMA chain
     mov pindirs, ~null
     out pins, 8                             ; onto MD (U1, U2, U3 all off)
     irq next set 3
     wait 1 gpio 15
     mov pindirs, null
+.wrap
+
+; -----------------------------------------------------------------------------
+; stopwatch_strobe (PIO1): pushes how long each read strobe stays low, in
+; 2-cycle loops. jmp pin = GP15 (nMEMRD).
+; -----------------------------------------------------------------------------
+.program stopwatch_strobe
+.wrap_target
+    wait 0 gpio 15
+    mov x, ~null
+low:
+    jmp pin done
+    jmp x-- low
+done:
+    mov isr, ~x
+    push noblock
 .wrap
 
 ; -----------------------------------------------------------------------------
@@ -115,12 +130,25 @@ serve:
     set pins, 0
 .wrap
 
-.program marker_dma
+.program marker_ready
+; Also times the interval: pushes the number of 3-cycle loops between flag 2
+; (strobe seen) and flag 3 (byte on MD). `mov y, status` reads flag 3: bus_shadow.c
+; sets that up, because SDK 2.1.1's pioasm emits an undefined name for .mov_status irq.
 .wrap_target
     wait 1 irq 2
     set pins, 1
-    wait 1 irq 3
+    mov x, ~null
+count:
+    mov y, status                           ; all ones once flag 3 is set
+    jmp !y more
+    jmp done
+more:
+    jmp x-- count
+done:
+    irq clear 3
     set pins, 0
+    mov isr, ~x
+    push noblock
 .wrap
 
 .program marker_serve
