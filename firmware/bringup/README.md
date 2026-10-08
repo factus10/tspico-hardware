@@ -348,8 +348,9 @@ the roughly 600 available.
 
 The card serves the TS-Pico ROM by default (`m 1`; `m 0` is the stock 2068
 set): HOME, plus the 16K EXROM over chunks 0-1. CMake takes
-`src/rom/TSPICO-22.ROM` from the firmware repo's `origin/main` with `git show`,
-so the checkout is left alone (`TSPICO_ROM` overrides it).
+the newest `src/rom/TSPICO-NN.ROM` on the firmware repo's `origin/main` (2.3
+as of 2026-10-08) with `git show`, so the checkout is left alone (`TSPICO_ROM`
+overrides it).
 
 The responder follows `docs/PROTOCOL.md` in the firmware repo (firmware
 2.2.1). Core 0 runs it from the menu loop. Core 1 makes the status busy on
@@ -366,8 +367,7 @@ every OUT and queues the byte, port 0Fh as `0x100 | data`.
 - **The tail:** once the Z80 has read the answer, the next 0x01 is staged.
   A half-received pre-header or body is dropped after 1 s, and an answer
   nobody reads after 10 s, both with status FBh (RECOVERED, Report T).
-- LOAD/SAVE blocks and the printer are not handled yet: they answer
-  RECOVERED.
+- The printer is not handled yet: it answers RECOVERED.
 
 `t` shows the responder's state and counts. `l` shows a trace core 1 keeps of
 every OUT, every IN 0Eh and every change in the status read. `z` arms a
@@ -397,7 +397,42 @@ MD0-MD7 no longer have pad pull-downs: MD is only sampled while a buffer
 drives it, and RP2350 erratum E9 can latch a pad with its input and pull-down
 both on at about 2 V.
 
-Next: LOAD and SAVE blocks, and the files behind them.
+### LOAD and SAVE, to a tape in RAM
+
+With LOAD/SAVE switched to the card (`SAVE "tpi:sdcard"`, which the ROM handles
+itself), blocks go to a 64 KB tape in RAM, in TAP format, until the card is
+reset. This stands in for files: the real firmware will stream TAPs from SD or
+flash a block at a time, so TAP size is limited only by storage. The rules
+follow v2's `SAVE_TS` and `LOAD_TS` (`src/TS/tspico_io.py` in the firmware
+repo):
+
+- **SAVE:** status F7h, then the header: 00h, the session, 17 bytes and the
+  XOR, 21 in all. The card checks the session, the XOR, a zero length and
+  room on the tape, and refuses with R, A or J. Otherwise it answers 01h and
+  F7h. The data block follows about a second later with no pre-header: FFh,
+  the session, the length from the header, and the XOR. The card stores both
+  blocks if the XOR is right and answers 01h plus the next pre-load; if not,
+  it answers 02h (R) and keeps nothing.
+- **LOAD, VERIFY, MERGE:** the card never sees the name, because the ROM
+  compares names itself. It serves the next block whose flag matches the
+  request, at most one lap of the tape. It checks the length and the XOR
+  before sending anything, since the ROM would stop part way through a bad
+  block. The flag and the first bytes are queued before READY. The rest
+  streams as the Z80 reads it: core 0 keeps the 1 KB queue topped up from
+  the tape, far faster than the Z80's one byte every ~47 us. After both of
+  the Z80's echoes the card stages 01h (the final status) and 01h (the next
+  pre-load). A header it can't find is refused with Report 8 through v2's
+  retry: the refusal goes in the flag slot, and the retry's SYNC stages it
+  as the first status.
+- `tpi:rew` rewinds the tape and `tpi:newtap` empties it. `T` on the USB
+  menu lists the blocks, with `>` at the LOAD position.
+
+On board 1 with ROM 2.3: a 27-byte program and a 6,912-byte `SCREEN$` each
+saved, loaded back and verified (2 SAVEs, 7 LOADs counting the header the
+second search skipped), with nothing refused, lost or given up.
+
+Next: the printer transactions, or on to the MicroPython port (phase 2 of
+`docs/v3-firmware-port-plan.md`).
 
 ## Board notes from proto1
 

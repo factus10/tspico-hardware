@@ -97,20 +97,31 @@ pico_generate_pio_header(bus_card ${CMAKE_CURRENT_LIST_DIR}/bus_card.pio)
 embed_binary(bus_card rom_home ${TSPICO_ROM_DIR}/GENUINE-2068-home.bin)
 embed_binary(bus_card rom_exrom ${TSPICO_ROM_DIR}/GENUINE-2068-exrom.bin)
 
-# The TS-Pico ROM (32K: HOME, then the 16K EXROM). By default it comes from the
-# firmware repo's origin/main with `git show`, so the checkout is left alone.
+# The TS-Pico ROM (32K: HOME, then the 16K EXROM). By default the newest
+# src/rom/TSPICO-NN.ROM on the firmware repo's origin/main, taken with `git
+# show`, so the checkout is left alone.
 set(TSPICO_FIRMWARE_REPO "$ENV{HOME}/Documents/github/tspico-firmware-build" CACHE PATH
 	"The TS-Pico firmware repo, for the TS-Pico ROM")
-set(TSPICO_ROM "" CACHE FILEPATH "The TS-Pico ROM image; empty takes src/rom/TSPICO-22.ROM from origin/main")
+set(TSPICO_ROM "" CACHE FILEPATH "The TS-Pico ROM image; empty takes the newest TSPICO-NN.ROM from origin/main")
 if(TSPICO_ROM)
 	set(tspico_rom_file ${TSPICO_ROM})
 else()
-	set(tspico_rom_file ${CMAKE_CURRENT_BINARY_DIR}/TSPICO-22.ROM)
-	execute_process(COMMAND git -C ${TSPICO_FIRMWARE_REPO} show origin/main:src/rom/TSPICO-22.ROM
+	execute_process(COMMAND git -C ${TSPICO_FIRMWARE_REPO} ls-tree --name-only origin/main src/rom/
+		OUTPUT_VARIABLE rom_list RESULT_VARIABLE git_result)
+	string(REGEX MATCHALL "TSPICO-[0-9][0-9]\\.ROM" roms "${rom_list}")
+	list(SORT roms)
+	list(LENGTH roms n_roms)
+	if(NOT git_result EQUAL 0 OR n_roms EQUAL 0)
+		message(FATAL_ERROR "no TSPICO-NN.ROM on origin/main in ${TSPICO_FIRMWARE_REPO}; set TSPICO_ROM")
+	endif()
+	list(GET roms -1 rom_name)
+	set(tspico_rom_file ${CMAKE_CURRENT_BINARY_DIR}/${rom_name})
+	execute_process(COMMAND git -C ${TSPICO_FIRMWARE_REPO} show origin/main:src/rom/${rom_name}
 		OUTPUT_FILE ${tspico_rom_file} RESULT_VARIABLE git_result)
 	if(NOT git_result EQUAL 0)
-		message(FATAL_ERROR "couldn't take TSPICO-22.ROM from ${TSPICO_FIRMWARE_REPO}; set TSPICO_ROM")
+		message(FATAL_ERROR "couldn't take ${rom_name} from ${TSPICO_FIRMWARE_REPO}")
 	endif()
+	message(STATUS "TS-Pico ROM: ${rom_name} from origin/main")
 endif()
 embed_binary(bus_card rom_tspico ${tspico_rom_file})
 target_link_libraries(bus_card
