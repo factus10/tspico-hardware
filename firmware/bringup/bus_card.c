@@ -549,8 +549,9 @@ static void __not_in_flash_func(core1_main)(void) {
 // 0Fh): both queues emptied, exactly one 0x01 staged (the pre-load the ROM reads
 // straight after the pre-header), status idle. Then a 10-byte pre-header; for a
 // command ('B', TADDR 0-3) a body ('D', LEN, text, XOR) and one answer, after
-// which the tail stages the next 0x01. Only tpi:info and tpi:nop are known so
-// far; LOAD/SAVE blocks and the printer are answered RECOVERED (Report T).
+// which the tail stages the next 0x01. Known commands: tpi:info, tpi:nop,
+// tpi:rew, tpi:newtap. LOAD and SAVE blocks go to a tape in RAM (TAP format);
+// the printer is answered RECOVERED (Report T).
 
 #define ST_IDLE      0xff   // READY + IDLE
 #define ST_MID       0xf7   // READY, transaction open
@@ -559,7 +560,12 @@ static void __not_in_flash_func(core1_main)(void) {
 #define GIVE_UP_US   1000000u     // a half-received pre-header or body
 #define TAIL_MAX_US  10000000u    // an answer nobody reads
 
-enum { P_PRE, P_BODY, P_TAIL };
+#define SAVE_DRAIN_US 500000u     // a refused SAVE: drop what follows until this quiet
+#define SAVE_FIRST_US 3000000u    // header accepted: the data block starts within this
+#define LOAD_STALL_US 3000000u    // LOAD: the Z80 stops reading for this long
+#define REFUSE_KEEP_US 2000000u   // a refused header LOAD: the retry's SYNC stages its status
+
+enum { P_PRE, P_BODY, P_TAIL, P_SAVE_HDR, P_SAVE_DATA, P_DRAIN, P_LOAD, P_LOAD_REFUSED, P_RETRY };
 static uint p_state = P_PRE;
 static uint8_t pre[10], body[BODY_MAX + 4];
 static uint pre_n, body_n, body_len;
@@ -567,6 +573,24 @@ static uint32_t p_since;
 static uint32_t p_syncs, p_cmds, p_gave_up, p_unsupported, p_xor_bad, p_stray;
 static uint8_t p_last_pre[10], p_last_answer;
 static char p_last_cmd[48];
+
+// The tape: TAP format (each block a 2-byte length, then flag, content, XOR),
+// filled by SAVE and read by LOAD, in RAM until the card is reset.
+#define TAPE_MAX (64 * 1024)
+static uint8_t tape[TAPE_MAX];
+static uint tape_len, tape_pos;
+static uint32_t t_saves, t_loads, t_refused;
+
+static uint8_t sv_hdr[21];        // 00, session lo/hi, 17 header bytes, XOR
+static uint sv_n, sv_blen;
+static uint8_t sv_x;
+static uint ld_src, ld_left, ld_next, ld_echoes;
+static uint32_t ld_tail;          // TX tail when last seen moving
+static bool ld_header_search;
+static uint ld_headers_seen;
+static uint8_t lr_st;             // a refused header LOAD's status, for the retry's SYNC
+static uint32_t lr_until;
+static bool lr_retry;
 
 static void tx_put(uint8_t b) {
     txq[txq_head % TXQ_N] = b;
@@ -579,19 +603,26 @@ static void set_status(uint8_t st) {
     io_status = st;
 }
 
-// Empty both queues, stage one 0x01, and say idle (or recovered).
-static void to_idle(bool recovered) {
+static void tx_clear(void) {
     uint32_t t;
     do {
         t = txq_tail;
         txq_head = t;
     } while (txq_tail != t);
+}
+
+// Empty both queues, stage one byte (0x01 but for a refused LOAD's retry), and
+// say idle (or recovered).
+static void to_idle_first(uint8_t first, bool recovered) {
+    tx_clear();
     rxq_tail = rxq_head;
-    tx_put(0x01);
+    tx_put(first);
     pre_n = 0;
     p_state = P_PRE;
     set_status(recovered ? ST_RECOVERED : ST_IDLE);
 }
+
+static void to_idle(bool recovered) { to_idle_first(0x01, recovered); }
 
 static void answer(const uint8_t *b, uint n) {
     for (uint i = 0; i < n; i++) tx_put(b[i]);
@@ -632,6 +663,12 @@ static void run_command(void) {
         return;
     }
     static char msg[200];
+    // Pre-header byte 2 of a command is the ROM's version from ROM 2.3 ($23);
+    // earlier ROMs send the bank, $FF.
+    char rom[24];
+    if (!tspico_rom) snprintf(rom, sizeof rom, "stock 2068");
+    else if (pre[2] == 0xff) snprintf(rom, sizeof rom, "TS-Pico 2.2 or older");
+    else snprintf(rom, sizeof rom, "TS-Pico %x.%x", pre[2] >> 4, pre[2] & 15);
     if (pre[1] != 0) {
         // LOAD "tpi:name": mounting; there are no files yet.
         snprintf(msg, sizeof msg, "TS-Pico v3: no files yet\r(%s)", p_last_cmd);
@@ -639,14 +676,24 @@ static void run_command(void) {
     } else if (strcmp(p_last_cmd, "TPI:NOP") == 0) {
         uint8_t st = 1;
         answer(&st, 1);
+    } else if (strcmp(p_last_cmd, "TPI:REW") == 0) {
+        tape_pos = 0;
+        ld_header_search = false;
+        uint8_t st = 1;
+        answer(&st, 1);
+    } else if (strcmp(p_last_cmd, "TPI:NEWTAP") == 0) {
+        tape_len = tape_pos = 0;
+        ld_header_search = false;
+        answer_text(1, "TS-Pico v3: the RAM tape\ris empty");
     } else if (strcmp(p_last_cmd, "TPI:INFO") == 0) {
         snprintf(msg, sizeof msg,
                  "TS-Pico v3 card, RP2350B\r"
                  "Clock %lu MHz\r"
                  "ROM %s, from the card\r"
-                 "Bring-up responder: tpi:info\r"
-                 "and tpi:nop so far",
-                 clock_get_hz(clk_sys) / 1000000, tspico_rom ? "TS-Pico 2.2" : "stock 2068");
+                 "RAM tape: %u bytes, at %u\r"
+                 "Commands: tpi:info tpi:nop\r"
+                 "tpi:rew tpi:newtap",
+                 clock_get_hz(clk_sys) / 1000000, rom, tape_len, tape_pos);
         answer_text(1, msg);
     } else {
         snprintf(msg, sizeof msg, "TS-Pico v3: %.24s\ris not here yet", p_last_cmd);
@@ -654,8 +701,153 @@ static void run_command(void) {
     }
 }
 
+// ---- SAVE: header (21 bytes after status F7h), then the data block --------------
+
+static void save_refuse(uint8_t st) {
+    t_refused++;
+    tx_put(st);
+    set_status(ST_IDLE);
+    p_state = P_DRAIN;       // then idle once the Z80 has stopped sending
+    p_since = time_us_32();
+}
+
+static void save_header_done(void) {
+    uint8_t x = sv_hdr[0];
+    for (uint i = 3; i < 20; i++) x ^= sv_hdr[i];
+    uint session = pre[3] | pre[4] << 8;
+    sv_blen = sv_hdr[14] | sv_hdr[15] << 8;
+    if (session && (sv_hdr[1] != pre[3] || sv_hdr[2] != pre[4])) save_refuse(2);   // R
+    else if (x != sv_hdr[20]) save_refuse(2);
+    else if (sv_blen == 0) save_refuse(8);                                         // A
+    else if (tape_len + 21 + sv_blen + 4 > TAPE_MAX) save_refuse(0x0a);            // J: tape full
+    else {
+        tx_put(0x01);
+        set_status(ST_MID);
+        sv_n = 0;
+        sv_x = 0;
+        p_state = P_SAVE_DATA;
+        p_since = time_us_32();
+    }
+}
+
+// The data block, FF, session lo/hi, the bytes, XOR, goes straight into the tape
+// after the header block, and is kept only if its XOR is right.
+static void save_data_byte(uint8_t b) {
+    uint8_t *d = &tape[tape_len + 21 + 2];   // the data block's flag
+    uint i = sv_n++;
+    if (i == 1 || i == 2) return;             // the session: not in the TAP
+    uint k = i == 0 ? 0 : i - 2;
+    d[k] = b;
+    if (i < sv_blen + 3) sv_x ^= b;
+    if (i < sv_blen + 3) return;
+    tx_clear();
+    if (sv_x != b) {                         // parity: Report R, nothing kept
+        t_refused++;
+        tx_put(0x02);
+        tx_put(0x01);
+    } else {
+        uint8_t *h = &tape[tape_len];
+        h[0] = 19;
+        h[1] = 0;
+        h[2] = 0x00;
+        memcpy(&h[3], &sv_hdr[3], 17);
+        h[20] = sv_hdr[20];
+        d[-2] = (uint8_t)(sv_blen + 2);
+        d[-1] = (uint8_t)((sv_blen + 2) >> 8);
+        tape_len += 21 + 2 + sv_blen + 2;
+        t_saves++;
+        tx_put(0x01);                         // final status
+        tx_put(0x01);                         // the next pre-load
+    }
+    pre_n = 0;
+    p_state = P_PRE;
+    set_status(ST_IDLE);
+}
+
+// ---- LOAD: the next block whose flag matches, streamed as the Z80 reads ---------
+
+static uint next_block(uint at) {
+    uint n = tape[at] | tape[at + 1] << 8;
+    at += 2 + n;
+    return at >= tape_len ? 0 : at;
+}
+
+// Refusals go in the flag slot: st, then st again (header) or 01 (data); a
+// refused header also stages st for the retry's SYNC.
+static void load_refuse(uint8_t st, bool header) {
+    t_refused++;
+    tx_put(st);
+    tx_put(header ? st : 0x01);
+    set_status(ST_IDLE);
+    if (header) {
+        lr_st = st;
+        lr_until = time_us_32() + REFUSE_KEEP_US;
+    }
+    p_state = P_LOAD_REFUSED;
+    p_since = time_us_32();
+}
+
+static void load_top_up(void) {
+    while (ld_left && txq_head - txq_tail < TXQ_N - 16) {
+        tx_put(tape[ld_src++]);
+        ld_left--;
+    }
+}
+
+static void load_start(void) {
+    uint8_t flag = pre[0];
+    uint de = pre[7] | pre[8] << 8;
+    bool header = flag == 0x00;
+    if (!header) ld_header_search = false;
+    else if (!ld_header_search) {
+        ld_header_search = true;
+        ld_headers_seen = 0;
+    }
+    // The next block with this flag, at most one lap.
+    uint at = tape_pos, blocks = 0, found = TAPE_MAX, total = 0, headers = 0;
+    if (tape_len) {
+        for (uint a = 0;;) {
+            total++;
+            if (tape[a + 2] == 0x00) headers++;
+            a = next_block(a);
+            if (a == 0) break;
+        }
+        for (blocks = 0; blocks < total; blocks++, at = next_block(at)) {
+            if (tape[at + 2] == flag) {
+                found = at;
+                break;
+            }
+        }
+    }
+    if (found == TAPE_MAX || (header && ld_headers_seen >= headers)) {
+        ld_header_search = false;
+        load_refuse(header ? 7 : 2, header);   // 8 End of file / R
+        return;
+    }
+    uint n = tape[found] | tape[found + 1] << 8;   // flag + content + XOR
+    uint8_t x = 0;
+    for (uint i = 0; i < n; i++) x ^= tape[found + 2 + i];
+    tape_pos = next_block(found);
+    if (header) ld_headers_seen++;
+    if (n != de + 2 || x != 0) {                  // the ROM would stop part way: refuse first
+        load_refuse(2, header);
+        return;
+    }
+    ld_src = found + 2;
+    ld_left = n;
+    ld_echoes = 0;
+    load_top_up();
+    ld_tail = txq_tail;
+    t_loads++;
+    p_state = P_LOAD;
+    p_since = time_us_32();
+    set_status(ST_IDLE);   // READY: flag and the first bytes are queued
+}
+
 static void pre_done(void) {
     memcpy(p_last_pre, pre, sizeof pre);
+    bool retry = lr_retry;
+    lr_retry = false;
     uint len = pre[7] | pre[8] << 8;
     if (pre[0] == 'B' && pre[1] <= 3 && len <= BODY_MAX) {
         body_len = len + 4;
@@ -663,6 +855,18 @@ static void pre_done(void) {
         p_state = P_BODY;
         p_since = time_us_32();
         set_status(ST_MID);   // ready for the body
+    } else if (retry && pre[0] == 0x00) {
+        // The retry after a refused header LOAD: the Z80 read the refusal as its
+        // first status and stops; serve nothing.
+        p_state = P_RETRY;
+        p_since = time_us_32();
+    } else if (pre[0] == 0x00 && pre[1] == 0) {
+        sv_n = 0;
+        p_state = P_SAVE_HDR;
+        p_since = time_us_32();
+        set_status(ST_MID);   // ready for the header
+    } else if (pre[0] == 0x00 || pre[0] == 0xff) {
+        load_start();
     } else {
         p_unsupported++;
         to_idle(true);
@@ -676,7 +880,9 @@ static void proto_poll(void) {
         rxq_tail++;
         if (w & 0x100) {          // any OUT to 0Fh: SYNC / abort
             p_syncs++;
-            to_idle(false);
+            lr_retry = (int32_t)(time_us_32() - lr_until) < 0 && lr_st;
+            to_idle_first(lr_retry ? lr_st : 0x01, false);
+            lr_st = 0;
             continue;
         }
         uint8_t b = (uint8_t)w;
@@ -687,14 +893,56 @@ static void proto_poll(void) {
         } else if (p_state == P_BODY) {
             body[body_n++] = b;
             if (body_n == body_len) run_command();
+        } else if (p_state == P_SAVE_HDR) {
+            sv_hdr[sv_n++] = b;
+            if (sv_n == sizeof sv_hdr) save_header_done();
+        } else if (p_state == P_SAVE_DATA) {
+            save_data_byte(b);
+        } else if (p_state == P_LOAD) {
+            if (ld_echoes < 2) ld_echoes++;   // the flag echo, then the Z80's XOR: not checked
+        } else if (p_state == P_LOAD_REFUSED) {
+            set_status(ST_IDLE);              // the flag echo: READY again, then wait for SYNC
+            pre_n = 0;
+            p_state = P_PRE;
+        } else if (p_state == P_DRAIN) {
+            // a refused SAVE's leftovers
         } else {
             p_stray++;            // a byte while the answer is out (key replies: not yet)
         }
     }
     uint32_t idle = time_us_32() - p_since;
-    if ((p_state == P_PRE && pre_n > 0 && idle > GIVE_UP_US) || (p_state == P_BODY && idle > GIVE_UP_US)) {
+    if (p_state == P_LOAD) {
+        load_top_up();
+        if (txq_tail != ld_tail) {
+            ld_tail = txq_tail;
+            p_since = time_us_32();
+            idle = 0;
+        }
+        if (!ld_left && txq_head == txq_tail && ld_echoes == 2) {
+            tx_put(0x01);                     // final status
+            tx_put(0x01);                     // the next pre-load
+            pre_n = 0;
+            p_state = P_PRE;
+            set_status(ST_IDLE);
+        } else if (idle > (ld_left || txq_head != txq_tail ? LOAD_STALL_US : GIVE_UP_US)) {
+            p_gave_up++;
+            ld_header_search = false;
+            to_idle(true);
+        }
+        return;
+    }
+    if ((p_state == P_PRE && pre_n > 0 && idle > GIVE_UP_US) || (p_state == P_BODY && idle > GIVE_UP_US) ||
+        (p_state == P_SAVE_HDR && idle > GIVE_UP_US) || (p_state == P_LOAD_REFUSED && idle > GIVE_UP_US)) {
         p_gave_up++;
         to_idle(true);
+    } else if (p_state == P_SAVE_DATA && idle > (sv_n ? GIVE_UP_US : SAVE_FIRST_US)) {
+        p_gave_up++;
+        if (sv_n) to_idle(true);
+        else save_refuse(2);
+    } else if (p_state == P_DRAIN && idle > SAVE_DRAIN_US) {
+        to_idle(false);
+    } else if (p_state == P_RETRY) {
+        if (txq_head == txq_tail || idle > 200000u) to_idle(false);
     } else if (p_state == P_TAIL) {
         if (txq_head == txq_tail) {   // the Z80 has read the answer: stage the next pre-load
             tx_put(0x01);
@@ -722,7 +970,8 @@ static void print_trace(uint n) {
 }
 
 static void print_proto(void) {
-    static const char *const names[] = {"pre-header", "body", "answer out"};
+    static const char *const names[] = {"pre-header", "body", "answer out", "SAVE header", "SAVE data",
+                                        "SAVE refused", "LOAD", "LOAD refused", "LOAD retry"};
     printf("  protocol %s: state %s, status %02x, TX %ld, RX %lu (lost %lu)\n", echo_mode ? "off (echo mode)" : "on",
            names[p_state], io_status, (long)(txq_head - txq_tail), rxq_head - rxq_tail, rxq_lost);
     printf("  SYNCs %lu, commands %lu (bad XOR %lu), unsupported %lu, gave up %lu, stray bytes %lu\n", p_syncs, p_cmds,
@@ -730,6 +979,28 @@ static void print_proto(void) {
     printf("  last pre-header:");
     for (uint i = 0; i < sizeof p_last_pre; i++) printf(" %02x", p_last_pre[i]);
     printf("; last command %s, answer %02x\n", p_last_cmd[0] ? p_last_cmd : "-", p_last_answer);
+    printf("  tape: %u of %u bytes, LOAD position %u; SAVEs %lu, LOADs %lu, refused %lu\n", tape_len, TAPE_MAX,
+           tape_pos, t_saves, t_loads, t_refused);
+}
+
+static void print_tape(void) {
+    if (!tape_len) {
+        printf("  the tape is empty\n");
+        return;
+    }
+    static const char *const types[] = {"Program", "Number array", "Character array", "Bytes"};
+    for (uint a = 0;;) {
+        uint n = tape[a] | tape[a + 1] << 8;
+        const uint8_t *b = &tape[a + 2];
+        printf("  %5u%s %s %5u bytes", a, a == tape_pos ? ">" : " ", b[0] == 0 ? "header" : "data  ", n - 2);
+        if (b[0] == 0 && n == 19) {
+            printf("  %-15s \"%.10s\" length %u, start/line %u", b[1] < 4 ? types[b[1]] : "?", (const char *)&b[2],
+                   b[12] | b[13] << 8, b[14] | b[15] << 8);
+        }
+        printf("\n");
+        a = next_block(a);
+        if (a == 0) break;
+    }
 }
 
 // ---- reports ------------------------------------------------------------------
@@ -865,6 +1136,7 @@ static void help(void) {
            "  n [0|1]     IN handling (0 leaves every IN to the 2068)\n"
            "  t           the TS-Pico protocol responder: state, counts, last command\n"
            "  l [n]       the last n protocol events (64)\n"
+           "  T           the RAM tape's blocks (> marks the LOAD position)\n"
            "  p [0|1]     echo mode in place of the responder: OUT 0Eh bytes come back on IN 0Eh\n"
            "  m [0|1]     ROM set: 1 TS-Pico (default), 0 stock 2068 (2068 must be held)\n"
            "  u [n]       set the status byte IN 0Fh returns (hex)\n"
@@ -971,6 +1243,7 @@ int main(void) {
             print_io();
             break;
         case 't': print_proto(); break;
+        case 'T': print_tape(); break;
         case 'z':
             snap_ready = snap_waiting = false;
             snap_armed = true;
