@@ -550,8 +550,9 @@ static void __not_in_flash_func(core1_main)(void) {
 // straight after the pre-header), status idle. Then a 10-byte pre-header; for a
 // command ('B', TADDR 0-3) a body ('D', LEN, text, XOR) and one answer, after
 // which the tail stages the next 0x01. Known commands: tpi:info, tpi:nop,
-// tpi:rew, tpi:newtap. LOAD and SAVE blocks go to a tape in RAM (TAP format);
-// the printer is answered RECOVERED (Report T).
+// tpi:rew, tpi:newtap. LOAD and SAVE blocks go to a tape in RAM (TAP format).
+// The printer ('B', TADDR 4-6): LPRINT/LLIST text to a buffer, COPY's screen
+// kept for the USB menu ('P', 'Y').
 
 #define ST_IDLE      0xff   // READY + IDLE
 #define ST_MID       0xf7   // READY, transaction open
@@ -565,7 +566,7 @@ static void __not_in_flash_func(core1_main)(void) {
 #define LOAD_STALL_US 3000000u    // LOAD: the Z80 stops reading for this long
 #define REFUSE_KEEP_US 2000000u   // a refused header LOAD: the retry's SYNC stages its status
 
-enum { P_PRE, P_BODY, P_TAIL, P_SAVE_HDR, P_SAVE_DATA, P_DRAIN, P_LOAD, P_LOAD_REFUSED, P_RETRY };
+enum { P_PRE, P_BODY, P_TAIL, P_SAVE_HDR, P_SAVE_DATA, P_DRAIN, P_LOAD, P_LOAD_REFUSED, P_RETRY, P_PRN_BODY };
 static uint p_state = P_PRE;
 static uint8_t pre[10], body[BODY_MAX + 4];
 static uint pre_n, body_n, body_len;
@@ -588,6 +589,21 @@ static uint ld_src, ld_left, ld_next, ld_echoes;
 static uint32_t ld_tail;          // TX tail when last seen moving
 static bool ld_header_search;
 static uint ld_headers_seen;
+// The printer: one transaction per LPRINT/LLIST character (with an 8-byte
+// pattern body for characters 80h and up), COPY with the display memory from
+// 4000h as its body (6912 bytes, or 15104 for the other modes).
+#define PRN_BODY_MAX (15104 + 4)
+#define PRN_TEXT_N 4096
+static uint8_t prn_body[PRN_BODY_MAX];
+static uint prn_n, prn_len;       // bytes received, body length expected
+static uint8_t prn_x;
+static char prn_text[PRN_TEXT_N];
+static uint prn_text_n;
+static uint prn_ctl_args;          // parameters of a control code still to skip
+static uint32_t prn_chars, prn_copies, prn_bad;
+static uint8_t copy_mode, copy_colour;
+static uint copy_n;               // the last good COPY's screen bytes (in prn_body + 3)
+
 static uint8_t lr_st;             // a refused header LOAD's status, for the retry's SYNC
 static uint32_t lr_until;
 static bool lr_retry;
@@ -844,6 +860,73 @@ static void load_start(void) {
     set_status(ST_IDLE);   // READY: flag and the first bytes are queued
 }
 
+// ---- the printer ------------------------------------------------------------------
+
+static void prn_put(const char *t) {
+    while (*t && prn_text_n < PRN_TEXT_N - 1) prn_text[prn_text_n++] = *t++;
+}
+
+// LPRINT/LLIST text, as v2's TextCapture: ENTER a newline, INK..OVER and AT/TAB
+// skip their parameters, block graphics and UDGs as zmakebas escapes.
+static void prn_feed(uint8_t c) {
+    static const char *const blocks[] = {"  ", " '", "' ", "''", " .", " :", "'.", "':",
+                                         ". ", ".'", ": ", ":'", "..", ".:", ":.", "::"};
+    char t[12];
+    if (prn_ctl_args) {
+        prn_ctl_args--;
+        return;
+    }
+    if (c == 0x0d) prn_put("\n");
+    else if (c >= 0x10 && c <= 0x15) prn_ctl_args = 1;
+    else if (c == 0x16 || c == 0x17) prn_ctl_args = 2;
+    else if (c == 0x5c) prn_put("\\\\");
+    else if (c == 0x7f) prn_put("\\*");
+    else if (c >= 0x20 && c < 0x7f) {
+        t[0] = (char)c;
+        t[1] = 0;
+        prn_put(t);
+    } else if (c >= 0x80 && c <= 0x8f) {
+        snprintf(t, sizeof t, "\\%s", blocks[c - 0x80]);
+        prn_put(t);
+    } else if (c >= 0x90 && c <= 0xa4) {
+        snprintf(t, sizeof t, "\\%c", 'A' + c - 0x90);
+        prn_put(t);
+    } else {
+        snprintf(t, sizeof t, "\\{0x%02X}", c);
+        prn_put(t);
+    }
+}
+
+static void prn_done(void) {
+    bool body = prn_len != 0;
+    bool ok = !body || (prn_n <= PRN_BODY_MAX && prn_body[0] == 'D' && prn_x == prn_body[prn_len - 1]);
+    uint8_t st = 1;
+    if (pre[1] == 5) {
+        prn_chars++;
+        if (!ok) prn_bad++;   // a pattern with a bad XOR: printed anyway, as v2
+        prn_feed(pre[3]);
+    } else if (ok && body) {
+        prn_copies++;
+        copy_mode = pre[4];
+        copy_colour = pre[3];
+        copy_n = prn_len - 4;
+    } else {
+        prn_bad++;
+        st = 2;               // Report R
+    }
+    if (body) tx_put(st);     // the body's final status
+    tx_put(0x01);             // the next pre-load
+    pre_n = 0;
+    p_state = P_PRE;
+    set_status(ST_IDLE);
+}
+
+static void prn_byte(uint8_t b) {
+    if (prn_n < PRN_BODY_MAX) prn_body[prn_n] = b;
+    if (prn_n < prn_len - 1) prn_x ^= b;
+    if (++prn_n == prn_len) prn_done();
+}
+
 static void pre_done(void) {
     memcpy(p_last_pre, pre, sizeof pre);
     bool retry = lr_retry;
@@ -855,6 +938,16 @@ static void pre_done(void) {
         p_state = P_BODY;
         p_since = time_us_32();
         set_status(ST_MID);   // ready for the body
+    } else if (pre[0] == 'B' && pre[1] >= 4 && pre[1] <= 6) {
+        prn_len = len ? len + 4 : 0;
+        prn_n = 0;
+        prn_x = 0;
+        if (!prn_len) prn_done();
+        else {
+            p_state = P_PRN_BODY;
+            p_since = time_us_32();
+            set_status(ST_MID);   // ready for the body
+        }
     } else if (retry && pre[0] == 0x00) {
         // The retry after a refused header LOAD: the Z80 read the refusal as its
         // first status and stops; serve nothing.
@@ -898,6 +991,8 @@ static void proto_poll(void) {
             if (sv_n == sizeof sv_hdr) save_header_done();
         } else if (p_state == P_SAVE_DATA) {
             save_data_byte(b);
+        } else if (p_state == P_PRN_BODY) {
+            prn_byte(b);
         } else if (p_state == P_LOAD) {
             if (ld_echoes < 2) ld_echoes++;   // the flag echo, then the Z80's XOR: not checked
         } else if (p_state == P_LOAD_REFUSED) {
@@ -932,7 +1027,8 @@ static void proto_poll(void) {
         return;
     }
     if ((p_state == P_PRE && pre_n > 0 && idle > GIVE_UP_US) || (p_state == P_BODY && idle > GIVE_UP_US) ||
-        (p_state == P_SAVE_HDR && idle > GIVE_UP_US) || (p_state == P_LOAD_REFUSED && idle > GIVE_UP_US)) {
+        (p_state == P_SAVE_HDR && idle > GIVE_UP_US) || (p_state == P_LOAD_REFUSED && idle > GIVE_UP_US) ||
+        (p_state == P_PRN_BODY && idle > GIVE_UP_US)) {
         p_gave_up++;
         to_idle(true);
     } else if (p_state == P_SAVE_DATA && idle > (sv_n ? GIVE_UP_US : SAVE_FIRST_US)) {
@@ -971,7 +1067,7 @@ static void print_trace(uint n) {
 
 static void print_proto(void) {
     static const char *const names[] = {"pre-header", "body", "answer out", "SAVE header", "SAVE data",
-                                        "SAVE refused", "LOAD", "LOAD refused", "LOAD retry"};
+                                        "SAVE refused", "LOAD", "LOAD refused", "LOAD retry", "printer body"};
     printf("  protocol %s: state %s, status %02x, TX %ld, RX %lu (lost %lu)\n", echo_mode ? "off (echo mode)" : "on",
            names[p_state], io_status, (long)(txq_head - txq_tail), rxq_head - rxq_tail, rxq_lost);
     printf("  SYNCs %lu, commands %lu (bad XOR %lu), unsupported %lu, gave up %lu, stray bytes %lu\n", p_syncs, p_cmds,
@@ -981,6 +1077,21 @@ static void print_proto(void) {
     printf("; last command %s, answer %02x\n", p_last_cmd[0] ? p_last_cmd : "-", p_last_answer);
     printf("  tape: %u of %u bytes, LOAD position %u; SAVEs %lu, LOADs %lu, refused %lu\n", tape_len, TAPE_MAX,
            tape_pos, t_saves, t_loads, t_refused);
+    printf("  printer: %lu characters, %lu COPYs, %lu bad; text buffer %u bytes\n", prn_chars, prn_copies, prn_bad,
+           prn_text_n);
+}
+
+static void print_printer(void) {
+    prn_text[prn_text_n] = 0;
+    printf("  printer text (%u bytes):\n%s\n", prn_text_n, prn_text);
+    prn_text_n = 0;
+    if (copy_n) printf("  last COPY: mode %u, colour %u, %u screen bytes ('Y' dumps them)\n", copy_mode, copy_colour, copy_n);
+}
+
+static void dump_copy(void) {
+    printf("COPY %u %u %u\n", copy_mode, copy_colour, copy_n);
+    for (uint i = 0; i < copy_n; i++) printf("%02x%s", prn_body[3 + i], i % 64 == 63 ? "\n" : "");
+    printf("\nEND\n");
 }
 
 static void print_tape(void) {
@@ -1137,6 +1248,7 @@ static void help(void) {
            "  t           the TS-Pico protocol responder: state, counts, last command\n"
            "  l [n]       the last n protocol events (64)\n"
            "  T           the RAM tape's blocks (> marks the LOAD position)\n"
+           "  P / Y       printer text since the last 'P' / the last COPY's screen, in hex\n"
            "  p [0|1]     echo mode in place of the responder: OUT 0Eh bytes come back on IN 0Eh\n"
            "  m [0|1]     ROM set: 1 TS-Pico (default), 0 stock 2068 (2068 must be held)\n"
            "  u [n]       set the status byte IN 0Fh returns (hex)\n"
@@ -1244,6 +1356,8 @@ int main(void) {
             break;
         case 't': print_proto(); break;
         case 'T': print_tape(); break;
+        case 'P': print_printer(); break;
+        case 'Y': dump_copy(); break;
         case 'z':
             snap_ready = snap_waiting = false;
             snap_armed = true;
