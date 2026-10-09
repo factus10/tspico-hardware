@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -19,7 +19,7 @@ The plan therefore runs in four stages:
 
 | Fact | Source |
 |---|---|
-| MicroPython v1.20.0, plain Pico board, Python modules frozen, no C modules | `.github/workflows/build.yml:189`, `src/manifest.py` |
+| MicroPython v1.20.0, plain Pico board, Python modules frozen, no C modules. (v1.29.0 since firmware #121, 2026-10-02; see phase 2.) | `.github/workflows/build.yml:189`, `src/manifest.py` |
 | Clocked at 270 MHz | `src/main.py:59` |
 | Three PIO state machines: `TS_IO_DUAL` (PIO0 SM0, ports $0E/$0F), `set_ctrl` (/BE, A14_L and the flash/SRAM chip enables) and `sel_bank` (A15-A18 slot lines) | `src/TS/tspico_io.py:398-684`, `src/TS/tspico.py:5693-5704` |
 | All FIFO access is polled: no IRQs, no DMA. The status byte is the I/O state machine's Y register, set by writing instructions straight into PIO0 SM0's registers (`MQX`) | `tspico_io.py:115-129` |
@@ -63,7 +63,7 @@ Three hardware facts the firmware must respect:
 | LED | GP25, about 48 call sites | XL9555 bit 5 over I2C (about 100 µs per write) | Small; shim needed |
 | 2068 reset | 555 timer, firmware not involved | RESET_HOLD on GP29, released by firmware | Small |
 | Clock | 270 MHz | 250 MHz (core at 1.20 V, flash clock divider 3); the bus timing needs it | Measured in phase 1 |
-| Build, CI | MicroPython v1.20, RP2040 | A MicroPython release with RP2350 support, custom board, C user module | Medium |
+| Build, CI | MicroPython v1.29.0 (v1.20 until #121), RP2040 | MicroPython v1.29.0, custom board, C user module | Medium |
 | Web updater | RP2040 family ID only, 2 MB flash, `RPI-RP2` drive | Accept the RP2350 family (`rp2350-arm-s`), 16 MB, `RP2350` drive | Small |
 
 ## 4. Plan
@@ -118,6 +118,19 @@ Move the existing v2 build from v1.20.0 to the release that phase 3 will use on 
 **Exit:** host tests green, and a v2.2 board passes the usual hardware checks (LOAD, SAVE, `tpi:` commands, BLKRCV, ZX48 mode).
 
 If the newer MicroPython costs too much RAM on the RP2040, v2 stays pinned at v1.20 and CI builds the two boards against different MicroPython versions.
+
+**Results (done, 2026-10-09).** The firmware repo had already made this move before phase 1 started: #121 (merged 2026-10-02) moved the v2 build from v1.20.0 to **v1.29.0**, and releases 2.1.1, 2.2, 2.2.1 and 2.3 have shipped on it. Phase 3 uses the same release. Item by item:
+
+- **Release.** v1.29.0 is the newest stable release (v1.30.0 is only a preview tag). It supports the RP2350B: there are 48-GPIO boards in the tree (`WEACTSTUDIO_RP2350B_CORE`, `WAVESHARE_RP2350B_CORE`, with `PICO_NUM_GPIOS 48`), `rp2350b_af.csv`, and `machine.Pin` handles pins above 31. It supports PIO GPIOBASE: `rp2.PIO.gpio_base(0|16)`, with `StateMachine` pin bases checked against it (`ports/rp2/rp2_pio.c`). `tsbus` sets the base from C anyway. (The RP2350B is the QFN-80 package with 48 GPIOs, not a 48-pin package.)
+- **pico-sdk.** v1.29.0 bundles pico-sdk 2.3.0. The phase 1 bring-up was built against 2.1.1, so rebuild it on 2.3.0 at the start of phase 3, to keep an SDK change apart from the move into MicroPython.
+- **`mpy-cross`.** CI builds `mpy-cross` from the same v1.29.0 tree for `dev_tspico.mpy` (mpy v6.3); `build-dev-mpy.sh` pins `mpy-cross==1.29.*`. `main.py` falls back to the frozen firmware if a `.mpy` from another version is present.
+- **`asm_pio_encode`.** Same signature, `(instr, sideset_count, sideset_opt)`, with the count including the enable bit, which is how `MQX` calls it.
+- **`sm.exec`.** v1.29's `exec()` still runs the Python assembler on every call given text. Measured on a v2.2 board at 270 MHz (`src/test/mp_timing_bench.py`): `exec(text)` 5.8-7.2 ms (9.6 ms on v1.20), `exec(int)` 5.1 µs, `MQX` about 33 µs. `MQX` stays on v2; on v3 it becomes a `tsbus` call (phase 3).
+- **Per-byte Python costs** rose on v1.29 (a function call 5.6 to 7.3 µs). #121 fixed the ZX48 `tpi:` reply. #126-#128 moved the LOAD and pre-header paths to DMA, and #209 moved BLKRCV, which had been broken on v1.29 until then.
+- **RAM.** Free RAM at boot is 181 kB on v1.29, against 106 kB on v1.20, so v2 is not pinned at v1.20.
+- **Exit.** Host tests green. A v2.2 board passed LOAD, SAVE, `tpi:` commands and ZX48 in #121, and BLKRCV (the ROM update) after #209 (2026-10-06).
+
+A side effect to keep in mind: v1.29's LittleFS writes on-disk format 2.1, which v1.20 can't read, so flashing a v1.20 UF2 over v1.29 reformats the Pico's filesystem.
 
 ### Phase 3: MicroPython board and the `tsbus` C module
 
@@ -186,7 +199,7 @@ Each of these is independent and can be taken in any order:
 - **R2. Two state machines on one bus.** Memory and I/O cycles never overlap, but both state machines drive nAEN_LO/HI and MD. They need optional side-set, or pindir changes made only inside their own cycle. The alternative is one front-end state machine that waits on all four strobes and dispatches. *Resolved in phase 1:* five programs share the pins with optional side-set and no side-set on idle waits (a stalled instruction keeps asserting its side-set), and INs go to core 1.
 - **R3. Port decode fidelity.** v2.2 decodes $0E/$0F in 74LS glue. If that decode was partial, software may rely on mirror addresses that a full low-byte decode will not answer. Check the v2.2 decode before phase 1 step 3.
 - **R4. Bank-rule fidelity.** The "low 16K read" condition is now computed from A14, A15 and /RD in PIO. Test every slot class with the existing ROM images, including `OUT 244,3` (the Spectrum ROM through the DOCK).
-- **R5. MicroPython upgrade regressions** on v2 (RAM, `sm.exec`, `asm_pio_encode`). Phase 2 isolates them. Confirm RP2350B 48-pin and PIO GPIOBASE support in the chosen MicroPython release before committing to it.
+- **R5. MicroPython upgrade regressions** on v2 (RAM, `sm.exec`, `asm_pio_encode`). Phase 2 isolates them. Confirm RP2350B 48-pin and PIO GPIOBASE support in the chosen MicroPython release before committing to it. *Resolved in phase 2:* v1.29.0 supports both; RAM rose, `sm.exec` is still slow with text (`MQX` stays), and the per-byte slowdowns were fixed in the firmware.
 - **R6. Flash-write stalls.** LittleFS writes stall execute-in-place on the RP2350 just as on the RP2040. The memory path must not depend on flash. *Phase 1:* the memory path and core 1 run from SRAM, and the I/O queues are 1 KB, so a stall of a few milliseconds no longer drops bytes. Core 0's protocol code still has to avoid long stalls in the middle of a block.
 - **R7. Hardware.** GP8-GP10 lack pull-ups (fixed in firmware now, in the next board revision later). The ESP32-C3 ships with blank flash.
 
@@ -194,7 +207,7 @@ Each of these is independent and can be taken in any order:
 
 1. **One codebase or a fork?** Recommendation: one repo, with the board layer of phase 4. v2 users keep getting fixes, and the 34 host tests cover both boards.
 2. **Where the bus layer lives.** Recommendation: a C user module (`tsbus`), with the I/O FIFOs still exposed as an `rp2.StateMachine`. The PIO and DMA could be set up from Python with `rp2.DMA`, but timing, alignment and SM/DMA ownership are easier to guarantee in C, and the AY emulation needs C anyway (`PLAN.md`, risks).
-3. **MicroPython version for both boards,** or v2 pinned at v1.20 (phase 2 decides).
+3. **MicroPython version for both boards,** or v2 pinned at v1.20 (phase 2 decides). *Decided:* v1.29.0 for both boards.
 4. **Z80-side writes into ROM slots** (`v3-architecture.md` section 11, question 4): emulate the SST39SF040 command sequence, provide a Pico-side save command, or both. Recommendation: the save command for parity; emulation only if a real tool needs it.
 5. **Ports enabled at first release:** only $0E/$0F, or $1C-$1E from the start (section 11, question 2).
 6. **Slot storage layout:** file names, whether SD can override QSPI slots, and config migration from a v2 `config.ini`.
