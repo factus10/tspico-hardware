@@ -367,7 +367,8 @@ every OUT and queues the byte, port 0Fh as `0x100 | data`.
 - **The tail:** once the Z80 has read the answer, the next 0x01 is staged.
   A half-received pre-header or body is dropped after 1 s, and an answer
   nobody reads after 10 s, both with status FBh (RECOVERED, Report T).
-- The printer is not handled yet: it answers RECOVERED.
+- The printer ('B', TADDR 4-6), once printing is switched to the card
+  (`SAVE "tpi:picopt"`): see below.
 
 `t` shows the responder's state and counts. `l` shows a trace core 1 keeps of
 every OUT, every IN 0Eh and every change in the status read. `z` arms a
@@ -431,8 +432,24 @@ On board 1 with ROM 2.3: a 27-byte program and a 6,912-byte `SCREEN$` each
 saved, loaded back and verified (2 SAVEs, 7 LOADs counting the header the
 second search skipped), with nothing refused, lost or given up.
 
-Next: the printer transactions, or on to the MicroPython port (phase 2 of
-`docs/v3-firmware-port-plan.md`).
+### The printer
+
+As v2's `PRINT_IO`. Each LPRINT/LLIST character is its own transaction, SYNC
+and all: the character is in pre-header byte 3, and characters 80h and up add
+an 8-byte pattern as a body. COPY sends the display memory from 4000h as its
+body: 6,912 bytes, or 15,104 in the other screen modes. A body is captured
+after status F7h and its XOR checked. The card answers a final status for a
+body (1, or 2 for a bad COPY), then the next pre-load. Text goes into a 4 KB
+buffer, translated as v2's `TextCapture` does (ENTER a newline, INK to OVER
+and AT/TAB skip their parameters, block graphics and UDGs as zmakebas
+escapes). `P` on the USB menu prints and empties it. `Y` dumps the last COPY's
+screen bytes in hex.
+
+On board 1 with ROM 2.3: LPRINT and LLIST text arrived as typed, and two
+COPYs arrived with good XORs. The second, rebuilt on the Mac from the 6,912
+bytes, showed the text and line on the 2068's screen.
+
+Next: the MicroPython port (phase 2 of `docs/v3-firmware-port-plan.md`).
 
 ## Board notes from proto1
 
