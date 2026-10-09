@@ -537,11 +537,13 @@ stretches some IN cycles, and the guard was shorter than the longest ones.
   | the bank-switch code in RAM at 65D0h (F4h, FFh) | 8-50% |
   | ROM 2.3's `IN A,(0Eh)` at 2298h, from the EXROM | 32-59% |
 
-  So the high address byte is not the rule: `IN 32766` puts 7Fh there and
-  barely stretched. Contended RAM in a Spectrum's sense isn't either, since
-  60000 stretched too. *(inferred)* The SCLD holds the Z80 clock against the
-  display fetch for code running from RAM or the EXROM, but not from the HOME
-  ROM. The exact rule is not settled. FUSE models the 2068 as a Spectrum
+  The mechanism: the SCLD drives the Z80's clock, and stops it while it
+  updates the screen. An IN cycle that a stop lands in is stretched by whole
+  T-states. What isn't settled is which cycles the SCLD stops. The high
+  address byte is not the rule: `IN 32766` puts 7Fh there and barely
+  stretched. Contended RAM in a Spectrum's sense isn't either, since 60000
+  stretched too. INs running from the HOME ROM almost never stretch, while
+  those from RAM or the EXROM often do. FUSE models the 2068 as a Spectrum
   (4000h-7FFFh contended), which these numbers contradict.
 - **The guard was too short.** It allowed 2 µs of the 1 µs timer, counted
   from U3 on (0.3-0.5 µs into the IN), so it could end at about 2.3 µs from
