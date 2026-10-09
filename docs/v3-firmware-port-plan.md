@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -41,13 +41,14 @@ The `firmware/bringup/` self-test passes on board 1:
 - ESP32-C3 EN control, ROM boot banner and the IO9 download strap;
 - the LED.
 
-Not yet tested: anything plugged into a TS2068, SD with a card, audio, the joystick and the OLED.
+Not yet tested: SD with a card, audio, the joystick and the OLED. In a TS2068 the board now runs everything phase 1 asked for and more; see phase 1's results.
 
 Three hardware facts the firmware must respect:
 
 - **No PSRAM.** U22 is not fitted, so images live in internal SRAM (520 KB) and on the QSPI filesystem.
 - **Pin order at startup.** GP8-GP10 have no external pull-ups, so the first instructions must drive them high. `board_safe_init()` in the bring-up firmware does this; the production firmware has to do the same before MicroPython starts anything else.
 - **2068 reset.** RESET_HOLD holds the 2068 in reset until the firmware releases it. That replaces the v2.2 555 timer and removes the boot race.
+- **/BE needs a pull-up.** nBE (edge A29) is driven by an open-drain 74LVC06 and has no pull-up on proto1, so it rises too slowly: a RAM opcode fetch straight after a served ROM byte reads wrong bits. Proto1 boards need a 2.2k from A29 to +5V; the next revision needs a pull-up or a push-pull drive. (v2 drove /BE push-pull.)
 
 ## 3. What changes, layer by layer
 
@@ -55,13 +56,13 @@ Three hardware facts the firmware must respect:
 |---|---|---|---|
 | Memory | PIO selects chip and slot; chips serve bytes | PIO classifies the cycle; DMA moves the byte from or to a SRAM image | **New, large** |
 | I/O ports | `TS_IO_DUAL`: hardware decodes $0E/$0F to /PICOSEL; PIO sees A0 and R/W | PIO reads the low address byte through the U1/U2 byte mux and decodes $0E/$0F itself; MD direction and nDATA_OE explicit; /WAIT available | Rewrite the PIO; keep the Python contract |
-| Status byte, FIFOs | Y register, 4-deep FIFOs, `MQX` direct register writes | Same, if the I/O state machine stays on PIO0 SM0. The `MQX` register offsets are identical on the RP2350 (checked in the SDK register headers) | Small |
+| Status byte, FIFOs | Y register, 4-deep FIFOs, `MQX` direct register writes | No I/O state machine: core 1 answers INs and queues OUTs, and the status byte is a variable. `MQ` becomes a `tsbus` object with the same methods (phase 3) | Medium; the Python contract is kept |
 | Slots | 16 x 32 KB in parallel flash or SRAM; `ROM_SM` picks flash or SRAM | Image files on QSPI flash, loaded into SRAM; slot numbering kept | Medium |
 | ROM/DCK updates | Z80 programs flash (`romupdate.tap`, `dckupdate.tap`, upgrade UF2, `updater.asm`) | Pico writes the slot file directly | Medium; simplification |
 | SD | SPI0 on GP2-4, shared with the data bus | SPI0 on GP32/37-39, dedicated; can stay mounted | Small, and removes the suspected cause of "Report D" |
 | LED | GP25, about 48 call sites | XL9555 bit 5 over I2C (about 100 µs per write) | Small; shim needed |
 | 2068 reset | 555 timer, firmware not involved | RESET_HOLD on GP29, released by firmware | Small |
-| Clock | 270 MHz | 150 MHz nominal; overclock only if the bus timing needs it | Measure |
+| Clock | 270 MHz | 250 MHz (core at 1.20 V, flash clock divider 3); the bus timing needs it | Measured in phase 1 |
 | Build, CI | MicroPython v1.20, RP2040 | A MicroPython release with RP2350 support, custom board, C user module | Medium |
 | Web updater | RP2040 family ID only, 2 MB flash, `RPI-RP2` drive | Accept the RP2350 family (`rp2350-arm-s`), 16 MB, `RP2350` drive | Small |
 
@@ -96,6 +97,15 @@ Extend `firmware/bringup/` into a bus test. Stay in C on the bare Pico SDK so ti
 
 All state machines go on PIO0 and PIO1 with GPIOBASE 0; every bus pin is in GP0-GP23. The DMA chain and any interrupt handler must run from SRAM, not flash. Flash writes stall execute-in-place, and memory service has to continue through them; v2.1 already works around the same stall on core 1 (`tspico.py:6409`).
 
+**Results (2026-10-07 to 10-09, board 1 in a real 2068).** All four steps pass, and the C bus test went further: the ROM 2.2/2.3 protocol responder, LOAD and SAVE to a tape in RAM, and the printer (LPRINT, LLIST, COPY) all work against the real ROM. The details, and what each step took, are in `firmware/bringup/README.md`. What the later phases need to know:
+
+- **Clock.** 250 MHz. An opcode fetch needs the byte well under about 156 ns after the strobe; the card gets it there in about 124.
+- **Bank shadow, not /ROSCS and /EXROM.** The class of each read comes from a shadow of ports F4h and FFh kept by core 1, so /BE goes out about 50 ns after the strobe. With /BE from the 2068's own select lines it came too late for EXROM.
+- **PIO0 and PIO1 are full.** PIO0: `serve` (27 instructions) and `io_drive` (5). PIO1: `addr_read`, `mem_write` and `io_snoop` (13 + 11 + 8).
+- **No I/O state machine.** OUTs come in through `io_snoop`, which reads every I/O write (the bank shadow needs them all anyway). Core 1 takes INs from a GPIO edge interrupt on /IORD: it reads the port through a GPIO override on U1 and, for $0E/$0F, hands the reply to `io_drive` and enables U3. The worst time from the interrupt to U3 on is 320 ns of about 600. The status byte and the TX and RX queues (1 KB each) are core 1 variables.
+- **Core 1 belongs to the bus.** It runs from SRAM with its interrupt at top priority, and keeps the bank shadow, DOCK writes and the IN replies. Nothing else may run there.
+- **/BE pull-up.** See section 2.2. It was found by ROM 2.2's key click, which runs from the RAM bank-switch code on every keypress.
+
 ### Phase 2: MicroPython upgrade on v2 hardware
 
 Move the existing v2 build from v1.20.0 to the release that phase 3 will use on the RP2350. Change nothing else, so any regression is clearly MicroPython's.
@@ -112,13 +122,17 @@ If the newer MicroPython costs too much RAM on the RP2040, v2 stays pinned at v1
 ### Phase 3: MicroPython board and the `tsbus` C module
 
 - **Board definition.** Add `TSPICO_V3` to `ports/rp2/boards`, reusing `firmware/bringup/boards/tspico_v3.h` (RP2350B, 16 MB flash, 12 MHz crystal). Give the LittleFS filesystem most of the 16 MB for slot images, and leave PSRAM support off.
-- **`tsbus` C user module.** It wraps the phase 1 PIO programs and DMA chains:
+- **`tsbus` C user module.** It wraps the phase 1 PIO programs, DMA chains and core 1 code (`firmware/bringup/bus_card.pio` and `bus_card.c`):
   - safe pin init (first, before anything else);
-  - slot buffers at fixed 64 KB-aligned addresses, kept outside the MicroPython heap;
+  - image buffers at fixed addresses, kept outside the MicroPython heap (phase 1 interleaves HOME, EXROM and DOCK four bytes per address at `0x20040000`, 256 KB);
   - `load_slot(kind, bytes)` and `switch_slot(...)` under a running Z80;
   - RESET_HOLD control;
-  - claims its PIO state machines and DMA channels through the SDK so MicroPython's `rp2` module cannot hand them out again.
-- **MQ.** Keep the I/O state machine a MicroPython `rp2.StateMachine` on PIO0 SM0, built from the new PIO program. Then `MQ.put`, `get`, `tx_fifo`, `rx_fifo`, `MQX` and the Y-register status all keep their meaning, and so do the host tests that model them. If the I/O and memory programs have to be one state machine (risk R2), `tsbus` provides an object with the same five methods instead.
+  - claims its PIO state machines and DMA channels through the SDK so MicroPython's `rp2` module cannot hand them out again;
+  - starts core 1 itself, with the bus code and its interrupt handler in SRAM.
+- **Core 1 is `tsbus`'s.** v2.1 runs `BLINK_LED` and the log writer on core 1 with `_thread`. On v3 they move to core 0 (an idle-loop hook or a timer), and the v3 build must not start `_thread` work on core 1. The flash-write stall that v2.1 works around on core 1 (`tspico.py:6409`) still applies: LittleFS writes stall execute-in-place, so core 1's code must be entirely in SRAM, which phase 1's already is.
+- **MQ is a `tsbus` object, not a state machine.** Both PIO blocks are full and the I/O path is core 1 plus queues, so `rp2.StateMachine` is out. `tsbus` provides an object with `MQ`'s methods (`put`, `get`, `tx_fifo`, `rx_fifo`) and the status calls behind `MQ_STATUS`, `MQ_READY` and `MQX`, over core 1's queues and status byte. Auto-busy and the 9-bit RX words (bit 8 for $0F) keep their meaning, so the protocol code and its host tests carry over. Two things change:
+  - **Depth.** The queues are 1 KB, not 4 entries. Code that relied on a full 4-deep FIFO to pace itself (`TX_ROOM`, `CMD_PUT`) keeps working, but should be checked; a `tx_fifo()` that reports the real depth is safer than one that pretends to be 4.
+  - **Blocks instead of DMA.** v2.1 streams LOAD and BLKRCV blocks into the PIO FIFO by DMA because Python can't keep a 4-deep FIFO fed. On v3 there is no PIO FIFO to feed. `tsbus` takes a whole block instead, as a buffer or a pointer and length (for example `MQ.put_block(buf)`), and C streams it into the queue as the Z80 reads, as phase 1's LOAD does. Python never handles single bytes on these paths.
 - **CI.** Add a v3 build job: board `TSPICO_V3`, `USER_C_MODULES=tsbus`, its own artefact name.
 
 **Exit:** the v3 UF2 boots to the REPL. From the REPL, `tsbus` serves the genuine ROM, the 2068 boots, and an `MQ` loopback works.
@@ -138,7 +152,7 @@ Introduce `TS/board.py` with a v2 and a v3 implementation, selected at build tim
 
 v2 behaviour must be unchanged: the host tests pass, and a v2.2 board passes its hardware checks. On v3, `SD_CALL` and `CH_CALL` stop rebuilding `MQ`. That is the dedicated SPI bus paying off, and it removes the race behind the "#40" ordering in `SAVE_TS` (`tspico_io.py:2379-2391`).
 
-LED calls on v3 cost about 100 µs each over I2C. Keep them out of the timing-critical loops listed in `src/CLAUDE.md` (`RX_CAPTURE`, `RX_BLOCK`, `TX_ROOM`, the LOAD and BLKRCV streams). BLINK_LED runs on core 1 today; on v3 either hand the blink to core 0's idle loop or guard I2C with a lock.
+LED calls on v3 cost about 100 µs each over I2C. Keep them out of the timing-critical loops listed in `src/CLAUDE.md` (`RX_CAPTURE`, `RX_BLOCK`, `TX_ROOM`, the LOAD and BLKRCV streams). BLINK_LED runs on core 1 today; on v3 it moves to core 0's idle loop (phase 3: core 1 belongs to `tsbus`).
 
 **Exit:** both UF2s build from one tree, and both boards pass the same command list.
 
@@ -169,11 +183,11 @@ Each of these is independent and can be taken in any order:
   - overclock the RP2350;
   - pre-assert /WAIT on DOCK reads;
   - fewer PIO cycles in the mux sequence.
-- **R2. Two state machines on one bus.** Memory and I/O cycles never overlap, but both state machines drive nAEN_LO/HI and MD. They need optional side-set, or pindir changes made only inside their own cycle. The alternative is one front-end state machine that waits on all four strobes and dispatches.
+- **R2. Two state machines on one bus.** Memory and I/O cycles never overlap, but both state machines drive nAEN_LO/HI and MD. They need optional side-set, or pindir changes made only inside their own cycle. The alternative is one front-end state machine that waits on all four strobes and dispatches. *Resolved in phase 1:* five programs share the pins with optional side-set and no side-set on idle waits (a stalled instruction keeps asserting its side-set), and INs go to core 1.
 - **R3. Port decode fidelity.** v2.2 decodes $0E/$0F in 74LS glue. If that decode was partial, software may rely on mirror addresses that a full low-byte decode will not answer. Check the v2.2 decode before phase 1 step 3.
 - **R4. Bank-rule fidelity.** The "low 16K read" condition is now computed from A14, A15 and /RD in PIO. Test every slot class with the existing ROM images, including `OUT 244,3` (the Spectrum ROM through the DOCK).
 - **R5. MicroPython upgrade regressions** on v2 (RAM, `sm.exec`, `asm_pio_encode`). Phase 2 isolates them. Confirm RP2350B 48-pin and PIO GPIOBASE support in the chosen MicroPython release before committing to it.
-- **R6. Flash-write stalls.** LittleFS writes stall execute-in-place on the RP2350 just as on the RP2040. The memory path must not depend on flash. The 4-deep I/O FIFOs still need the core-1 log-writer discipline v2.1 already has.
+- **R6. Flash-write stalls.** LittleFS writes stall execute-in-place on the RP2350 just as on the RP2040. The memory path must not depend on flash. *Phase 1:* the memory path and core 1 run from SRAM, and the I/O queues are 1 KB, so a stall of a few milliseconds no longer drops bytes. Core 0's protocol code still has to avoid long stalls in the middle of a block.
 - **R7. Hardware.** GP8-GP10 lack pull-ups (fixed in firmware now, in the next board revision later). The ESP32-C3 ships with blank flash.
 
 ## 6. Decisions needed
