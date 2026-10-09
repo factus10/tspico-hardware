@@ -125,6 +125,21 @@ static void __not_in_flash_func(trace)(char kind, uint8_t v) {
     trace_n++;
 }
 static volatile uint32_t io_ins, io_in_ours, io_outs_ours, io_in_late;
+// Late-IN investigation: INs whose strobe had already ended when the handler
+// started; and the last long ones, whose strobe lasted LONG_CYC or more from the
+// handler's entry (time, port, reply or 100h if not ours, cycles from entry to
+// the end or the timeout, and whether it timed out). Per-port counts of all INs
+// and of long ones.
+static volatile uint32_t io_in_entry_high;
+#define LONG_CYC 300   // 1.2 us at 250 MHz; a normal IN ends about 0.5 us after entry
+#define LATE_N 32
+static uint32_t late_t[LATE_N], late_port[LATE_N], late_reply[LATE_N], late_cyc[LATE_N], late_to[LATE_N];
+// The last LATE_CTX reads the card had served (read-log entries) when each long
+// IN ended: shows whether the IN ran from a served ROM or from RAM.
+#define LATE_CTX 4
+static uint32_t late_ctx[LATE_N][LATE_CTX];
+static volatile uint32_t late_n;
+static uint32_t port_ins[256], port_long[256];
 // Core 1's worst gap between checks of nIORD, and worst time from noticing an IN
 // to U3 on, in core cycles (DWT counter).
 static volatile uint32_t poll_gap_max, respond_max;
@@ -261,6 +276,72 @@ static void set_sync_bypass(bool on) {
 
 // ---- start --------------------------------------------------------------------
 
+// ---- /IORD pulse lengths (PIO2), for the late-IN investigation ------------------
+//
+// iord_len times every nIORD low pulse, separately from core 1's IN handler, and
+// a DMA channel streams the counts into iord_ring without end. Core 0 folds them
+// into a histogram from its poll loop; 'd' prints it.
+#define IORD_RING_N 4096
+static uint32_t iord_ring[IORD_RING_N] __attribute__((aligned(IORD_RING_N * 4)));
+static uint ch_iord;
+static uint32_t iord_seen;                       // next ring index to fold in
+static const uint32_t iord_edge_ns[] = {500, 750, 1000, 1500, 2000, 3000, 5000, 10000};
+#define IORD_BUCKETS (count_of(iord_edge_ns) + 1)
+static uint32_t iord_hist[IORD_BUCKETS], iord_pulses, iord_max_ns;
+#define IORD_LONG_N 16
+static uint32_t iord_long_t[IORD_LONG_N], iord_long_ns[IORD_LONG_N], iord_long_n;
+
+static void iord_len_start(void) {
+    PIO pio = pio2;
+    uint sm = pio_claim_unused_sm(pio, true);
+    uint off = pio_add_program(pio, &iord_len_program);
+    pio_sm_config c = iord_len_program_get_default_config(off);
+    sm_config_set_jmp_pin(&c, 17);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    pio_sm_init(pio, sm, off, &c);
+
+    ch_iord = dma_claim_unused_channel(true);
+    dma_channel_config d = dma_channel_get_default_config(ch_iord);
+    channel_config_set_transfer_data_size(&d, DMA_SIZE_32);
+    channel_config_set_read_increment(&d, false);
+    channel_config_set_write_increment(&d, true);
+    channel_config_set_ring(&d, true, 14);       // 4096 words
+    channel_config_set_dreq(&d, pio_get_dreq(pio, sm, false));
+    dma_channel_configure(ch_iord, &d, iord_ring, &pio->rxf[sm], dma_encode_endless_transfer_count(), true);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static void iord_reset(void) {
+    late_n = 0;
+    memset(port_ins, 0, sizeof port_ins);
+    memset(port_long, 0, sizeof port_long);
+    iord_seen = (dma_hw->ch[ch_iord].write_addr - (uint32_t)iord_ring) / 4;
+    memset(iord_hist, 0, sizeof iord_hist);
+    iord_pulses = iord_max_ns = iord_long_n = 0;
+}
+
+// Fold the new pulses into the histogram. Pulses over 2 us also go to a ring,
+// with the time they were folded in (within the poll loop's latency).
+static void iord_scan(void) {
+    uint32_t now = (dma_hw->ch[ch_iord].write_addr - (uint32_t)iord_ring) / 4;
+    while (iord_seen != now) {
+        uint32_t loops = iord_ring[iord_seen];
+        iord_seen = (iord_seen + 1) & (IORD_RING_N - 1);
+        uint32_t ns_len = loops > 100000000u ? 0xffffffffu : loops * 8;   // 8 ns a loop at 250 MHz
+        uint b = 0;
+        while (b < count_of(iord_edge_ns) && ns_len >= iord_edge_ns[b]) b++;
+        iord_hist[b]++;
+        iord_pulses++;
+        if (ns_len > iord_max_ns) iord_max_ns = ns_len;
+        if (ns_len >= 2000) {
+            iord_long_t[iord_long_n % IORD_LONG_N] = timer_hw->timerawl;
+            iord_long_ns[iord_long_n % IORD_LONG_N] = ns_len;
+            iord_long_n++;
+        }
+    }
+}
+
 static void bus_start(void) {
     pio_set_gpio_base(pio_serve, 0);
     pio_set_gpio_base(pio_addr, 0);
@@ -365,6 +446,7 @@ static void bus_start(void) {
     pio_sm_set_enabled(pio_addr, sm_addr, true);
     pio_sm_set_enabled(pio_addr, sm_write, true);
     pio_sm_set_enabled(pio_addr, sm_snoop, true);
+    iord_len_start();
 }
 
 // ---- core 1 -------------------------------------------------------------------
@@ -393,17 +475,24 @@ static inline void force_low(uint gpio) { hw_set_bits(&io_bank0_hw->io[gpio].ctr
 static inline void release(uint gpio) { hw_clear_bits(&io_bank0_hw->io[gpio].ctrl, FORCE_LOW); }
 
 #define IORD_MASK (1u << 17)
-#define IO_TIMEOUT_US 2   // a real IN holds nIORD low about 0.75 us
+// How long U3 may stay on waiting for the strobe to end, in core cycles from the
+// handler's entry. An IN holds nIORD low about 0.7 us, but the 2068 stretches
+// some IN cycles by whole T-states (clock held by the SCLD, inferred): up to
+// 2.4 us measured (README, "Long IN strobes"). The old limit, 2 us of the
+// 1 us timer counted from U3 on, could end before the Z80 sampled the reply.
+#define IO_TIMEOUT_CYC 1000   // 4 us at 250 MHz
 
 // An IN is in progress (nIORD low). Read the port through U1; for 0Eh/0Fh put
 // the reply on MD (io_drive) and U3 on until the strobe ends.
 static void __not_in_flash_func(handle_in)(void) {
     uint32_t t0c = m33_hw->dwt_cyccnt;
+    uint32_t in0 = sio_hw->gpio_in;
     io_ins++;
     force_low(PIN_NAEN_LO);                   // U1: A7..A0 onto MD
     busy_wait_at_least_cycles(8);             // ~32 ns: U1 enable plus margin
     uint port = sio_hw->gpio_in & 0xff;
     release(PIN_NAEN_LO);
+    uint reply_log = 0x100;
     if ((port & 0xfe) == 0x0e) {
         uint8_t reply;
         if (port & 1) {
@@ -415,6 +504,7 @@ static void __not_in_flash_func(handle_in)(void) {
             reply = 0x00;
         }
         pio_serve->txf[sm_iodrv] = reply;     // io_drive: onto MD
+        reply_log = reply;
         busy_wait_at_least_cycles(4);
         force_low(PIN_NDATA_OE);              // U3: MD onto the Z80's data bus
         io_in_ours++;
@@ -429,10 +519,30 @@ static void __not_in_flash_func(handle_in)(void) {
     }
     // Wait for the strobe to end, with a timeout so U3 can never stay on.
     uint32_t t0 = timer_hw->timerawl;
+    bool timed_out = false;
     while (!(sio_hw->gpio_in & IORD_MASK)) {
-        if (timer_hw->timerawl - t0 > IO_TIMEOUT_US) { io_in_late++; break; }
+        if (m33_hw->dwt_cyccnt - t0c > IO_TIMEOUT_CYC) {
+            io_in_late++;
+            timed_out = true;
+            break;
+        }
     }
     release(PIN_NDATA_OE);
+    uint32_t dur = m33_hw->dwt_cyccnt - t0c;
+    port_ins[port]++;
+    if (dur >= LONG_CYC) {
+        port_long[port]++;
+        uint32_t i = late_n % LATE_N;
+        late_t[i] = t0;
+        late_port[i] = port;
+        late_reply[i] = reply_log;
+        late_cyc[i] = dur;
+        late_to[i] = timed_out;
+        uint32_t pos = (dma_hw->ch[ch_log].write_addr - (uint32_t)addr_log) / 4;
+        for (uint j = 0; j < LATE_CTX; j++) late_ctx[i][j] = addr_log[(pos - LATE_CTX + j) & (LOG_N - 1)];
+        late_n++;
+    }
+    if (in0 & IORD_MASK) io_in_entry_high++;
 }
 
 // A falling edge on nIORD interrupts core 1 wherever its loop is (polling left
@@ -1192,6 +1302,39 @@ static void print_io(void) {
            respond_max * 1000 / hz);
 }
 
+static void print_entry(uint32_t p);
+static void print_iord(void) {
+    iord_scan();
+    printf("  nIORD low pulses (PIO2, 8 ns): %lu, longest %lu ns\n", iord_pulses, iord_max_ns);
+    printf("   ");
+    for (uint b = 0; b < IORD_BUCKETS; b++) {
+        if (b == 0) printf("<%lu", iord_edge_ns[0]);
+        else if (b == IORD_BUCKETS - 1) printf(">=%lu", iord_edge_ns[b - 1]);
+        else printf("%lu-%lu", iord_edge_ns[b - 1], iord_edge_ns[b]);
+        printf(":%lu  ", iord_hist[b]);
+    }
+    printf("(ns)\n");
+    uint32_t n = iord_long_n, f = n > IORD_LONG_N ? n - IORD_LONG_N : 0;
+    for (uint32_t i = f; i < n; i++)
+        printf("   long pulse at %lu us: %lu ns\n", iord_long_t[i % IORD_LONG_N], iord_long_ns[i % IORD_LONG_N]);
+    uint hz = clock_get_hz(clk_sys) / 1000000;
+    printf("  core 1: INs %lu, late %lu, strobe already over at entry %lu, long (>= %u ns from entry) %lu\n",
+           io_ins, io_in_late, io_in_entry_high, LONG_CYC * 1000 / hz, late_n);
+    printf("   by port (all INs / long):");
+    for (uint p = 0; p < 256; p++)
+        if (port_ins[p]) printf(" %02x:%lu/%lu", p, port_ins[p], port_long[p]);
+    printf("\n");
+    n = late_n; f = n > LATE_N ? n - LATE_N : 0;
+    for (uint32_t i = f; i < n; i++) {
+        uint32_t k = i % LATE_N;
+        printf("   long at %lu us: port %02lx, reply %s%02lx, %lu ns from entry%s; last reads:", late_t[k],
+               late_port[k], late_reply[k] > 0xff ? "none " : "", late_reply[k] & 0xff, late_cyc[k] * 1000 / hz,
+               late_to[k] ? " (timed out)" : "");
+        for (uint j = 0; j < LATE_CTX; j++) print_entry(late_ctx[k][j]);
+        printf("\n");
+    }
+}
+
 static void print_banks(void) {
     uint hsr = sh_hsr, ff = sh_ff;
     printf("  shadow: F4h (HSR) = %02x, FFh = %02x; chunk table:", hsr, ff);
@@ -1260,6 +1403,7 @@ static void help(void) {
            "  k [0|1]     serve DOCK-bank chunks (no /BE), and store writes to them\n"
            "  x [a b c d] delays in cycles: serve's U2 wait, serve's U1 wait, U2 hold, U1 hold\n"
            "  q [0|1]     input synchroniser bypass on MD and the strobes\n"
+           "  d [0]       nIORD pulse lengths (PIO2) and core 1's late INs ('d 0' clears)\n"
            "  ?           this help\n"
            "Clock %lu MHz.\n",
            clock_get_hz(clk_sys) / 1000000);
@@ -1269,6 +1413,7 @@ static int read_line(char *buf, int len) {
     int n = 0;
     for (;;) {
         proto_poll();
+        iord_scan();
         int c = getchar_timeout_us(0);
         if (c == PICO_ERROR_TIMEOUT) continue;
         if (c == '\r' || c == '\n') {
@@ -1343,6 +1488,10 @@ int main(void) {
             print_io();
             break;
         case 'i': measure_iord(); break;
+        case 'd':
+            if (sscanf(line + 1, "%u", &v) == 1 && v == 0) iord_reset();
+            print_iord();
+            break;
         case 'n':
             if (sscanf(line + 1, "%u", &v) == 1) in_handling = v != 0;
             printf("  IN handling %s\n", in_handling ? "on" : "off: every IN left to the 2068");

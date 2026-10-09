@@ -487,15 +487,82 @@ MicroPython.
 
 "Late" counts every IN (the keyboard's too) whose /IORD was still low past
 `IO_TIMEOUT_US`, after which U3 is turned off. It happens only during
-protocol work, not at idle, at about the same rate on both SDKs. Why the
-strobe runs long then isn't known yet. The replies were read correctly:
-every XOR passed. It is worth understanding before `tsbus`.
+protocol work, not at idle, at about the same rate on both SDKs. The 2068
+stretches those IN cycles, and the guard was too short for them: see "Long IN
+strobes" below, which explains them and fixes the guard.
 
 A first attempt at serving after the boards were swapped stalled `serve`
 after one read (pc 25), on both builds. A boot in shadow mode (`g` without
 `e 1`) cleared it, and serving worked after that. It looks like the
 bank-register state that otherwise needs a power cycle (step 4 above). It is
 not an SDK difference.
+
+### Long IN strobes (board 1, 2026-10-09)
+
+The "late" INs above: in about a fifth of protocol INs, /IORD was still low
+when core 1's guard ran out and turned U3 off. The answer is that the 2068
+stretches some IN cycles, and the guard was shorter than the longest ones.
+
+**Instruments** (still in `bus_card`):
+
+- **`iord_len` (PIO2).** It times every nIORD low pulse in 8 ns steps,
+  independently of core 1. A DMA channel streams the counts into a 4K-word
+  ring with no end, and core 0 folds them into a histogram from its poll
+  loop.
+- **Core 1, for each IN.** It counts INs whose strobe had already ended when
+  the handler started. It also counts all INs and long INs by port (long
+  means 1.2 µs or more from the handler's entry). For each of the last 32
+  long INs it keeps the time, port, reply, duration and the last four reads
+  the card served.
+- **`d` prints all of this; `d 0` clears it.**
+
+**Findings** (ROM 2.3, card serving HOME, EXROM and DOCK):
+
+- **The stretch is real and comes from the 2068, not core 1.** At idle,
+  every pulse was 500-750 ns (longest 696 ns). Under protocol work, PIO2
+  saw pulses of 1.5-2.4 µs. They come in whole T-states: about 1.74, 2.02 and
+  2.31 µs from the handler's entry. The longest pulse in over 400,000 INs was
+  **2,400 ns**: a normal IN (about 0.7 µs) plus 6 T-states, the most a
+  Spectrum-style contention scheme adds.
+- **The card does not cause it.** `bus_card` never drives WAIT_REQ, and the
+  2068's own INs to F4h, FFh and FEh stretch too.
+- **It depends on where the IN runs, not on the port.** Share of INs that
+  lasted 1.2 µs or more from the handler's entry, over several runs:
+
+  | Code | Long INs |
+  |---|---|
+  | BASIC `IN 254` and `IN 32766`, from the HOME ROM | 0.2% |
+  | `IN A,(FEh)` loop (A = 0) from RAM at 60000 | 15% |
+  | the same loop from RAM at 5B00h | about 28% (that run's counts include the BASIC `RUN`) |
+  | the bank-switch code in RAM at 65D0h (F4h, FFh) | 8-50% |
+  | ROM 2.3's `IN A,(0Eh)` at 2298h, from the EXROM | 32-59% |
+
+  So the high address byte is not the rule: `IN 32766` puts 7Fh there and
+  barely stretched. Contended RAM in a Spectrum's sense isn't either, since
+  60000 stretched too. *(inferred)* The SCLD holds the Z80 clock against the
+  display fetch for code running from RAM or the EXROM, but not from the HOME
+  ROM. The exact rule is not settled. FUSE models the 2068 as a Spectrum
+  (4000h-7FFFh contended), which these numbers contradict.
+- **The guard was too short.** It allowed 2 µs of the 1 µs timer, counted
+  from U3 on (0.3-0.5 µs into the IN), so it could end at about 2.3 µs from
+  entry. That is before a 2.4 µs strobe ends, and so before the Z80 samples
+  the reply at the end of T3. With the reply on 0Eh/0Fh, U3 went off early,
+  and the byte survived only on the bus's charge.
+
+**Fix:** `IO_TIMEOUT_CYC`. The guard is now 1,000 core cycles (4 µs) from
+the handler's entry, counted on the DWT cycle counter. The guard still exists
+so U3 can't stay on if /IORD sticks low. Same verification set as before
+(tpi:info, SAVE/LOAD/VERIFY of a program and a `SCREEN$`, LPRINT/LLIST/COPY,
+and the RAM loop at 5B00h):
+
+- 310,220 INs, 47,859 of them stretched (2,375 on 0Eh/0Fh); longest 2,392 ns.
+- **0 late.** Nothing refused or lost, and no bad XORs.
+- Worst time from entry to U3 on: 316 ns, unchanged.
+
+**For `tsbus`:** the IN handler must time the strobe with the cycle counter,
+and allow at least the 2.4 µs worst case with a margin; 4 µs here. While
+core 1 waits it handles no I/O writes. That is safe because `io_snoop`'s FIFO
+holds them, and OUTs are microseconds apart.
 
 Next: the MicroPython board definition and the `tsbus` module (phase 3).
 

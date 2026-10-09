@@ -166,3 +166,22 @@ data_wait:
     wait 1 gpio 18
 .wrap
 
+
+; -----------------------------------------------------------------------------
+; iord_len (PIO2): times every nIORD low pulse, independently of core 1, for the
+; late-IN investigation. Pushes the number of two-instruction loops nIORD (GP17,
+; also the jmp pin) stayed low: 8 ns each at 250 MHz, plus the input
+; synchroniser's two cycles at each edge. Drives nothing. A DMA channel streams
+; the counts into a RAM ring; core 0 folds them into a histogram ('d').
+
+.program iord_len
+.wrap_target
+    wait 0 gpio 17
+    mov x, ~null
+low:
+    jmp pin done
+    jmp x-- low
+done:
+    mov isr, ~x
+    push noblock
+.wrap
