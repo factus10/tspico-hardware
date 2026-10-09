@@ -6,8 +6,10 @@ offers a menu for the checks that need a person (LED, joystick, audio, OLED).
 
 ## Build and flash
 
-Needs the Pico SDK (2.1.1 or later, for RP2350 support), the Arm GNU toolchain
-and picotool (`brew install picotool`).
+Needs the Pico SDK, the Arm GNU toolchain and picotool (`brew install
+picotool`). Use pico-sdk 2.3.0, the version MicroPython v1.29.0 bundles, which
+the `tsbus` module will be built with. Phase 1 was done on 2.1.1, and 2.3.0
+gives the same results (see "pico-sdk 2.3.0" below).
 
 ```bash
 export PICO_SDK_PATH=~/pico/pico-sdk
@@ -449,7 +451,53 @@ On board 1 with ROM 2.3: LPRINT and LLIST text arrived as typed, and two
 COPYs arrived with good XORs. The second, rebuilt on the Mac from the 6,912
 bytes, showed the text and line on the 2068's screen.
 
-Next: the MicroPython port (phase 2 of `docs/v3-firmware-port-plan.md`).
+### pico-sdk 2.3.0 (board 1, 2026-10-09)
+
+Phase 3 of `docs/v3-firmware-port-plan.md` starts by rebuilding this firmware
+on pico-sdk 2.3.0, the SDK in MicroPython v1.29.0. Phase 1 used 2.1.1, and
+this rebuild keeps any change the SDK makes apart from the move into
+MicroPython.
+
+**Build.** All four targets build on both SDKs with no warnings. For
+`bus_card`:
+
+- The C runtime still ends below the images: `.bss` ends at `0x2002f8a0`
+  (`0x2002fb78` on 2.1.1), `__HeapLimit` is `0x20040000`, and the scratch and
+  stack sections are where they were. `memmap_bus.ld` needs no change.
+- The same functions run from RAM.
+- Nothing on the hot path calls into flash: `iord_isr`, `handle_in`,
+  `write_table`, `trace` and `log_to_ring` make no flash calls on either
+  SDK. Only `core1_main`'s one-time interrupt setup and the USB stack call
+  flash code through veneers, the same calls on both.
+
+**On the 2068, with ROM 2.3:**
+
+- Boot, typing (the key-click test for the /BE bug) and `tpi:info` work.
+- SAVE, LOAD and VERIFY of a program and a `SCREEN$` to the RAM tape work:
+  2 SAVEs, 7 LOADs, nothing refused or lost.
+- LPRINT, LLIST and COPY work, with no bad XORs.
+- DOCK: 256 POKEs through chunk 4 read back with 0 errors.
+
+| Same steps (SAVE, LOAD, printer) | 2.1.1 | 2.3.0 |
+|---|---|---|
+| IN 0Eh/0Fh answered | 7282 | 7337 (+ the DOCK test) |
+| INs whose strobe outlasted the 2 µs guard ("late") | 1289 | 1613 |
+| Worst time from entering the handler to U3 on | 316 ns | 320 ns |
+| Idle BASIC, 60 s: INs, late | — | 29600, 0 |
+
+"Late" counts every IN (the keyboard's too) whose /IORD was still low past
+`IO_TIMEOUT_US`, after which U3 is turned off. It happens only during
+protocol work, not at idle, at about the same rate on both SDKs. Why the
+strobe runs long then isn't known yet. The replies were read correctly:
+every XOR passed. It is worth understanding before `tsbus`.
+
+A first attempt at serving after the boards were swapped stalled `serve`
+after one read (pc 25), on both builds. A boot in shadow mode (`g` without
+`e 1`) cleared it, and serving worked after that. It looks like the
+bank-register state that otherwise needs a power cycle (step 4 above). It is
+not an SDK difference.
+
+Next: the MicroPython board definition and the `tsbus` module (phase 3).
 
 ## Board notes from proto1
 
