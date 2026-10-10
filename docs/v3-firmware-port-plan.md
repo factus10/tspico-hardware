@@ -200,6 +200,31 @@ LED calls on v3 cost about 100 µs each over I2C. Keep them out of the timing-cr
 
 **Exit:** both UF2s build from one tree, and both boards pass the same command list.
 
+**Results (2026-10-10, tspico-firmware-build #239-#244; design in its `docs/v3-board-layer-proposal.md`):**
+
+- **Exit passed.** Firmware `main` (83b06e1) ran the same command list on a v2.2 board and on proto1:
+  - `tpi:info`, `CAT`, `tpi:dir`;
+  - a LOAD and SAVE round trip of BASIC, SCREEN$ and 16K CODE, byte-exact on both boards (`src/test/sd_roundtrip.py`);
+  - BREAK mid-LOAD;
+  - folders;
+  - a card pulled and put back;
+  - the printer capture.
+  
+  The exceptions, deferred to phase 5: `tpi:boot`, `tpi:dock` and `tpi:blkrcv` refuse on v3 with Report F, and ZX48 needs the Spectrum ROM's slot. On v2 ZX48 passed, including a byte-exact SAVE in Spectrum mode.
+- **Where it differs from the table above:**
+  - The board is chosen at run time (`from tsbus import MQ` succeeds), not at build time, so one set of frozen modules serves both boards.
+  - SD still mounts and unmounts per command on v3. The dedicated pins mean `sd_take_bus` keeps `MQ`, and `tsbus` serves the 2068 throughout.
+  - There is no shadow boot: the 2068 is held in reset until the ROM file is loaded into SRAM.
+  - `map_slots` is a no-op until phase 5.
+- **The deep queues.** `put_block(buf, wait_ms)` in `tsbus` is v3's `STREAM_DMA`; Python never handles single bytes on the block paths. A host test reruns the v2 Z80 models (LOAD, commands, SAVE, ZX48) on 1,024-entry queues. It found one bug: in ZX48 mode a block was "sent" with up to 1,020 bytes unread. Fixed.
+- **The LED** (D4, XL9555 bit 5) is dimmed by two soft timers. `config.ini`'s `LED_BRIGHTNESS` is 1-100 %, default 5.
+- **SD hot insert** ([#21](https://github.com/factus10/tspico-hardware/issues/21)): two cards died going into a running proto1. The firmware had held CS, SCK and MOSI driven between commands, and clocked an empty socket for about 3.6 s each time it looked; the detect switch was never read. Now:
+  - the switch is read before any SD line is touched;
+  - a new card gets 250 ms to settle;
+  - the lines are plain inputs while no card is mounted, as v2's are.
+  
+  Three hot inserts were clean afterwards.
+
 ### Phase 5: Feature parity on v3
 
 1. **Boot order.** Run safe init, then load the configured slots from QSPI into SRAM, then start the memory and I/O state machines, then release RESET_HOLD. The 2068 no longer needs to wait out a 2-3 s reset pulse.
