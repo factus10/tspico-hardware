@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -150,6 +150,36 @@ A side effect to keep in mind: v1.29's LittleFS writes on-disk format 2.1, which
 - **CI.** Add a v3 build job: board `TSPICO_V3`, `USER_C_MODULES=tsbus`, its own artefact name.
 
 **Exit:** the v3 UF2 boots to the REPL. From the REPL, `tsbus` serves the genuine ROM, the 2068 boots, and an `MQ` loopback works.
+
+**Results (2026-10-09 to 10-10, board 1 in a real 2068; firmware #234, #235, #236).** The exit test passes. The details are in the firmware repo's programmer's reference (`docs/reference/firmware/board-v3.md` and `tsbus.md`). What phase 4 needs to know:
+
+- **The board** is `src/boards/TSPICO_V3`, built from outside the MicroPython tree with `BOARD_DIR`. CI's `build-v3` job uploads `tspico-v3-firmware-uf2`, and `tools/pico-serial.py flash --v3` installs it. The filesystem is 14 MB.
+  - Safe pins and the XL9555's outputs are set in `MICROPY_BOARD_STARTUP`, right after the clock.
+  - Default `UART`/`I2C`/`SPI` pins point at the card's wiring, because the port's defaults land on MD0-MD7 and the buffer enables.
+- **Memory.** The GC heap ends at `0x20040000` (about 196 KB), so the top 256 KB of SRAM holds the images.
+  - This is a linker override that a deferred CMake call puts ahead of MicroPython's own override directories.
+  - The C stack is scratch Y's 8 KB.
+  - SRAM is striped across all eight banks, but measured contention between the interpreter and the DMA is negligible.
+- **Core 1** runs only `tsbus`, from SRAM, with `_thread` off.
+  - It has its own vector table, because MicroPython keeps `machine.Pin`'s handler on `IO_IRQ_BANK0` in the table both cores start with.
+  - It is not a multicore lockout victim, so LittleFS writes don't pause it.
+  - Serving carried on through 256 KB of writes, and through a soft reset.
+- **The clock.** The board boots at 150 MHz, and `tsbus.start()` raises it to 250 MHz at 1.20 V, with the flash at most 84 MHz (divider 3). Two traps:
+  - **Booting at 250 MHz hangs before USB.** The SDK sets the clock before MicroPython sets the flash divider.
+  - **boot2's divider must be 3.** After every flash erase or program, the SDK re-enables XIP through boot2 before MicroPython restores its own divider, in code that runs from flash. With `PICO_FLASH_SPI_CLKDIV` 2, the first LittleFS write at 250 MHz hung core 0.
+  - Nothing yet stops Python calling `machine.freq()` after `start()`, which would break the bus timing.
+- **`tsbus`** runs phase 1's five PIO programs unchanged (a copy of `bus_card.pio`), and the IN handler with the 4 µs cycle-counted guard.
+  - API: `start`, `load(slot, data)`, `serve`, `exrom`, `dock`, `hold`, `stats`.
+  - With the genuine ROMs, each boot took the same 1,988 EXROM and 12 DOCK reads as phase 1.
+  - The card's copyright marker appeared on screen, and typing worked.
+  - A BASIC DOCK test read 256 bytes back with 0 errors.
+- **`MQ`** is `tsbus.MQ()`:
+  - `put`, `get` (9-bit words), `tx_fifo` and `rx_fifo` (the real levels, up to 1,024), `put_block`, `status`, and `exec` for exactly the strings `MQX` sends; `active` does nothing.
+  - `exec` gives `MQ_STATUS`'s F7h, FBh and FFh.
+  - The BASIC loopback (`OUT 14`, wait for 255 on `IN 15`, `IN 14`) over 0-255 had 0 errors, with a worst response of 324 ns.
+  - **For phase 4:** the pacing code that relied on a full 4-deep FIFO (`TX_ROOM`, `CMD_PUT`) has to be checked against queues of 1,024.
+- **The SCLD keeps its bank registers through a Z80 reset.** After a crashed boot, the next served boot fails too. To recover, power-cycle the 2068 and then boot it from its own ROM first (shadow mode) before serving.
+- **Still to do in phase 3:** `switch_slot(...)` under a running Z80. `tsbus.load` already writes a slot.
 
 ### Phase 4: Board layer in the shared firmware
 
