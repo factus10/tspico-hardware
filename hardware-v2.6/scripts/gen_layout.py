@@ -43,9 +43,11 @@ P = {}
 # toward the glue logic, QSPI and USB on the left toward the flash and the USB-C socket, the
 # crystal on the right, GP18-GP29 along the top.
 P["U2"] = (24.0, 19.5, 90)
-P["C21"], P["C22"] = (21.0, 25.3, 0), (27.0, 25.3, 0)            # IOVDD pins 1 and 10 (bottom side)
+# IOVDD pins 1, 10 (bottom row) and 33, 42 (top row): each cap stands on its own pin's lane, +3V3 pad
+# nearest the chip, so it blocks no neighbour's escape; the pin-to-cap stub is a locked pre-route (below)
+P["C21"], P["C22"] = (21.4, 25.4, 270), (25.0, 25.4, 270)
 P["C23"], P["C30"] = (29.8, 23.0, 90), (29.8, 16.6, 90)          # IOVDD 22, DVDD 23 (right side)
-P["C24"], P["C25"] = (27.0, 13.7, 0), (21.0, 13.7, 0)            # IOVDD 33, 42 (top side)
+P["C24"], P["C25"] = (25.0, 13.6, 90), (21.4, 13.6, 90)
 P["C26"], P["C27"] = (18.0, 22.6, 90), (18.0, 16.4, 90)          # IOVDD 49 / USB_VDD, ADC_AVDD (left side)
 P["C28"], P["C29"], P["C31"] = (16.1, 16.4, 90), (16.1, 19.5, 90), (18.0, 19.5, 90)   # VREG_VIN, VREG_VOUT, DVDD 50
 P["Y1"], P["R25"], P["C33"], P["C34"] = (34.6, 19.5, 0), (31.6, 20.2, 90), (34.6, 16.6, 0), (34.6, 22.4, 0)
@@ -60,7 +62,7 @@ P["TP1"], P["TP2"], P["TP3"] = (24.5, 29.0, 0), (27.0, 29.0, 0), (29.5, 29.0, 0)
 P["SW4"] = (12.5, 4.0, 0)
 P["U22"], P["C35"], P["C2"] = (21.8, 5.4, 90), (27.4, 6.2, 0), (27.4, 2.0, 0)
 P["D2"], P["D4"] = (33.0, 2.0, 0), (33.0, 5.6, 0)
-P["R9"], P["R15"], P["R16"], P["R4"] = (38.0, 2.4, 90), (40.3, 2.4, 90), (42.6, 2.4, 90), (44.9, 2.4, 90)
+P["R9"], P["R15"], P["R16"] = (38.0, 2.4, 90), (40.3, 2.4, 90), (42.6, 2.4, 90)
 P["SW1"], P["SW2"], P["SW3"] = (58.0, 4.5, 0), (74.0, 4.5, 0), (90.0, 4.5, 0)
 P["C15"] = (52.6, 6.6, 0)
 P["JP2"], P["JP3"], P["JP5"] = (66.0, 4.5, 90), (82.0, 4.5, 90), (98.0, 4.5, 90)
@@ -79,19 +81,20 @@ P["U3"] = (9.58, 39.8, 270)
 P["R22"], P["R23"], P["C3"], P["C18"] = (19.8, 34.0, 0), (19.8, 35.8, 0), (19.8, 37.6, 0), (19.8, 39.8, 0)
 # glue row, decoupling caps above each package
 ROW1 = 38.8
-for ref, cap, x in (("U1", "C1", 26.0), ("U5", "C5", 35.5), ("U4", "C4", 45.0), ("U9", "C14", 54.5)):
-    P[ref], P[cap] = (x, ROW1, 0), (x, ROW1 - 5.8, 0)
-P["U8"], P["C8"] = (64.0, ROW1 + 0.3, 0), (64.0, ROW1 - 5.8, 0)
-P["U7"], P["C6"] = (73.0, ROW1, 0), (73.0, ROW1 - 5.8, 0)
-P["R7"], P["R2"] = (71.5, ROW1 + 6.0, 90), (74.5, ROW1 + 6.0, 90)
-P["R8"], P["R3"], P["JP1"] = (52.5, ROW1 + 6.6, 90), (55.0, ROW1 + 6.6, 90), (58.4, ROW1 + 6.6, 90)
-P["JP4"] = (31.0, ROW1 + 7.0, 0)
-# power-on reset (555) on the right, below the flash socket
-P["U11"] = (108.0, 37.0, 0)
-P["R1"], P["C9"] = (103.0, 42.5, 90), (105.5, 42.5, 90)
-P["R5"], P["C12"] = (108.0, 42.5, 90), (111.0, 42.5, 90)
-P["C11"], P["R10"], P["R11"], P["Q1"] = (113.8, 42.5, 90), (113.5, 34.5, 90), (116.0, 34.5, 90), (114.5, 38.5, 0)
-P["C16"] = (120.0, 42.5, 90)
+# glue row (prototype 2, 74LVC): port decode U5 and its jumper, the OR gates U4, /MREQ_G U1, the /BE
+# driver U9 with its pull-ups and link, the A14/A15 mux U8, then U7 into the Pico; caps above each
+P["U5"], P["C5"] = (28.0, ROW1, 0), (28.0, ROW1 - 5.0, 0)
+P["JP4"] = (33.6, ROW1, 90)
+P["U4"], P["C4"] = (39.5, ROW1, 0), (39.5, ROW1 - 5.0, 0)
+P["U1"], P["C1"] = (46.0, ROW1, 0), (46.0, ROW1 - 4.0, 0)
+P["U9"], P["C14"] = (51.5, ROW1, 0), (51.5, ROW1 - 4.0, 0)
+P["R8"], P["R3"], P["JP1"] = (52.6, ROW1 + 4.6, 90), (55.2, ROW1 + 4.6, 90), (58.4, ROW1 + 4.6, 90)
+P["U8"], P["C8"] = (62.0, ROW1, 0), (62.0, ROW1 - 5.0, 0)
+P["U7"], P["C6"] = (72.0, ROW1, 0), (72.0, ROW1 - 5.8, 0)
+# power-on reset supervisor on the right, below the flash socket
+P["U11"] = (108.0, 37.5, 0)
+P["R1"], P["R5"], P["C12"], P["C9"] = (103.5, 42.0, 90), (106.0, 42.0, 90), (108.5, 42.0, 90), (111.0, 42.0, 90)
+P["C16"] = (120.0, 42.0, 90)
 # data path over the data fingers
 ROW2 = 49.6
 P["U6"], P["C7"] = (44.0, ROW2, 0), (48.8, ROW2 - 3.6, 90)
@@ -220,6 +223,16 @@ def main():
             v = pcbnew.PCB_VIA(board)
             v.SetPosition(mm(vx, vy)); v.SetWidth(pcbnew.FromMM(0.6)); v.SetDrill(pcbnew.FromMM(0.3)); v.SetNet(net); v.SetLocked(True)
             board.Add(v)
+
+    # RP2040 IOVDD pins on the top and bottom rows: a locked straight stub to the cap on the same lane.
+    # Without it the router twice left one of these pins (or a neighbour) sealed in (proto2 attempts 1-3).
+    for pin, cap in (("1", "C21"), ("10", "C22"), ("33", "C24"), ("42", "C25")):
+        a = [q for q in fps["U2"].Pads() if q.GetNumber() == pin][0]
+        c = [q for q in fps[cap].Pads() if q.GetNumber() == "1"][0]
+        t = pcbnew.PCB_TRACK(board)
+        t.SetStart(a.GetPosition()); t.SetEnd(c.GetPosition())
+        t.SetWidth(pcbnew.FromMM(0.2)); t.SetLayer(pcbnew.F_Cu); t.SetNet(a.GetNet()); t.SetLocked(True)
+        board.Add(t)
 
     # fiducials: the router does not see their 0.6 mm pad clearance, so give each a keepout square
     for fp in board.GetFootprints():

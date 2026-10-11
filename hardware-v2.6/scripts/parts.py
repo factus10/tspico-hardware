@@ -15,13 +15,11 @@ T20 = "TSSOP-20_4.4x6.5mm_P0.65mm"
 
 PARTS = {
     # ---- resistors (0603, 1%) ------------------------------------------------
-    ("2k2", R): ("0603WAF2201T5E", "C4190", "basic"),
     ("2k7", R): ("0603WAF2701T5E", "C13167", "basic"),
     ("4k7", R): ("0603WAF4701T5E", "C23162", "basic"),
     ("10k", R): ("0603WAF1002T5E", "C25804", "basic"),
+    ("11k", R): ("0603WAF1102T5E", "C25950", "preferred (no loading fee)"),
     ("47k", R): ("0603WAF4702T5E", "C25819", "basic"),
-    ("220k", R): ("0603WAF2203T5E", "C22961", "basic"),
-    ("1M", R): ("0603WAF1004T5E", "C22935", "basic"),
     ("27", R): ("0603WAF270JT5E", "C25190", "preferred, USB series (RP2040 design guide value)"),
     ("1k", R): ("0603WAF1001T5E", "C21190", "basic"),
     ("5k1", R): ("0603WAF5101T5E", "C23186", "basic"),
@@ -32,8 +30,9 @@ PARTS = {
     # ---- capacitors ----------------------------------------------------------
     ("100n", C6): ("CC0603KRX7R9BB104", "C14663", "basic, X7R 50V"),
     ("15p", C6): ("CL10C150JB8NNNC", "C1644", "basic, C0G"),
+    ("470n", C6): ("CL10B474KA8NNNC", "C1623", "basic, X7R 25V; TPS3808 delay = 470/175 = 2.7 s"),
     ("1u", C6): ("CL10A105KB8NNNC", "C15849", "basic, X5R 25V"),
-    ("10u", C8): ("CL21A106KAYNNNE", "C15850", "basic, X5R 25V (25 V rating keeps the DC-bias loss small at 5 V, which matters for the 555 timing cap C12)"),
+    ("10u", C8): ("CL21A106KAYNNNE", "C15850", "basic, X5R 25V"),
     # ---- semiconductors ------------------------------------------------------
     ("RP2040", "QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm"): ("RP2040", "C2040", "extended, Raspberry Pi"),
     ("W25Q16JVSSIQ", "SOIC-8_5.3x5.3mm_P1.27mm"): ("W25Q16JVSSIQ", "C82317", "extended, Winbond 2 MB QSPI (the Pico's flash size); the basic W25Q128JVSIQ C97521 costs more than the fee saves"),
@@ -42,14 +41,13 @@ PARTS = {
     ("green", "LED_0805_2012Metric"): ("KT-0805G", "C2297", "basic, KENTO"),
     ("USB-C", "USB_C_Receptacle_HRO_TYPE-C-31-M-12"): ("TYPE-C-31-M-12", "C165948", "extended, HRO (same as v3)"),
     # U10 SST39SF040-70-4C-PHE and U13 AS6C4008-55PCN are through-hole DIP-32 in sockets, hand-soldered: no LCSC number
-    ("74LS04", SO14): ("SN74LS04DR", "C6796", "extended, TI"),
-    ("74LS09", SO14): ("SN74LS09DR", "C7731", "extended, TI, open-collector (56 in stock)"),
-    ("74LS27", SO14): ("XL74LS27", "C707098", "extended, XINLUDA (the only SOIC LS27 at JLC; 108 in stock)"),
-    ("74LS32", SO14): ("SN74LS32DR", "C116812", "extended, TI"),
-    ("74LS157", SO16): ("XL74LS157", "C707097", "extended, XINLUDA"),
+    ("74LVC138A", "TSSOP-16_4.4x5mm_P0.65mm"): ("SN74LVC138APWR", "C485077", "extended, TI, port decode (6617 in stock 2026-10-11; SSOP C2674435 is cheaper but a different footprint)"),
+    ("74LVC32A", "TSSOP-14_4.4x5mm_P0.65mm"): ("74LVC32APW,118", "C6087", "extended, Nexperia (same part as v3)"),
+    ("74LVC157A", "TSSOP-16_4.4x5mm_P0.65mm"): ("SN74LVC157APWR", "C406871", "extended, TI"),
+    ("74LVC1G97", "SOT-23-6"): ("SN74LVC1G97DBVR", "C128411", "extended, TI configurable gate, wired as OR with one inverted input"),
+    ("74LVC2G07", "SOT-23-6"): ("74LVC2G07GV", "C19829597", "extended, Nexperia dual open-drain buffer (EM74LVC2G07GV C49188101 is the alternate)"),
+    ("TPS3808G01", "SOT-23-6"): ("TPS3808G01DBVR", "C19653", "extended, TI reset supervisor, adjustable threshold and delay"),
     ("74LVC245APW", T20): ("74LVC245APW,118", "C6082", "extended, Nexperia (same part as v3)"),
-    ("NE555", "SOIC-8_3.9x4.9mm_P1.27mm"): ("NE555DR", "C7593", "preferred (no loading fee), TI; replaces the TLC555"),
-    ("MMBT3904", "SOT-23"): ("MMBT3904", "C20526", "basic, CJ"),
     ("SS14", "D_SMA"): ("SS14", "C2480", "basic, MDD"),
     # ---- electromechanical ---------------------------------------------------
     ("microSD", "microSD_TF-01A"): ("TF-01A", "C91145", "extended, HRO push-push (same socket and footprint as v3)"),
