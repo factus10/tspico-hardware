@@ -2,6 +2,8 @@
 
 The v2.2 card with the RP2040 on the board instead of a Pico module, on the v3 outline (130 x 64.25 mm, 56 mm body plus the 8.25 mm tongue, same edge connector, 4 layers). JLCPCB assembles everything surface mount. The flash and SRAM are the original through-hole DIP-32 parts in sockets, soldered by hand. The bus circuit, the designators and the GPIO map are v2.2's, so the standard Pico MicroPython build and the shipped firmware (tspico-firmware-build) run unchanged.
 
+**To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v2.6-proto1 release](https://github.com/factus10/tspico-hardware/releases/tag/v2.6-proto1). To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
+
 Status: see "State" at the end. Not built.
 
 Compared with v2.5 (`../hardware-v2.5/`, Pico module, all SMT, bench programming): same bus logic and layout style. The Pico module is replaced by the RP2040 core, the memories go back to DIP, and the bench-programming block is gone: program the SST39SF040 in a ROM programmer before it goes in its socket, as v2.2 boards are built.
