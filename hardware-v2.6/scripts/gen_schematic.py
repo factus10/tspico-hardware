@@ -17,9 +17,11 @@ the shipped firmware run unchanged. Differences from v2.2:
     VBUS (D4, the Pico's own Schottky). USB powers only the 3.3 V side, as with the Pico.
   - U10 flash and U13 SRAM: through-hole DIP-32 in sockets, hand-soldered (program the
     flash in a ROM programmer, as v2.2 boards are built)
-  - the rest as v2.5: SMT 74LS/74LVC, NE555, on-board micro SD (TF-01A), solder jumpers
-    JP1/P10 (closed) and JP4 (1-2), DNP pads for JP2/JP3/JP5, R12 4.7 k D6 pull-down,
-    R15/R16 10 k on the memory /CE lines
+  - prototype 2: the glue logic in 74LVC at 3.3 V (U5 LVC138 port decode, U4 LVC32, U1 LVC1G97,
+    U9 LVC2G07 open-drain /BE, U8 LVC157) instead of 74LS04/27/32/09/157, same logic at every
+    Pico pin; TPS3808 reset supervisor instead of the 555 and Q1
+  - as v2.5: on-board micro SD (TF-01A), solder jumpers JP1/P10 (closed) and JP4 (1-2), DNP pads
+    for JP2/JP3/JP5, R12 4.7 k D6 pull-down, R15/R16 10 k on the memory /CE lines
 """
 import os
 import re
@@ -55,6 +57,9 @@ SJ3_BR12 = "Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm_NumberLab
 DIP32 = "Package_DIP:DIP-32_W15.24mm_Socket"
 SOIC8W = "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm"
 TP_FP = "TestPoint:TestPoint_Pad_D1.0mm"
+SOT23_6 = "Package_TO_SOT_SMD:SOT-23-6"
+TSSOP14 = "Package_SO:TSSOP-14_4.4x5mm_P0.65mm"
+TSSOP16 = "Package_SO:TSSOP-16_4.4x5mm_P0.65mm"
 
 POWER = {"+5V", "+3V3", "GND"}
 NC = None
@@ -91,14 +96,13 @@ def interface():
         edge[p] = NC
     return [
         part("tspico:TS2068_Edge", "P1", "TS2068_Edge", "tspico:TS2068_EdgeConnector_2x32", edge),
-        # power-on reset: 555 monostable holds the 2068 in reset ~2.4 s while the Pico boots (as v2.2)
-        part("Timer:NE555D", "U11", "NE555", SO8, {"1": "GND", "8": "+5V", "4": "+5V", "2": "RST_TRIG",
-                                                   "6": "RST_TIM", "7": "RST_TIM", "5": "RST_CONT", "3": "RST_OUT"}),
-        R("R1", "1M", "+5V", "RST_TRIG"), C("C9", "100n", "RST_TRIG"),
-        R("R5", "220k", "+5V", "RST_TIM"), C("C12", "10u", "RST_TIM"),
-        C("C11", "100n", "RST_CONT"),
-        R("R10", "4k7", "RST_OUT", "RST_B"), R("R11", "2k2", "RST_B", "GND"),
-        part("tspico:MMBT3904", "Q1", "MMBT3904", SOT23, {"1": "RST_B", "2": "GND", "3": "nRESET"}),
+        # power-on reset (proto2): TPS3808G01 supervisor holds /RESET low while +5V is under 4.09 V
+        # (R1/R5 divider into SENSE, 0.405 V threshold) and for CT/175 nF s = 2.7 s after (C12 470 nF),
+        # so the Pico is running before the Z80 starts, as the v2.2 555 did. Open-drain output.
+        part("Power_Supervisor:TPS3808DBV", "U11", "TPS3808G01", SOT23_6,
+             {"1": "nRESET", "2": "GND", "3": NC, "4": "RST_CT", "5": "RST_SENSE", "6": "+5V"}),
+        R("R1", "100k", "+5V", "RST_SENSE"), R("R5", "11k", "RST_SENSE", "GND"),
+        C("C12", "470n", "RST_CT"), C("C9", "100n", "+5V"),
         # buttons; JP2/JP3 are DNP pads for external buttons in parallel
         part("Switch:SW_Push", "SW1", "NMI", SW_FP, {"1": "nNMI", "2": "GND"}),
         C("C15", "100n", "nNMI"),
@@ -112,20 +116,23 @@ def interface():
 
 
 def logic():
+    # proto2: the v2.2 gates rebuilt in 74LVC at 3.3 V (inputs take the 2068's 5 V directly). The logic
+    # at every Pico pin is v2.2's; only the gate delays shrink. Every signal still reaches the Pico
+    # through U7, and /+W and /+RW leave U4 after the same number of gates, as their order matters
+    # to the TS_IO PIO program (it reads /+W one cycle after /+RW falls).
     return [
-        # U8: A14/A15 to the memories, Z80's in DOCK (/ROSCS low), the Pico's otherwise
-        part("74xx:74LS157", "U8", "74LS157", SO16, {"1": "nROSCS_L", "2": "A14", "3": "A14_B", "4": "A14_I",
-                                                     "5": "A15", "6": "A15_B", "7": "A15_I", "8": "GND", "16": "+5V",
-                                                     "15": "GND", "10": "GND", "11": "GND", "13": "GND", "14": "GND",
-                                                     "9": NC, "12": NC}),
-        # U7: 5 V control signals to the Pico (A to B always)
-        part("tspico:74LVC245_AtoB", "U7", "74LVC245APW", TSSOP20, {"1": "U7_DIR", "2": "A0", "3": "nPW", "4": "nMREQ_G",
-                                                            "5": "nEXROM", "6": "nBE_L", "7": "nRDROM", "8": "nROSCS",
-                                                            "9": "nPRW", "10": "GND", "20": "+3V3", "19": "GND",
-                                                            "18": "A0_L", "17": "nPW_L", "16": "nMREQ_L", "15": "nEXR_L",
-                                                            "14": "BE_L_BUF", "13": "nRDROM_L", "12": "nROSCS_L", "11": "nPRW_L"}),
-        R("R2", "4k7", "+3V3", "U7_DIR"),
-        R("R7", "4k7", "+3V3", "BE_L_BUF"),
+        # U8: A14/A15 to the memories, Z80's in DOCK (/ROSCS low), the Pico's otherwise (3.3 V out, TTL-level memory inputs)
+        part("74xx:74LS157", "U8", "74LVC157A", TSSOP16, {"1": "nROSCS_L", "2": "A14", "3": "A14_B", "4": "A14_I",
+                                                          "5": "A15", "6": "A15_B", "7": "A15_I", "8": "GND", "16": "+3V3",
+                                                          "15": "GND", "10": "GND", "11": "GND", "13": "GND", "14": "GND",
+                                                          "9": NC, "12": NC}),
+        # U7: control signals to the Pico (A to B always). Channel 5 now carries /BE_IN as /BE_STAT
+        # (v2.2 looped the Pico's own /BE_L through it and used an LS09 gate for /BE_STAT).
+        part("tspico:74LVC245_AtoB", "U7", "74LVC245APW", TSSOP20, {"1": "+3V3", "2": "A0", "3": "nPW", "4": "nMREQ_G",
+                                                                    "5": "nEXROM", "6": "nBE_IN", "7": "nRDROM", "8": "nROSCS",
+                                                                    "9": "nPRW", "10": "GND", "20": "+3V3", "19": "GND",
+                                                                    "18": "A0_L", "17": "nPW_L", "16": "nMREQ_L", "15": "nEXR_L",
+                                                                    "14": "nBE_STAT", "13": "nRDROM_L", "12": "nROSCS_L", "11": "nPRW_L"}),
         # U6: Z80 data bus <-> Pico, DIR from /+W (B to A only for an I/O read of the card's port)
         part("74xx:74LS245", "U6", "74LVC245APW", TSSOP20, {"1": "nPW", "2": "D0", "3": "D1", "4": "D2", "5": "D3",
                                                             "6": "D4", "7": "D5", "8": "D6", "9": "D7", "10": "GND",
@@ -135,36 +142,33 @@ def logic():
         # R12: 4.7k from U6 pin 8 (D6) to pin 10 (GND), a later rework on v2.2 boards that is not in the
         # 2023 schematic; carried into v2.5 as a part
         R("R12", "4k7", "D6", "GND"),
-        # U9: open-collector /BE driver and /BE_IN status
-        part("74xx:74LS09", "U9", "74LS09", SO14, {"1": "BE_L_BUF", "2": "nBE_IN", "3": "nBE_DRV"}, unit=1),
-        part("74xx:74LS09", "U9", "74LS09", SO14, {"4": "GND", "5": "GND", "6": NC}, unit=2),
-        part("74xx:74LS09", "U9", "74LS09", SO14, {"9": "GND", "10": "GND", "8": NC}, unit=3),
-        part("74xx:74LS09", "U9", "74LS09", SO14, {"12": "nBE_IN", "13": "nBE_IN", "11": "nBE_STAT"}, unit=4),
-        part("74xx:74LS09", "U9", "74LS09", SO14, {"14": "+5V", "7": "GND"}, unit=5),
+        # U5: port decode. O0 is low for an I/O cycle to $x0-$xF with A7-A5 = 0, A4 = 0 (port pair $00-$0F),
+        # O1 the same with A4 = 1 ($10-$1F); E3 = /M1 keeps interrupt-acknowledge cycles out, exactly as
+        # v2.2's /+RW = NOT(M1 + /IORQ + PX). JP4 picks the pair (1-2 = O0 = $00-$0F as shipped).
+        part("74xx:74LS138", "U5", "74LVC138A", TSSOP16, {"1": "A4", "2": "A5", "3": "A6", "4": "nIORQ", "5": "A7",
+                                                          "6": "nM1", "15": "DEC_00", "14": "DEC_10", "13": NC, "12": NC,
+                                                          "11": NC, "10": NC, "9": NC, "7": NC, "8": "GND", "16": "+3V3"}),
+        part("Jumper:SolderJumper_3_Bridged12", "JP4", "Port $00/$10", SJ3_BR12, {"1": "DEC_00", "2": "PORT_SEL", "3": "DEC_10"}),
+        # U4: /+RW = PORT_SEL (through a gate so it keeps step with /+W); /+W = PORT_SEL + /RD, which equals
+        # v2.2's NOT(/RD + /IORQ + PX) except when /M1, /IORQ and /RD are all low, which a Z80 never does;
+        # /RDROM = A14 + A15 + /RD as v2.2
+        part("74xx:74LS32", "U4", "74LVC32A", TSSOP14, {"1": "PORT_SEL", "2": "GND", "3": "nPRW"}, unit=1),
+        part("74xx:74LS32", "U4", "74LVC32A", TSSOP14, {"4": "PORT_SEL", "5": "nRD", "6": "nPW"}, unit=2),
+        part("74xx:74LS32", "U4", "74LVC32A", TSSOP14, {"9": "A14", "10": "A15", "8": "A14_OR_A15"}, unit=3),
+        part("74xx:74LS32", "U4", "74LVC32A", TSSOP14, {"12": "A14_OR_A15", "13": "nRD", "11": "nRDROM"}, unit=4),
+        part("74xx:74LS32", "U4", "74LVC32A", TSSOP14, {"14": "+3V3", "7": "GND"}, unit=5),
+        # U1: /MREQ_G = /MREQ + NOT /BE_IN, as v2.2. The 1G97 is a 2:1 mux (Y = IN0 when IN2 high, IN1 when
+        # IN2 low), so IN2 = /BE_IN, IN0 = /MREQ, IN1 tied high.
+        part("74xGxx:74LVC1G97", "U1", "74LVC1G97", SOT23_6, {"1": "+3V3", "2": "GND", "3": "nMREQ", "4": "nMREQ_G",
+                                                             "5": "+3V3", "6": "nBE_IN"}),
+        # U9: open-drain /BE driver: /BE_DRV low when the Pico asks (nBE_L) or a card further out does (/BE_IN),
+        # the wired-AND v2.2's LS09 made. Outputs tolerate 5 V (R3 pull-up to +5V).
+        part("74xGxx:74LVC2G07", "U9", "74LVC2G07", SOT23_6, {"1": "nBE_L", "6": "nBE_DRV"}, unit=1),
+        part("74xGxx:74LVC2G07", "U9", "74LVC2G07", SOT23_6, {"3": "nBE_IN", "4": "nBE_DRV"}, unit=2),
+        part("74xGxx:74LVC2G07", "U9", "74LVC2G07", SOT23_6, {"2": "GND", "5": "+3V3"}, unit=3),
         R("R3", "2k7", "+5V", "nBE_DRV"), R("R8", "4k7", "+5V", "nBE_IN"),
-        # U1 inverters
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"1": "nM1", "2": "M1"}, unit=1),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"3": "NOR567", "4": "OR567"}, unit=2),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"5": "NRW", "6": "nPRW"}, unit=3),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"9": "NW", "8": "nPW"}, unit=4),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"11": "nBE_IN", "10": "BE_IN"}, unit=5),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"13": "A4", "12": "nA4"}, unit=6),
-        part("74xx:74LS04", "U1", "74LS04", SO14, {"14": "+5V", "7": "GND"}, unit=7),
-        # U4 OR gates
-        part("74xx:74LS32", "U4", "74LS32", SO14, {"1": "A14", "2": "A15", "3": "A14_OR_A15"}, unit=1),
-        part("74xx:74LS32", "U4", "74LS32", SO14, {"4": "A14_OR_A15", "5": "nRD", "6": "nRDROM"}, unit=2),
-        part("74xx:74LS32", "U4", "74LS32", SO14, {"9": "OR567", "10": "PORT_A4", "8": "PX"}, unit=3),
-        part("74xx:74LS32", "U4", "74LS32", SO14, {"12": "nMREQ", "13": "BE_IN", "11": "nMREQ_G"}, unit=4),
-        part("74xx:74LS32", "U4", "74LS32", SO14, {"14": "+5V", "7": "GND"}, unit=5),
-        # U5 NOR gates: port decode
-        part("74xx:74LS27", "U5", "74LS27", SO14, {"1": "A5", "2": "A6", "13": "A7", "12": "NOR567"}, unit=1),
-        part("74xx:74LS27", "U5", "74LS27", SO14, {"3": "M1", "4": "nIORQ", "5": "PX", "6": "NRW"}, unit=2),
-        part("74xx:74LS27", "U5", "74LS27", SO14, {"9": "nRD", "10": "nIORQ", "11": "PX", "8": "NW"}, unit=3),
-        part("74xx:74LS27", "U5", "74LS27", SO14, {"14": "+5V", "7": "GND"}, unit=4),
-        # JP4: port pair, 1-2 = $00-$0F (as shipped), 2-3 = $10-$1F
-        part("Jumper:SolderJumper_3_Bridged12", "JP4", "Port $00/$10", SJ3_BR12, {"1": "A4", "2": "PORT_A4", "3": "nA4"}),
-        C("C1", "100n", "+5V"), C("C4", "100n", "+5V"), C("C5", "100n", "+5V"), C("C8", "100n", "+5V"),
-        C("C14", "100n", "+5V"), C("C6", "100n", "+3V3"), C("C7", "100n", "+3V3"),
+        C("C1", "100n", "+3V3"), C("C4", "100n", "+3V3"), C("C5", "100n", "+3V3"), C("C8", "100n", "+3V3"),
+        C("C14", "100n", "+3V3"), C("C6", "100n", "+3V3"), C("C7", "100n", "+3V3"),
     ]
 
 
@@ -238,8 +242,7 @@ def mcu():
         part("Connector:TestPoint", "TP1", "SWCLK", TP_FP, {"1": "SWCLK"}),
         part("Connector:TestPoint", "TP2", "SWDIO", TP_FP, {"1": "SWDIO"}),
         part("Connector:TestPoint", "TP3", "GP23", TP_FP, {"1": "GP23"}),
-        # as v2.2: RUN pull-up and the Pico reset button; /BE_STAT pull-up; memory /CE pull-ups (v2.5)
-        R("R4", "4k7", "+3V3", "nBE_STAT"),
+        # as v2.2: RUN pull-up and the Pico reset button; memory /CE pull-ups (v2.5)
         R("R9", "4k7", "+3V3", "PICO_RUN"),
         part("Switch:SW_Push", "SW3", "Pico Reset", SW_FP, {"1": "PICO_RUN", "2": "GND"}),
         part("Connector_Generic:Conn_01x02", "JP5", "Ext Pico Reset", HDR2_SMD, {"1": "GND", "2": "PICO_RUN"}, dnp=True),
@@ -250,13 +253,14 @@ def mcu():
 NOTES = {
     "interface.kicad_sch": [
         "TS2068 rear connector (pin names per the TS2068 Technical Manual table 2.4.1-1). Side A on top, confirmed by the v3 bring-up.",
-        "U11/Q1: power-on reset, 1.1 x 220k x 10u = 2.4 s, so the Pico is running before the Z80 starts. C12 is a 25 V ceramic to keep DC-bias loss small.",
+        "U11 TPS3808G01: /RESET held while +5V < 4.09 V (R1/R5) and 2.7 s after (C12 470 nF), so the Pico is running before the Z80 starts. Open-drain, like v2.2's Q1.",
         "SW1 NMI, SW2 TS reset. JP2/JP3: DNP pads for external buttons. JP1 (/BE link) is a solder jumper, closed.",
     ],
     "logic.kicad_sch": [
-        "The v2.2 bus logic, gate for gate (Logic.schdoc). /+W = I/O read of the card's port; /+RW = any I/O to it; +X = port address match.",
+        "The v2.2 bus logic (Logic.schdoc) rebuilt in 74LVC at 3.3 V: same logic at every Pico pin. /+W = I/O read of the card's port; /+RW = any I/O to it (not INTA).",
+        "U5 decodes the port (A7-A4, /IORQ, /M1); U4 makes /+RW, /+W, /RDROM; U1 /MREQ_G; U9 the open-drain /BE. U7 channel 5 = /BE_IN -> /BE_STAT.",
         "R12: 4.7k pull-down on D6 at U6 (pins 8 to 10), a post-2023 rework on v2.2 boards, now a fitted part.",
-        "JP4: 1-2 (as shipped) answers $00-$0F, 2-3 answers $10-$1F. U9B/U9C unused (inputs grounded). U8 C/D sections unused.",
+        "JP4: 1-2 (as shipped) answers $00-$0F, 2-3 answers $10-$1F. U8 C/D sections unused (inputs grounded).",
     ],
     "memory.kicad_sch": [
         "U10 SST39SF040 and U13 AS6C4008, DIP-32 in sockets (hand-soldered), both on the 5 V bus as v2.2. Program the flash in a ROM programmer.",
@@ -273,18 +277,17 @@ NOTES = {
 
 
 def project_symbols():
-    """Rewrite lib/tspico.kicad_sym: the edge connector plus flattened copies of two stock
-    symbols, adjusted so ERC judges this circuit correctly:
+    """Rewrite lib/tspico.kicad_sym: the edge connector plus a flattened copy of a stock
+    symbol, adjusted so ERC judges this circuit correctly:
       74LVC245_AtoB 74LS245 with A pins as inputs and B pins as outputs (U7 is fixed A to B)
-      MMBT3904      the stock symbol extends Q_NPN_BEC; a flat copy avoids a library mismatch"""
+"""
     import gen_edge_symbol
     gen_edge_symbol.main()
     path = os.path.join(HW, "lib", "tspico.kicad_sym")
     lib = schlib.SymLib()
     out = []
     for stock, name, types in (("74xx:74LS245", "74LVC245_AtoB", {**{str(n): "input" for n in range(2, 10)},
-                                                                  **{str(n): "output" for n in range(11, 19)}}),
-                               ("Transistor_BJT:MMBT3904", "MMBT3904", {})):
+                                                                  **{str(n): "output" for n in range(11, 19)}}),):
         blk, _ = lib.get(stock)
         old = stock.split(":")[1]
         blk = blk.replace(f'(symbol "{stock}"', f'(symbol "{name}"', 1).replace(f'(symbol "{old}_', f'(symbol "{name}_')
