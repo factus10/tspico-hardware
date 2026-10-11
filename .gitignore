@@ -12,6 +12,14 @@ hardware/fab/
 hardware/*.rpt
 hardware/*.json
 !hardware/tspico-v3.kicad_pro
+hardware-v2.5/fab/
+hardware-v2.5/*.rpt
+hardware-v2.5/*.json
+hardware-v2.5/*.ripup
+hardware-v2.6/fab/
+hardware-v2.6/*.rpt
+hardware-v2.6/*.json
+hardware-v2.6/*.ripup
 # OS / editors
 .DS_Store
 __pycache__/
