@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10; phase 4's exit passed, 2026-10-10; phase 5 done and v2.3.1 released for v3, 2026-10-12. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -235,6 +235,36 @@ LED calls on v3 cost about 100 µs each over I2C. Keep them out of the timing-cr
 
 **Exit:** v3 passes the v2 hardware checklist. The user manual gains a v3 section. A v3 release is tagged.
 
+**Results (2026-10-12, tspico-firmware-build #247-#261; design in its `docs/v3-slots-proposal.md`):**
+
+- **Exit passed.**
+  - **The checklist:** `tools/hwcheck.py` (#253, #256) runs the v2 hardware checklist on either board, mostly unattended. On proto1 the automatic part passed 21/21 and the manual part passed, after the two fixes below.
+  - **The manual:** Appendix F (#251).
+  - **The release:** firmware 2.3.1 on ROM 2.3, released 2026-10-12 with `firmware-v3.uf2` and `v3-slots.zip`.
+- **Slots** (#248, #249):
+  - **The files:** `/slots/F00.bin` to `F15.bin` are the flash slots, and `S00.bin` to `S15.bin` the SRAM slots, which are deleted at every boot.
+  - **The numbering** is v2's, so `tpi:boot`, `tpi:dock` and existing BASIC work unchanged.
+  - **Booting:** the ROM is loaded into SRAM before RESET_HOLD is released. If the configured slot is empty, the boot falls back to flash slot 1, then to `/rom/TSPICO-23.ROM`.
+  - **`tpi:boot`** resets the 2068 into the new ROM rather than swapping under the running Z80.
+  - **`tpi:dock`** is live. A flash dock is read-only, as v2's chip is. A RAM dock is saved back to its files before it is switched away, so an even RAM slot pair gives a program 64K of RAM in the dock.
+  - **ZX48 mode** passed on the card, including a byte-exact SAVE.
+- **ROM and DCK updates** (#250): the v3 updater tapes `romupd3.tap` and `dckupd3.tap` keep romupdate's questions, warn before slot 0, and end in `tpi:blkrcv`. The Pico then writes the slot file itself. Writing the booted slot is safe on v3, because the 2068 runs from the SRAM image.
+- **The updaters** (#252, #260):
+  - **The web updater** and **`TS-Pico-Updater.exe`** recognise the card by its MicroPython machine string or its RP2350 drive.
+  - **Never a wipe:** the slots share the flash with the firmware, so there is no RP2350 `flash_nuke`. This replaces item 5's plan.
+  - **Firmware:** they install the RP2350 UF2, after checking its family ID.
+  - **Slots:** slots 0 and 1 are written every time; the others only where the card has none, so a user's ROMs are kept.
+- **Found and fixed on the way:**
+  - **`tpi:dock` answered before the dock had switched** (#253): a program's next PEEK could read an empty dock.
+  - **The APB bridge stalls during flash writes** (#254, #255). While core 0 erases or programs flash, any access through the RP2350's APB bridge can take about 4 µs. The IN path's GPIO IRQ and enable overrides went through APB, so a ZX48 `LOAD "tpi:..."` read a bogus status and crashed the 2068. The IN path now uses only PIO and SIO: `iord_watch` on PIO2 raises the IRQ, and U1/U3 are driven by a spare PIO1 state machine. The stress test that followed read `IN 15` 7.5 million times during flash writes, with 0 bad reads. **Rule:** nothing on core 1's bus path may touch APB.
+  - **Power-cycling the 2068 with the card on USB** (#257). The card stays powered, so the 2068 came up frozen until TS Reset. Core 1 now:
+    - holds RESET_HOLD while the 2068 is off (/MEMWR, /IORD and /IOWR all low) and for 100 ms after it comes back;
+    - lets go of the bus when /MEMRD stops for 100 µs;
+    - ignores port F4/FF writes while the bus is idle, which were power-down glitches.
+    
+    The bank shadow is cleared at power-up only, since the SCLD keeps its registers through a reset. Why the 2068's own power-on reset fails with the card attached is still open: with the 2068 off, every bus input reads 0 V.
+- **Not a firmware bug:** a 64K AROS cartridge (Sinistar) crashed within seconds on one 2068 with both v2.2 and v3, and runs cleanly on a second 2068. That first machine has a pattern-sensitive fault that RAM and bus-integrity tests don't show. Lesson: try a second 2068 early.
+
 ### Phase 6: v3-only features (after parity)
 
 Each of these is independent and can be taken in any order:
@@ -264,6 +294,10 @@ Each of these is independent and can be taken in any order:
 1. **One codebase or a fork?** Recommendation: one repo, with the board layer of phase 4. v2 users keep getting fixes, and the 34 host tests cover both boards.
 2. **Where the bus layer lives.** Recommendation: a C user module (`tsbus`), with the I/O FIFOs still exposed as an `rp2.StateMachine`. The PIO and DMA could be set up from Python with `rp2.DMA`, but timing, alignment and SM/DMA ownership are easier to guarantee in C, and the AY emulation needs C anyway (`PLAN.md`, risks).
 3. **MicroPython version for both boards,** or v2 pinned at v1.20 (phase 2 decides). *Decided:* v1.29.0 for both boards.
-4. **Z80-side writes into ROM slots** (`v3-architecture.md` section 11, question 4): emulate the SST39SF040 command sequence, provide a Pico-side save command, or both. Recommendation: the save command for parity; emulation only if a real tool needs it.
+4. **Z80-side writes into ROM slots** (`v3-architecture.md` section 11, question 4): emulate the SST39SF040 command sequence, provide a Pico-side save command, or both. Recommendation: the save command for parity; emulation only if a real tool needs it. *Decided (phase 5):* the Pico-side command only. A v3 updater tape asks romupdate's questions and ends in `tpi:blkrcv`, and the Pico writes the slot file. SST39SF040 emulation is left out until a real tool needs it.
 5. **Ports enabled at first release:** only $0E/$0F, or $1C-$1E from the start (section 11, question 2).
-6. **Slot storage layout:** file names, whether SD can override QSPI slots, and config migration from a v2 `config.ini`.
+6. **Slot storage layout:** file names, whether SD can override QSPI slots, and config migration from a v2 `config.ini`. *Decided (phase 5):*
+   - **File names:** `/slots/Fnn.bin` for the flash slots and `/slots/Snn.bin` for the SRAM slots, which are deleted at boot.
+   - **No SD override:** slots live only on the card's flash. A ROM or DCK on SD goes into a slot through the updater tapes.
+   - **No config migration:** `config.ini` keeps v2's keys (`ROM_SM`, `ROM_SLOT`, `DCK_SLOT`) with the same meaning.
+   - **A v2.2 flash image** converts slot for slot (`build-flash.py --slots`).
