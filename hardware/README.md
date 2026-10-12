@@ -1,6 +1,8 @@
 # TS-Pico v3 KiCad project
 
-Status: Phase 3 (layout) 2026-09-16: placed and autorouted. 519 of 532 connections routed by Freerouting (`scripts/autoroute.py`), zero DRC rule violations; 13 connections remain for hand-finishing in KiCad (list below). Schematic: all eight sheets drawn, ERC clean, LCSC numbers on every orderable part. The board file holds only the outline, the edge connector, mounting holes and fiducials; layout (Phase 3) has not started.
+Status 2026-10-12: prototype 2. Proto1 ([v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) was built and brought up; proto2 adds its fixes (below), routed by `scripts/flow.py` with no hand edits, DRC clean at every severity. ERC: one warning, U4's unused input tied to GND.
+
+**To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v3.0-proto2 release](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2). To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
 
 ## Proto2 changes (from proto1 bring-up and issue #21)
 
