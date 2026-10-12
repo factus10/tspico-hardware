@@ -124,8 +124,10 @@ def main():
     F = s.place("Memory_Flash:W25Q128JVS", "U21", "GD25Q128ESIGR", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 150)
     s.label("nQSPI_SS", F.pin("1")); s.label("QSPI_SD1", F.pin("2")); s.label("QSPI_SD2", F.pin("3")); s.label("GND", F.pin("4"))
     s.label("QSPI_SD0", F.pin("5")); s.label("QSPI_SCLK", F.pin("6")); s.label("QSPI_SD3", F.pin("7")); s.label("+3V3", F.pin("8"))
-    P = s.place("Memory_RAM:APS6404L-3SQRx-SN", "U22", "APS6404L-3SQR-SN", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", 340, 200, dnp=True)
-    # APS6404L SOP-8: 1 CE#, 2 SO/SIO1, 3 SIO2, 4 VSS, 5 SI/SIO0, 6 SCLK, 7 SIO3, 8 VCC
+    P = s.place("Memory_RAM:APS6404L-3SQRx-SN", "U22", "APS6404L-3SQR-SN", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", 340, 200, dnp=True)
+    # APS6404L SOP-8: 1 CE#, 2 SO/SIO1, 3 SIO2, 4 VSS, 5 SI/SIO0, 6 SCLK, 7 SIO3, 8 VCC.
+    # Package code SN is SOP-8L(150), 3.90 mm body (AP Memory outline; proto1 had the 208 mil footprint by mistake).
+    # ESP-PSRAM64H / LY68L6400 (Adafruit 4677, the sanded "generic" PSRAM) have the same pinout and package.
     s.label("PSRAM_CS", P.pin("1")); s.label("QSPI_SD1", P.pin("2")); s.label("QSPI_SD2", P.pin("3")); s.label("GND", P.pin("4"))
     s.label("QSPI_SD0", P.pin("5")); s.label("QSPI_SCLK", P.pin("6")); s.label("QSPI_SD3", P.pin("7")); s.label("+3V3", P.pin("8"))
     for k, (ref, net) in enumerate([("C37", "+3V3"), ("C38", "+3V3")]):
@@ -133,7 +135,7 @@ def main():
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
     R21 = s.place("Device:R", "R21", "10k", R0603, 395, 150)
     s.label("+3V3", R21.pin("1")); s.label("nQSPI_SS", R21.pin("2"))
-    s.text("U21 boot flash (XIP CS0). U22 PSRAM on the same QSPI bus, DNP on the prototype ($5 part, SD-image cache only),", 320, 225, 1.5)
+    s.text("U21 boot flash (XIP CS0). U22 PSRAM on the same QSPI bus, DNP (fit APS6404L-3SQR-SN or ESP-PSRAM64H; SD-image cache only),", 320, 225, 1.5)
     s.text("CS1 = GPIO47 (QMI CS1n). C37/C38 at U21/U22.", 320, 228, 1.5)
 
     # ---- RUN and BOOTSEL -------------------------------------------------------------

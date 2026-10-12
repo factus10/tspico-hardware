@@ -2,7 +2,7 @@
 """Generate memory.kicad_sch: slow I/O on a 16-bit I2C expander.
 
   U15  XL9555 (PCA9555 pinout, TSSOP-24, address 0x20) on I2C0 (GP24 SDA, GP25 SCL), /INT to GP35
-       port 0 (outputs): BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED
+       port 0 (outputs): BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED, SD_PWR_EN
        port 1 (inputs):  joystick x6, nBUSAK_L, SD_CD
   The expander powers up with every pin an input (100 k internal pull-ups), so the
   active-high outputs have 10 k pull-downs: nothing asserts until the firmware sets it.
@@ -33,7 +33,7 @@ def main():
     s.power("GND", 330, 40, "#PWR05", flag=False)
 
     U15 = s.place("Interface_Expansion:PCA9555PW", "U15", "XL9555", TSSOP24, 150, 110)
-    port0 = ["BUSRQ", "NMI_REQ", "nOLED_RST", "WIFI_EN", "WIFI_DL", "nLED", None, None]           # pins 4-11
+    port0 = ["BUSRQ", "NMI_REQ", "nOLED_RST", "WIFI_EN", "WIFI_DL", "nLED", "SD_PWR_EN", None]           # pins 4-11
     port1 = ["JOY_UP", "JOY_DOWN", "JOY_LEFT", "JOY_RIGHT", "JOY_FIRE1", "JOY_FIRE2", "nBUSAK_L", "SD_CD"]   # pins 13-20
     for bit, net in enumerate(port0):
         pin = U15.pin(str(4 + bit))

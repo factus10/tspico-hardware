@@ -20,9 +20,11 @@ PARTS = {
     ("33", R): ("0603WAF330JT5E", "C23140", "basic"),
     ("100", R): ("0603WAF1000T5E", "C22775", "basic"),
     ("1k", R): ("0603WAF1001T5E", "C21190", "basic"),
+    ("2k2", R): ("0603WAF2201T5E", "C4190", "basic"),
     ("4k7", R): ("0603WAF4701T5E", "C23162", "basic"),
     ("5k1", R): ("0603WAF5101T5E", "C23186", "basic"),
     ("10k", R): ("0603WAF1002T5E", "C25804", "basic"),
+    ("15k", R): ("0603WAF1502T5E", "C22809", "basic"),
     ("22k", R): ("0603WAF2202T5E", "C31850", "basic"),
     ("100k", R): ("0603WAF1003T5E", "C25803", "basic"),
     # ---- capacitors ----------------------------------------------------------
@@ -37,7 +39,7 @@ PARTS = {
     # ---- semiconductors ------------------------------------------------------
     ("RP2350B", "QFN-80-1EP_10x10mm_P0.4mm_EP3.4x3.4mm"): ("RP2350B", "C42415655", "extended"),
     ("GD25Q128ESIGR", "SOIC-8_5.3x5.3mm_P1.27mm"): ("GD25Q128ESIGR", "C2928891", "GigaDevice 16 MB QSPI, extended; W25Q128JVSIQ C97521 is basic but $2.22"),
-    ("APS6404L-3SQR-SN", "SOIC-8_5.3x5.3mm_P1.27mm"): ("APS6404L-3SQR-SN", "C5333729", "extended, $5.18 and low stock: DNP on the prototype; USON variant APS6404L-3SQR-ZR C3040877 is $4.18"),
+    ("APS6404L-3SQR-SN", "SOIC-8_3.9x4.9mm_P1.27mm"): ("APS6404L-3SQR-SN", "C5333729", "extended, SOP-8 150 mil, $3.97 and 4514 in stock (2026-10-12); DNP. Hand-fit alternative: Adafruit 4677 (ESP-PSRAM64H, $1.75)"),
     ("ESP32-C3-WROOM-02-N4", "ESP32-C3-WROOM-02"): ("ESP32-C3-WROOM-02-N4", "C2934560", "extended, 4 MB"),
     ("TLV1117LV33", "SOT-223-3_TabPin2"): ("TLV1117LV33DCYR", "C15578", "extended, TI"),
     ("MCP6002", "SOIC-8_3.9x4.9mm_P1.27mm"): ("MCP6002T-I/SN", "C7377", "preferred (no loading fee), Microchip"),
@@ -46,6 +48,7 @@ PARTS = {
     ("74LVC32APW", T14): ("74LVC32APW,118", "C6087", "extended, Nexperia: MEMRD/MEMWR/IORD/IOWR strobes (replaces the 74LVC04 + 74LVC08)"),
     ("74LVC574APW", T20): ("SN74LVC574APWR", "C7672", "extended, TI; DMA option only (DNP). Must be LVC: the outputs sit on the 5 V address bus"),
     ("XL9555", "TSSOP-24_4.4x7.8mm_P0.65mm"): ("XL9555", "C609791", "extended, XINLUDA PCA9555 clone, 16-bit I2C expander (replaces the 74HC273 + STAT buffer)"),
+    ("SY6280AAC", "SOT-23-5"): ("SY6280AAC", "C55136", "extended, Silergy current-limited load switch (AAT4610 pinout): SD socket VDD"),
     ("74LVC1G86", "SOT-23-5"): ("SN74LVC1G86DBVR", "C402161", "extended, TI"),
     ("SS34", "D_SMA"): ("SS34", "C8678", "basic, MDD"),
     ("green", "LED_0805_2012Metric"): ("KT-0805G", "C2297", "basic, KENTO (the 0603 basic part had 1 in stock)"),

@@ -204,6 +204,19 @@ def main():
     s.text("R2/R3: TAPE_OUT divided to ~0.6 V for the 2068 EAR input.", 355, 125, 1.5)
     s.text("Values to be confirmed on the prototype.", 355, 128, 1.5)
 
+    # ---- proto2 pull-ups (proto1 bring-up) ---------------------------------------
+    # nBE: the 74LVC06 only pulls low, and without a pull-up /BE rose too slowly for a RAM
+    # fetch right after a served byte (proto1 ran with a 2.2k bodge from A29 to +5V).
+    # On +5V_EDGE so nothing feeds an unpowered 2068.
+    R14 = s.place("Device:R", "R14", "2k2", R0603, 365, 195)
+    s.glabel("+5V_EDGE", R14.pin("1"), IN); s.label("nBE", R14.pin("2"))
+    # Buffer enables: the RP2350 resets its pads with pull-downs, which enabled U1, U2 and U3
+    # together in reset and BOOTSEL (U1 and U2 both driving MD).
+    for k, (ref, net) in enumerate((("R15", "nAEN_LO"), ("R16", "nAEN_HI"), ("R17", "nDATA_OE"))):
+        R = s.place("Device:R", ref, "10k", R0603, 380 + 15 * k, 195)
+        s.label("+3V3", R.pin("1")); s.glabel(net, R.pin("2"), IN)
+    s.text("R14: nBE pull-up to the 2068's +5V. R15-R17: buffer enables held off until the firmware drives GP8-GP10.", 355, 210, 1.5)
+
     # ---- decoupling ------------------------------------------------------------
     for k in range(9 if DMA_OPTION else 6):          # C1-C6: U1-U4, U6, U7 (U9 shares); C7-C9: U8, U12, U13 (DNP)
         C = s.place("Device:C", f"C{k + 1}", "100n", C0603, 40 + 9 * k, 255, dnp=k >= 6)

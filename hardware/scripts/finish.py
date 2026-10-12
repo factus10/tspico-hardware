@@ -121,7 +121,7 @@ def main():
         sys.exit(2)          # flow.py routes the board again; the router does not give the same result twice
 
 
-SUPPLY = {"GND", "+3V3", "DVDD", "+5V", "+5V_EDGE", "VBUS", "+3V3_WIFI"}
+SUPPLY = {"GND", "+3V3", "DVDD", "+5V", "+5V_EDGE", "VBUS", "+3V3_WIFI", "+3V3_SD"}
 
 
 def _orphan_pts(B, netname):

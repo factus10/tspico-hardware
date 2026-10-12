@@ -20,6 +20,7 @@ TS2068 edge connector (5 V)                                        RP2350B (3.3 
   control -> 74LVC245 -> nROSCS_L nEXROM_L nINT_L Z80_A14 Z80_A15 TAPE_IN nBUSAK_L -> GPIO / expander
   /MREQ, /IORQ, /RD, /WR -> 74LVC32 -> nMEMRD, nMEMWR, nIORD, nIOWR -> GPIO
   /BE /WAIT /BUSRQ /NMI /RESET <-- 74LVC06 open-drain <-- BE_REQ, WAIT_REQ (PIO), BUSRQ, NMI_REQ (expander), RESET_HOLD (GPIO, pull-up)
+  /BE has its own 2.2k pull-up to the 2068's +5V (proto2)
   EAR <-- divider <-- TAPE_OUT ; SOUND -> audio mixer
 Slow I/O: XL9555 16-bit I2C expander (I2C0 on GP24/GP25, /INT on GP35)
   out: BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED      in: joystick x6, nBUSAK_L, SD_CD
@@ -75,7 +76,7 @@ One XL9555 (PCA9555 pinout, address 0x20) replaces the CTL register, its power-o
 
 | Port | Bits |
 |---|---|
-| 0 (outputs) | 0 BUSRQ, 1 NMI_REQ, 2 nOLED_RST, 3 WIFI_EN, 4 WIFI_DL (1 = ESP32 download mode; an open-drain gate pulls IO9 low), 5 nLED (low = on), 6-7 spare |
+| 0 (outputs) | 0 BUSRQ, 1 NMI_REQ, 2 nOLED_RST, 3 WIFI_EN, 4 WIFI_DL (1 = ESP32 download mode; an open-drain gate pulls IO9 low), 5 nLED (low = on), 6 SD_PWR_EN (1 = SD socket powered, proto2), 7 spare |
 | 1 (inputs) | 0-3 joystick up/down/left/right, 4 fire, 5 fire 2, 6 nBUSAK_L, 7 SD card detect |
 
 The expander powers up with every pin an input and weak pull-ups. 10 k pull-downs on the five active-high outputs give the same safe start the cleared CTL register did: no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot, LED off. /INT (GP35) fires on any input change, so the firmware reads the joystick only when it moves. A read takes about 100 us at 400 kHz.
@@ -92,13 +93,14 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 - RESET_HOLD is an RP2350 GPIO with a 4.7k pull-up into a 74LVC06 open-drain inverter on the 2068 /RESET line. Floating (RP2350 booting or absent) means high, so the 2068 is held in reset; the firmware drives it low to release and pulses it high to reset the 2068. Same behaviour the 555 gave, under firmware control.
 - TS Reset and NMI buttons pull the bus lines directly, as today. BOOTSEL and RUN buttons for the RP2350B.
 - Power: the card's 5 V rail is a Schottky diode-OR (SS34) of edge pin B4 and USB-C VBUS, so it runs from the 2068 or the expansion bus, from USB alone on the bench for programming, or both at once while debugging, without back-feeding either source. Budget about 250 mA average plus ESP32-C3 transmit bursts of up to about 350 mA at 3.3 V; 2 x 220 uF bulk on 5 V, 100 uF at the module, radio in modem-sleep unless in use. Two TLV1117LV33 LDOs (0.35 V dropout, needed because of the diode drop): logic and RP2350B, and the ESP32 module. When USB-powered with the card in an unpowered 2068, only the open-drain lines and the address transceivers (inputs) face the bus, so nothing drives the dead machine.
+- SD socket power (proto2, issue #21): the socket's VDD is +3V3_SD from an SY6280AAC current-limited switch (0.45 A, R42), enabled by expander P0.6 and held off by R43 until the firmware sets it. A card that latches up hits the limit instead of pulling +3V3 down and resetting the RP2350B, and a wedged card can be power-cycled. The card-side pull-ups (R34-R37) are on +3V3_SD; the detect switch pull-up stays on +3V3. Firmware order: detect switch (low = card in), settle, power on, then SPI; release CS/SCK/MOSI/MISO to inputs before switching power off.
 
 ## 7. GPIO map (RP2350B)
 
 | GPIO | Signal | Dir | Notes |
 |---|---|---|---|
 | 0-7 | MD0-MD7 | bidir | Local bus. PIO in/out base. |
-| 8 | nAEN_LO | out | Low address byte (A0-A7) buffer enable (PIO side-set). |
+| 8 | nAEN_LO | out | Low address byte (A0-A7) buffer enable (PIO side-set). GP8-GP10 have 10k pull-ups (proto2): the pads reset with pull-downs, which enabled all three buffers in BOOTSEL. |
 | 9 | nAEN_HI | out | High address byte (A8-A15) buffer enable (PIO side-set). |
 | 10 | nDATA_OE | out | Data transceiver enable (PIO side-set). |
 | 11 | BE_REQ | out | Asserts /BE through the 74LVC06 (PIO). |
@@ -133,7 +135,7 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 1 | 74LVC245 | Z80 D0-D7 to MD0-MD7 |
 | 1 | 74LVC245 | Control inputs, 5 V tolerant |
 | 1 | 74LVC32 | nMEMRD, nMEMWR, nIORD, nIOWR strobes |
-| 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET, ESP32 IO9 |
+| 1 | 74LVC06 | Open-drain: /BE, /WAIT, /BUSRQ, /NMI, /RESET, ESP32 IO9. /BE needs the pull-up: without it /BE rose too slowly for a RAM fetch after a served byte (proto1 bring-up). |
 | 1 | XL9555 | I2C expander: control outputs, joystick, status |
 
 Seven packages, four part numbers (down from 16 packages in the first v3 schematic), all 74LVC because every one of them touches the 5 V bus. The data transceiver takes its direction straight from /RD. No memory chips. MCU support: RP2350B, GD25Q128E, APS6404L-3SQR footprint (not fitted on the prototype), 12 MHz crystal, two 3.3 V LDOs, USB-C, buttons, SWD pads. WiFi: ESP32-C3-WROOM-02 (castellated SMT, 4 MB, on-board antenna; stock Zimodem firmware).

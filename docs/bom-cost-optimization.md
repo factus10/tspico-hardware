@@ -19,7 +19,7 @@ Rerun `python3 scripts/gen_fab.py --bom-only && python3 scripts/jlc_price.py --b
 
 | Change | Was | Now | Saves | Layout impact |
 |---|---|---|---|---|
-| PSRAM U22 not fitted | APS6404L-3SQR-SN $5.18, 143 in stock | footprint kept, DNP | $55 | none |
+| PSRAM U22 not fitted | APS6404L-3SQR-SN $5.18, 143 in stock (2026-10-12: $3.97, 4514) | footprint kept, DNP | $55 | none |
 | Bulk capacitors C40/C41/C46 | Panasonic polymer 220 uF $1.02 | KNSCHA 220 uF 10 V SMD electrolytic C2833309 $0.04 | $29 | CP_Elec 6.3x5.4 |
 | micro SD socket J2 | Hirose DM3AT $1.54 | HRO TF-01A C91145 $0.19 | $14 | new footprint to draw |
 | 3.5 mm jack J4 | CUI SJ-3523 $1.05, 26 in stock | PJ-320D C431535 $0.05 | $10 | PJ320D footprint |
@@ -67,8 +67,27 @@ Each address buffer delivers one plain byte (A0-A7, A8-A15); the connector's spl
 
 ## If the PSRAM is wanted
 
-JLCPCB stocks no cheap 3.3 V 8 MB PSRAM: APS6404L-3SQR-SN is $5.18 (143 left), the USON-8
-version APS6404L-3SQR-ZR C3040877 is $4.18 (about 1000), the $1.76 APS6404L-SQN is the 1.8 V part,
-and ESP-PSRAM64H / LY68L6400 / IPS6404 are not stocked. The PSRAM only caches SD-card images
-(1 ms load instead of 30-50 ms); images in QSPI flash already load in about 2 ms. Remove
-`dnp=True` on U22 in `gen_mcu.py` to fit it (adds about $8 on a 10-board run with the fee).
+Surveyed 2026-10-12 (JLCPCB parts API, unit prices at quantity 1). The PSRAM only caches SD-card
+images (1 ms load instead of 30-50 ms); images in QSPI flash already load in about 2 ms.
+
+| Part | LCSC | Price | Stock | Notes |
+|---|---|---|---|---|
+| APS6404L-3SQR-SN, 8 MB, 3.3 V, SOP-8 150 mil | C5333729 | $3.97 | 4514 | The reference part (Pico Plus 2, Adafruit Feather RP2350). Was $5.18 with 143 left in September. |
+| APS6404L-3SQR-ZR, USON-8 2x3 | C3040877 | $4.96 | 1793 | Needs a different footprint; no saving. |
+| APS1604M-3SQR-SN, 2 MB, 3.3 V, SOP-8 | C18214056 | $2.57 | 868 | Same pinout and commands at a quarter of the size. |
+| VTI7064MSME, 8 MB, SOIC-8 | C139966 | $4.68 | 154 | Rated 2.7-3.3 V, no margin on the 3.3 V rail. |
+| LY68L6400SLIT (Lyontek) | C261881 | $1.86 | 0 | Listed, not stocked. |
+| ESP-PSRAM64H, IPS6404, CSS6404 | - | - | 0 | Only as consigned-part entries. |
+| APS6404L-SQN-SN / -SQR-ZR | C5360304 / C43758152 | $1.92 / $3.03 | | 1.8 V parts: unusable, the QSPI bank is 3.3 V. |
+
+Adafruit's product 4677 ($1.75, $1.58 for 10+) is a sanded generic 8 MB PSRAM sold with the
+Espressif ESP-PSRAM64H datasheet: same pinout as the APS6404L (1 CE#, 2 SIO1, 3 SIO2, 4 VSS,
+5 SIO0, 6 SCLK, 7 SIO3, 8 VCC), 133 MHz, SPI/QPI, SOP-8 150 mil. It fits U22 by hand.
+
+So: leave U22 DNP in the JLCPCB order and hand-fit Adafruit 4677 on boards that need it, or
+remove `dnp=True` on U22 in `gen_mcu.py` to have JLCPCB fit the APS6404L-3SQR-SN (about $43 on a
+10-board run: 10 x $3.97 plus the $3 extended-part fee). Hand-fitting ten 4677s is about $16.
+
+**Footprint fix (proto2):** proto1's U22 was SOIC-8 5.3 x 5.3 mm (208 mil). AP Memory's package code
+SN is SOP-8L(150): body 3.90 mm, 6.00 mm across the leads (MS-012 AA), so proto2 uses
+`SOIC-8_3.9x4.9mm_P1.27mm`. Proto1 boards can't take a PSRAM without bending leads.

@@ -104,6 +104,12 @@ for i, r in enumerate(["R30", "R31", "R32", "R33", "R34"]):
 for i, r in enumerate(["R35", "R36", "R37", "R38", "R39"]):
     P[r] = (27, 26.6 + 2.7 * i, 0)
 P["C50"], P["C51"] = (30.5, 30, 0), (30.5, 34, 0)
+# proto2: SD socket power switch in the strip under the SD resistors, ISET and EN resistors below it
+P["U32"], P["C52"] = (31.0, 39.8, 0), (34.8, 40.0, 90)
+P["R42"], P["R43"] = (28.5, 43.2, 0), (32.0, 43.2, 0)
+# proto2 pull-ups: buffer enables between U3 and U1, nBE beside U4 (finger A29 is under U4)
+P["R15"], P["R16"], P["R17"] = (55.5, 40.0, 0), (55.5, 42.7, 0), (55.5, 45.4, 0)
+P["R14"] = (97.6, 47.6, 0)
 # power block, top right below the OLED header
 P["D2"], P["D3"] = (84, 11, 0), (84, 15.5, 0)
 P["C40"], P["C41"] = (93.5, 13.5, 0), (104, 13.5, 0)
