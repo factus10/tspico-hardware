@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10; phase 4's exit passed, 2026-10-10; phase 5 done and v2.3.1 released for v3, 2026-10-12. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10; phase 4's exit passed, 2026-10-10; phase 5 done and v2.3.1 released for v3, 2026-10-12; phase 6's SD slots and the TS2050 modem done, 2026-10-12. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -271,9 +271,30 @@ Each of these is independent and can be taken in any order:
 
 - Kempston joystick at $1F, from expander port 1 on /INT;
 - OLED status display;
-- ESP32-C3: an esptool bridge to install Zimodem through the card's USB (the RP2350 already controls EN and IO9), then the 8251 emulation at $73/$77;
+- ESP32-C3: an esptool bridge to install Zimodem through the card's USB (the RP2350 already controls EN and IO9), then the 8251 emulation at $73/$77 (*done*, below);
 - tape EAR out and SPK/TAP in;
 - protocol work that /WAIT makes possible: blocking pulls, so an empty FIFO no longer returns $00 and raises "J". This changes the protocol contract (`docs/PROTOCOL_V2_PROPOSAL.md`), so it needs a ROM revision and is opt-in.
+
+**Done so far:**
+
+- **Slots from the SD card** (firmware #263): MEM 3 boots and docks straight from `/slots/Fnn.bin` on the SD card, falling back to the flash slot of the same number. This revises decision 6's "no SD override": the flash slots are unchanged, and the SD card is a third bank chosen with MEM 3.
+- **The TS2050 modem** (design: firmware `docs/v3-modem-proposal.md`, #264):
+  - **Port 0 shared** (#266). A shadow of the XL9555's port 0, so the LED, WIFI_EN, WIFI_DL (IO9) and, on proto2, SD_PWR_EN each change only their own bit.
+  - **The 8251 at $73/$77** (#267), emulated on core 1 and bridged to Zimodem over UART0 by DMA. It is plain C with a host test, and RX is paced at 300 baud by default.
+  - **TS2050 mode** (#268):
+    - MTERM's DTR dial pulses become `ATD` to a Zimodem phonebook entry;
+    - `CONNECT` raises DSR (carrier);
+    - `NO CARRIER` or DTR off hangs up.
+
+    Hayes mode passes AT commands through, for setting up WiFi and the phonebook. Unmodified MTERM/T dials, connects, and hangs up both ways.
+  - **`tpi:modem`, the config keys** (`MODEM_MODE`, `MODEM_BAUD`, `MODEM_IDLE_MIN`), and **the ESP32 powered on demand** (#269).
+  - **The user manual's v3 build** (#270, #271): a CI artifact until the card ships. Its Appendix F is the modem.
+  - **Installing Zimodem:**
+    - Zimodem 4.0.3 is built in CI and published to the updater (#272).
+    - `tsbus.esp_relay` joins the card's USB to the ESP32's ROM loader (#273).
+    - The web updater (#274) and the Windows exe (#275) write Zimodem through the relay with their own loader clients and check its MD5. Zimodem's WiFi and phonebook settings stay.
+  - **Notes on the 2068's modem software:** MTERM, MTERM II and the BASIC dialers (#265, `docs/ts2050-software-notes.md`).
+  - **Still open:** what RTS does on a real 2050, and Specterm-64, ZX-Term*80 and the 2068 BBS, which are untested.
 
 ### Phase 7: AY sound
 
@@ -301,6 +322,6 @@ AY at $FFFD/$BFFD in C on core 1, with PWM audio. Moved out of phase 6 on 2026-1
 5. **Ports enabled at first release:** only $0E/$0F, or $1C-$1E from the start (section 11, question 2).
 6. **Slot storage layout:** file names, whether SD can override QSPI slots, and config migration from a v2 `config.ini`. *Decided (phase 5):*
    - **File names:** `/slots/Fnn.bin` for the flash slots and `/slots/Snn.bin` for the SRAM slots, which are deleted at boot.
-   - **No SD override:** slots live only on the card's flash. A ROM or DCK on SD goes into a slot through the updater tapes.
+   - **No SD override:** slots live only on the card's flash. A ROM or DCK on SD goes into a slot through the updater tapes. *Revised in phase 6 (firmware #263):* MEM 3 reads the slots straight from the SD card, falling back to the flash; the flash slots stay as decided here.
    - **No config migration:** `config.ini` keeps v2's keys (`ROM_SM`, `ROM_SLOT`, `DCK_SLOT`) with the same meaning.
    - **A v2.2 flash image** converts slot for slot (`build-flash.py --slots`).
