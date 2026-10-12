@@ -87,7 +87,8 @@ def main():
     s.label("nQSPI_SS", U.pin(by_name["~{QSPI_SS}"]))
 
     # ---- core regulator: VREG_LX -> L1 -> DVDD, 4.7 uF x2, 4.7 uF on VREG_VIN --------
-    L1 = s.place("Device:L", "L1", "3.3uH", L_FP, 250, 60)
+    # DNP at JLCPCB (2026-10-12: AOTA-B201610S3R3-101-T out of stock there and at LCSC); hand-fitted, dot on pad 2.
+    L1 = s.place("Device:L", "L1", "3.3uH", L_FP, 250, 60, dnp=True)
     s.label("VREG_LX", L1.pin("1")); s.label("DVDD", L1.pin("2"))   # LCSC numbering: dot-marked terminal = pad 2 = DVDD (1.1 V) side
     for k, (ref, net, val, fp) in enumerate([("C20", "DVDD", "4.7u", C0402), ("C22", "+3V3", "4.7u", C0402), ("C21", "DVDD", "100n", C0603), ("C47", "DVDD", "100n", C0603), ("C48", "DVDD", "100n", C0603)]):
         C = s.place("Device:C", ref, val, fp, 265 + 10 * k, 60)
