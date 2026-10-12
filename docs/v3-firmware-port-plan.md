@@ -272,9 +272,12 @@ Each of these is independent and can be taken in any order:
 - Kempston joystick at $1F, from expander port 1 on /INT;
 - OLED status display;
 - ESP32-C3: an esptool bridge to install Zimodem through the card's USB (the RP2350 already controls EN and IO9), then the 8251 emulation at $73/$77;
-- AY at $FFFD/$BFFD in C on core 1, with PWM audio;
 - tape EAR out and SPK/TAP in;
 - protocol work that /WAIT makes possible: blocking pulls, so an empty FIFO no longer returns $00 and raises "J". This changes the protocol contract (`docs/PROTOCOL_V2_PROPOSAL.md`), so it needs a ROM revision and is opt-in.
+
+### Phase 7: AY sound
+
+AY at $FFFD/$BFFD in C on core 1, with PWM audio. Moved out of phase 6 on 2026-10-12.
 
 ## 5. Risks
 
