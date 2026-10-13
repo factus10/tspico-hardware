@@ -306,7 +306,7 @@ Each of these is independent and can be taken in any order:
 
 ### Phase 7: AY sound
 
-AY at $FFFD/$BFFD in C on core 1, with PWM audio. Moved out of phase 6 on 2026-10-12.
+AY at $FFFD/$BFFD in C on core 1, with PWM audio. Moved out of phase 6 on 2026-10-12, then **unscheduled the same day**. It's now on the firmware repo's future-features list (`docs/FUTURE_FEATURES.md`): the 2068 has its own AY, so an emulated one only helps Spectrum software in ZX48 mode, and the audio path hasn't been tested. Cycles are not the obstacle.
 
 ## 5. Risks
 
