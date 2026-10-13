@@ -1,6 +1,6 @@
 # Porting the TS-Pico v2.1 firmware to v3 (RP2350B)
 
-Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10; phase 4's exit passed, 2026-10-10; phase 5 done and v2.3.1 released for v3, 2026-10-12; phase 6's SD slots and the TS2050 modem done, 2026-10-12. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
+Status: draft for review with the firmware maintainers, 2026-10-01; phase 1 done and phase 3 revised from its results, 2026-10-09; phase 2 found done (firmware #121) and closed, 2026-10-09; phase 3's exit test passed, 2026-10-10; phase 4's exit passed, 2026-10-10; phase 5 done and v2.3.1 released for v3, 2026-10-12; phase 6's SD slots and the TS2050 modem done, the joystick tested on a second board, the OLED moved to an SSD1309 and the /WAIT work dropped, 2026-10-12. Companion to [v3-architecture.md](v3-architecture.md), which is the hardware contract this plan targets. Firmware references are to `tspico-firmware-build` at `dc664a5` (v2.1-17).
 
 ## 1. Summary
 
@@ -269,11 +269,11 @@ LED calls on v3 cost about 100 µs each over I2C. Keep them out of the timing-cr
 
 Each of these is independent and can be taken in any order:
 
-- Kempston joystick at $1F, from expander port 1 on /INT;
-- OLED status display;
+- Kempston joystick at $1F, from expander port 1 on /INT (*firmware done; the DE-9 footprint needs a redesign*, below);
+- OLED status display (*now an SSD1309 on I2C; waits for the redone board*, below);
 - ESP32-C3: an esptool bridge to install Zimodem through the card's USB (the RP2350 already controls EN and IO9), then the 8251 emulation at $73/$77 (*done*, below);
 - tape EAR out and SPK/TAP in;
-- protocol work that /WAIT makes possible: blocking pulls, so an empty FIFO no longer returns $00 and raises "J". This changes the protocol contract (`docs/PROTOCOL_V2_PROPOSAL.md`), so it needs a ROM revision and is opt-in.
+- ~~protocol work that /WAIT makes possible~~: *dropped, 2026-10-12* (below).
 
 **Done so far:**
 
@@ -295,6 +295,14 @@ Each of these is independent and can be taken in any order:
     - The web updater (#274) and the Windows exe (#275) write Zimodem through the relay with their own loader clients and check its MD5. Zimodem's WiFi and phonebook settings stay.
   - **Notes on the 2068's modem software:** MTERM, MTERM II and the BASIC dialers (#265, `docs/ts2050-software-notes.md`).
   - **Still open:** what RTS does on a real 2050, and Specterm-64, ZX-Term*80 and the 2068 BBS, which are untested.
+- **The Kempston joystick** (firmware branch `v3-kempston`, not yet merged): core 1 answers IN $1F with a byte core 0 keeps current. The expander's /INT (GP35) triggers a read of port 1, which is converted to the Kempston byte 000FUDLR; fire 2 counts as fire. `config.ini` has `KEMPSTON` (on by default).
+  - **On proto1**, the DE-9's switches never reached the expander: port 1 read 3Fh whatever the stick did, even read directly over I2C. The joystick part of the board needs a redesign.
+  - **On a second board** with the socket mounted on the back, every direction gave its bit (up 8, down 4, left 2, right 1, fire 16), and the IRQ path followed each movement within 10 ms.
+  - **Left:** `IN 31` and a Kempston game on a 2068, then the PR.
+- **The OLED** (design: firmware `docs/v3-oled-proposal.md`, #277): the panel is now a 128x64 **SSD1309 on I2C**, not the Waveshare SSD1351 on SPI that J3 was laid out for. The board is being redone for it.
+  - **Proved on proto1**, wired to J3 by four wires with the power pins crossed: the panel answers at 3Ch on I2C1 (GP43 SCL, GP42 SDA) at 400 kHz. It ignores horizontal addressing, so it is written a page at a time, and a full frame takes about 30 ms.
+  - **The firmware waits for the new board,** which fixes the I2C pins and the header. A header in the modules' own order (GND VCC SCL SDA) would let one plug straight in.
+- **/WAIT protocol work: dropped** (2026-10-12). The protocol runs fast and reliably without blocking reads, so the ROM revision it needs isn't worth it. It can be revisited if an empty FIFO's "J" ever becomes a reported problem.
 
 ### Phase 7: AY sound
 
