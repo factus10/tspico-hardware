@@ -87,3 +87,11 @@ hardware/scripts/check.sh               # ERC + DRC, fails on any violation
 ```
 
 See `hardware/README.md` for the project layout and the geometry the edge connector is built from.
+
+## License
+
+The hardware designs in this repository (`hardware/`, `hardware-v2.5/`, `hardware-v2.6/`, `old/` and the design documents in `docs/`) are released under the [CERN Open Hardware Licence Version 2, Strongly Reciprocal](LICENSE) (CERN-OHL-S-2.0). You may make, modify and sell boards from them. If you distribute a modified design, or boards made from one, you must publish the modified design under the same licence.
+
+**Source Location:** https://github.com/factus10/tspico-hardware. The v2.6 and v3 boards carry this URL, the licence name and the open-source hardware logo on their bottom silkscreen. Boards made from a modified design must carry the location of the modified source instead.
+
+Not covered: the bring-up firmware in `firmware/` is software and is not licensed under CERN-OHL-S. `firmware/bringup/pico_sdk_import.cmake` keeps Raspberry Pi's BSD-3-Clause licence. Zimodem is fetched at build time from its own repository under its own licence. KiCad library parts and 3D models are used under the KiCad libraries' licence.

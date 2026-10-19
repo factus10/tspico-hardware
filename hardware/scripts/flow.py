@@ -3,7 +3,7 @@
 
     flow.py --jar <freerouting-2.4.1.jar> [--passes 100] [--attempts 3]
 
-placement -> locked pre-routes -> Freerouting -> finish -> silkscreen. Freerouting does not
+placement -> locked pre-routes -> Freerouting -> finish -> silkscreen -> board labels. Freerouting does not
 give the same result twice from the same input, and now and then it leaves a signal pin
 sealed in behind its neighbours' vias where finish.py cannot free it without a silly detour.
 Then the board is routed again from the placement; a board that fails is kept as
@@ -41,6 +41,9 @@ def main():
         sys.exit(f"not closed after {a.attempts} attempts")
     if step("silk.py"):
         sys.exit("silk.py failed")
+    # board name, URL, licence and OSHW logo (gen_layout.py rebuilt the board without them)
+    if subprocess.run([sys.executable, os.path.join(HERE, "labels.py"), "v3"]).returncode:
+        sys.exit("labels.py failed")
     print(f"==== closed on attempt {n}")
 
 

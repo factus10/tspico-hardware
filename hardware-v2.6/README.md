@@ -70,6 +70,7 @@ scripts/check.sh
 - Glue row across the board: U5 (decode) and JP4, U4, U1, U9 with R8/R3/JP1, U8, U7; the TPS3808 reset (U11) to the right of it, below the flash socket.
 - Over the data fingers: U6 and R12.
 - Every used bottom-side finger has a locked stub and via into the body, as in v2.5.
+- Labels: "TS-Pico v2.6" on top above the fingers. On the bottom: the name, the repository URL, the licence (CERN-OHL-S-2.0) and the OSHW logo. They are placed by `../hardware/scripts/labels.py v2.6`, which `flow.py` runs as its last step and which can be rerun on its own.
 
 ## Before ordering
 
