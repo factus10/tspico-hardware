@@ -10,6 +10,18 @@ Hardware for the TS-Pico, a mass-storage, ROM, and now WiFi/sound expansion card
 | `docs/` | [PLAN.md](PLAN.md) (plan), [docs/v3-architecture.md](docs/v3-architecture.md) (interface spec), part mapping, archived variants. |
 | `old/` | TS-Pico v2.2: the shipped through-hole design (CircuitStudio project and full fab package, September 2023). Reference only. |
 
+![TS-Pico v3, prototype 2](hardware/renders/tspico-v3-iso.png)
+
+The v3 board (prototype 2). Schematic: [hardware/docs/tspico-v3-schematic.pdf](hardware/docs/tspico-v3-schematic.pdf). PCB layers: [hardware/docs/tspico-v3-pcb.pdf](hardware/docs/tspico-v3-pcb.pdf).
+
+| v3 top | v3 bottom |
+|---|---|
+| ![v3 top](hardware/renders/tspico-v3-top.png) | ![v3 bottom](hardware/renders/tspico-v3-bottom.png) |
+
+| v2.6 | v2.5 |
+|---|---|
+| ![v2.6 top](hardware-v2.6/renders/tspico-v2.6-top.png) | ![v2.5 top](hardware-v2.5/renders/tspico-v2.5-top.png) |
+
 Firmware lives in [tspico-firmware-build](https://github.com/timex-sinclair-projects/tspico-firmware-build).
 
 ## Ordering a board
