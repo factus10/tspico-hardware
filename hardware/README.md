@@ -1,8 +1,8 @@
 # TS-Pico v3 KiCad project
 
-Status 2026-10-12: prototype 3 in this folder (changes below). Proto1 ([v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) was built and brought up; proto2 added its fixes (below). Both proto2 and proto3 were routed by `scripts/flow.py` with no hand edits, DRC clean at every severity. ERC: one warning, U4's unused input tied to GND.
+Status 2026-10-19: prototype 3 ([v3.0-proto3](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3), changes below). Proto1 ([v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) was built and brought up; proto2 added its fixes (below). Both proto2 and proto3 were routed by `scripts/flow.py` with no hand edits, DRC clean at every severity. ERC: one warning, U4's unused input tied to GND.
 
-**To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v3.0-proto2.1 release](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1): the proto2 board with L1 and U22 fitted by hand. [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) has the same Gerbers with L1 assembled by JLCPCB. To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
+**To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v3.0-proto3 release](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3). L1, U22, J3 and J5 are fitted by hand. Proto2: [v3.0-proto2.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1) (L1 by hand) and [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) (L1 assembled by JLCPCB), same Gerbers. To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
 
 ## Proto3 changes
 
