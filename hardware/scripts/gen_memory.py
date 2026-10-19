@@ -2,7 +2,7 @@
 """Generate memory.kicad_sch: slow I/O on a 16-bit I2C expander.
 
   U15  XL9555 (PCA9555 pinout, TSSOP-24, address 0x20) on I2C0 (GP24 SDA, GP25 SCL), /INT to GP35
-       port 0 (outputs): BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED, SD_PWR_EN
+       port 0 (outputs): BUSRQ, NMI_REQ, spare (OLED reset until proto3), WIFI_EN, WIFI_DL, nLED, SD_PWR_EN
        port 1 (inputs):  joystick x6, nBUSAK_L, SD_CD
   The expander powers up with every pin an input (100 k internal pull-ups), so the
   active-high outputs have 10 k pull-downs: nothing asserts until the firmware sets it.
@@ -33,7 +33,7 @@ def main():
     s.power("GND", 330, 40, "#PWR05", flag=False)
 
     U15 = s.place("Interface_Expansion:PCA9555PW", "U15", "XL9555", TSSOP24, 150, 110)
-    port0 = ["BUSRQ", "NMI_REQ", "nOLED_RST", "WIFI_EN", "WIFI_DL", "nLED", "SD_PWR_EN", None]           # pins 4-11
+    port0 = ["BUSRQ", "NMI_REQ", None, "WIFI_EN", "WIFI_DL", "nLED", "SD_PWR_EN", None]           # pins 4-11
     port1 = ["JOY_UP", "JOY_DOWN", "JOY_LEFT", "JOY_RIGHT", "JOY_FIRE1", "JOY_FIRE2", "nBUSAK_L", "SD_CD"]   # pins 13-20
     for bit, net in enumerate(port0):
         pin = U15.pin(str(4 + bit))
@@ -55,11 +55,11 @@ def main():
     for k, (ref, net, val) in enumerate((("R6", "I2C_SDA", "4k7"), ("R7", "I2C_SCL", "4k7"), ("R8", "nIOX_INT", "10k"))):
         R = s.place("Device:R", ref, val, R0603, 250 + 15 * k, 60)
         s.label("+3V3", R.pin("1")); s.glabel(net, R.pin("2"), BI)
-    # power-up defaults for the active-high outputs (and hold the OLED in reset)
-    for k, net in enumerate(("BUSRQ", "NMI_REQ", "nOLED_RST", "WIFI_EN", "WIFI_DL")):
-        R = s.place("Device:R", f"R{9 + k}", "10k", R0603, 250 + 15 * k, 110)
+    # power-up defaults for the active-high outputs (R11 held the SPI OLED in reset until proto3)
+    for k, (ref, net) in enumerate((("R9", "BUSRQ"), ("R10", "NMI_REQ"), ("R12", "WIFI_EN"), ("R13", "WIFI_DL"))):
+        R = s.place("Device:R", ref, "10k", R0603, 250 + 15 * k, 110)
         s.glabel(net, R.pin("1"), BI); s.label("GND", R.pin("2"))
-    s.text("R9-R13: 10 k pull-downs beat the expander's 100 k pull-ups until the firmware configures the port.", 245, 125, 1.5)
+    s.text("R9, R10, R12, R13: 10 k pull-downs beat the expander's 100 k pull-ups until the firmware configures the port.", 245, 125, 1.5)
 
     # activity LED, active low (the expander sinks better than it sources)
     R5 = s.place("Device:R", "R5", "100", R0603, 250, 160)

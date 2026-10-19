@@ -8,7 +8,7 @@ The card is an RP2350B on the TS2068 rear connector. The RP2350B serves the card
 
 Everything between the Z80 bus and the RP2350B travels over one 8-bit local bus, MD0 to MD7: the Z80 address (in two bytes through a pair of muxes), the Z80 data (through a transceiver), and the card's four registers. That is what keeps the design inside 48 GPIOs with room to spare.
 
-Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset,  tape EAR out and SPK/TAP in, a 128x96 SPI OLED, a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
+Other functions: Z80 I/O port decode entirely in PIO ($0E/$0F and the wishlist ports, Kempston at $1F, an emulated AY-3-8910 at the Spectrum 128 ports, an emulated Intel 8251 at $73/$77 bridged to an ESP32-C3 running Zimodem), /WAIT generation, a Pico-controlled 2068 reset,  tape EAR out and SPK/TAP in, a 128x64 I2C OLED (128x96 SPI on proto1/2), a DE-9 joystick, and stereo audio mixed with the 2068 SOUND line.
 
 ## 2. Block diagram
 
@@ -23,9 +23,9 @@ TS2068 edge connector (5 V)                                        RP2350B (3.3 
   /BE has its own 2.2k pull-up to the 2068's +5V (proto2)
   EAR <-- divider <-- TAPE_OUT ; SOUND -> audio mixer
 Slow I/O: XL9555 16-bit I2C expander (I2C0 on GP24/GP25, /INT on GP35)
-  out: BUSRQ, NMI_REQ, nOLED_RST, WIFI_EN, WIFI_DL, nLED      in: joystick x6, nBUSAK_L, SD_CD
+  out: BUSRQ, NMI_REQ, WIFI_EN, WIFI_DL, nLED, SD_PWR_EN      in: joystick x6, nBUSAK_L, SD_CD
 RP2350B support: GD25Q128E QSPI (16 MB, W25Q128 pinout), APS6404L PSRAM footprint (CS1 = GP47, not fitted on the prototype), 12 MHz, USB-C (data, VBUS to the diode-OR), BOOTSEL/RUN
-SD on SPI0, OLED on SPI1, ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> expander
+SD on SPI0, OLED on I2C1 (proto3), ESP32-C3-WROOM-02 (Zimodem) on UART, PWM stereo -> op-amp mixer -> 3.5 mm jack, DE-9 -> expander
 ```
 
 The two address buffers are the byte mux: their output enables put one address byte at a time on MD. U1 delivers A0-A7 on MD0-MD7 and U2 delivers A8-A15 on MD0-MD7, so the PIO's two reads are the plain low and high byte and its 16-bit word is the Z80 address as it is. (The edge connector's finger order splits the low byte's fingers either side of the high byte's; that is absorbed in the board routing, not in the firmware.)
@@ -76,10 +76,10 @@ One XL9555 (PCA9555 pinout, address 0x20) replaces the CTL register, its power-o
 
 | Port | Bits |
 |---|---|
-| 0 (outputs) | 0 BUSRQ, 1 NMI_REQ, 2 nOLED_RST, 3 WIFI_EN, 4 WIFI_DL (1 = ESP32 download mode; an open-drain gate pulls IO9 low), 5 nLED (low = on), 6 SD_PWR_EN (1 = SD socket powered, proto2), 7 spare |
+| 0 (outputs) | 0 BUSRQ, 1 NMI_REQ, 2 spare (nOLED_RST on proto1/2), 3 WIFI_EN, 4 WIFI_DL (1 = ESP32 download mode; an open-drain gate pulls IO9 low), 5 nLED (low = on), 6 SD_PWR_EN (1 = SD socket powered, proto2), 7 spare |
 | 1 (inputs) | 0-3 joystick up/down/left/right, 4 fire, 5 fire 2, 6 nBUSAK_L, 7 SD card detect |
 
-The expander powers up with every pin an input and weak pull-ups. 10 k pull-downs on the five active-high outputs give the same safe start the cleared CTL register did: no bus request, no NMI, OLED in reset, ESP32 off, normal ESP32 boot, LED off. /INT (GP35) fires on any input change, so the firmware reads the joystick only when it moves. A read takes about 100 us at 400 kHz.
+The expander powers up with every pin an input and weak pull-ups. 10 k pull-downs on the four active-high outputs give the same safe start the cleared CTL register did: no bus request, no NMI, ESP32 off, normal ESP32 boot, LED off. /INT (GP35) fires on any input change, so the firmware reads the joystick only when it moves. A read takes about 100 us at 400 kHz.
 
 ## 5. Images, slots and persistence
 
@@ -116,16 +116,15 @@ The expander powers up with every pin an input and weak pull-ups. 10 k pull-down
 | 29 | RESET_HOLD | out | Pull-up 4.7k; high = 2068 held in reset. |
 | 30 | AUDIO_R (PWM) | out | |
 | 35 | nIOX_INT | in | Expander change interrupt, 10 k pull-up. |
-| 26-28, 31, 33, 36, 40 | spare | | Seven spares. |
+| 26-28, 31, 33, 34, 36, 40, 41 | spare | | Nine spares (GP34 and GP41 were the SPI OLED's DC and CS until proto3). |
 | 32 | SD MISO | in | SPI0 RX (GP32 instead of GP36: the GP36 pad has no routable exit on the placed board). |
 | 37-39 | SD CS, SCK, MOSI | out | SPI0 pin group. |
-| 34 | OLED DC | out | Plain GPIO; moved from GP40, whose pad is boxed in on the board. |
-| 41-43 | OLED CS, SCK, MOSI | out | SPI1 pin group; OLED reset from the expander. |
+| 42, 43 | OLED_SDA, OLED_SCL | | I2C1 to the SSD1309 module on J3 (proto3), 4.7 k pull-ups; its own bus, so display updates never hold up the expander's joystick reads. Proto1/2: SPI1 SCK/MOSI, with CS on GP41, DC on GP34 and reset from the expander. |
 | 44, 45 | WIFI_TX, WIFI_RX | | ESP32-C3 UART0 (module GPIO20/21). XON/XOFF flow control; EN and IO9 from the expander. |
 | 46 | AUDIO_L (PWM) | out | |
 | 47 | PSRAM CS1 | | QMI CS1n (options GP0, 8, 19, 47). |
 
-41 used, 7 spare. Slow signals go through the expander, which has two spare bits.
+39 used, 9 spare. Slow signals go through the expander, which has two spare bits (P0.2, P0.7).
 
 ## 8. Chip list (interface and local bus)
 
@@ -144,7 +143,7 @@ Seven packages, four part numbers (down from 16 packages in the first v3 schemat
 
 - Memory: the `sel_bank`/`set_ctrl` state machines become one PIO program that reads the address bytes, picks a base pointer, and hands off to a DMA chain. PIO and DMA are configurable from MicroPython; the cycle itself needs no CPU. The image-load, slot-map and persistence logic replaces the flash-bank commands' hardware side while keeping their names.
 - Ports: `TS_IO` becomes a classifier over the address byte plus A14/A15, with WAIT side-set; the 8251 and AY emulations are new responders. AY audio generation runs in C on core 1.
-- SD on its own SPI; reset is RESET_HOLD; ESP32 control, LED, OLED reset and joystick through the I2C expander, joystick reads driven by its /INT line.
+- SD on its own SPI; reset is RESET_HOLD; ESP32 control, LED, SD power and joystick through the I2C expander, joystick reads driven by its /INT line.
 
 ## 10. Risks
 

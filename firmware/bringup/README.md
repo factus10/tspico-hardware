@@ -53,6 +53,8 @@ pin test only drives MD0-MD7 with all three local-bus buffers disabled.
 
 ## I2C OLED on J3
 
+Proto3 boards have a 4-pin I2C header (1 GND, 2 +3V3, 3 SCL, 4 SDA) on the same pins, for a 1.54" 128x64 SSD1309 module: use `o 64`. The jumper-wire table below is for proto1/2.
+
 J3 is wired for the SPI SSD1351 module, but its DIN and CLK pins (GP43,
 GP42) double as I2C1 SCL and SDA, so a 4-pin I2C SSD1306 (128x32) or SSD1309
 (128x64) module works with jumper wires. Power and ground are swapped relative

@@ -87,14 +87,18 @@ P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
 P["R27"], P["R26"] = (47.6, 23.7, 0), (47.6, 26.3, 0)          # USB series resistors on the way out to J1
 P["TP1"], P["TP2"], P["TP3"] = (6, 45.8, 0), (9.5, 45.8, 0), (13, 45.8, 0)
 P["R2"], P["R3"] = (20, 47.5, 0), (23.5, 47.5, 0)
-# top edge: ESP32-C3 (antenna over the edge), WiFi bulk cap, LED, buttons on 0.5 in centres, OLED header
+# top edge: ESP32-C3 (antenna over the edge), WiFi bulk cap, buttons, OLED header
 P["U40"] = (20, 8, 0)
 P["C46"] = (35.5, 9, 0)
 P["C60"], P["C61"], P["R40"], P["R41"], P["R12"], P["R13"] = (34, 19, 0), (34, 22, 0), (34, 25, 0), (34, 28, 0), (34, 31, 0), (34, 34, 0)
-P["D4"], P["R5"] = (43.5, 8, 0), (43.5, 11, 0)
-row(["SW1", "SW2", "SW3", "SW4"], 47, 4, 12.7, 0)
+# proto3: buttons in a 2x2 block (RUN under TS Reset, BOOTSEL under NMI) so the 1.54in OLED module on J3
+# covers none of them; the LED moves to the gap left of the ESP32, between H1 and the USB-C socket
+P["D4"], P["R5"] = (2.0, 12.1, 90), (4.3, 12.1, 90)
+row(["SW1", "SW2"], 47, 4, 12.7, 0)
+row(["SW3", "SW4"], 47, 10.3, 12.7, 0)
 P["R22"], P["R23"] = (72, 9.5, 0), (78.5, 9.5, 0)
-P["J3"], P["R11"] = (93, 4, 90), (112.6, 9.5, 90)
+P["J3"] = (93, 4, 90)
+P["R44"], P["R45"] = (103.5, 4.5, 90), (106.1, 4.5, 90)      # OLED I2C pull-ups past the end of the 4-pin header (proto3)
 # left edge: USB-C below the ESP32, micro SD below that (both open to the left)
 P["J1"] = (3.2, 21, 270)
 P["R24"], P["R25"] = (12, 21, 0), (15, 21, 0)
@@ -117,7 +121,7 @@ P["U30"], P["C42"], P["C43"] = (88, 23.5, 0), (81.6, 21, 90), (81.6, 25.5, 90)
 P["U31"], P["C44"], P["C45"] = (88, 32.5, 0), (81.6, 30, 90), (81.6, 34.5, 90)
 # right edge: audio jack in the corner (opening to the right), DE-9 below it
 P["J4"] = (123.7, 7, 180)
-P["J5"] = (122.3, 34, 90)
+P["J5"] = (122.3, 45.08, 90)    # male footprint (proto3) numbers its rows the other way: origin at pin 1 keeps body and holes where the socket's were
 # audio: op-amp, passives in signal order in three rows, 3.2 mm apart so each designator fits above its part
 P["U50"], P["C79"] = (99, 21.3, 0), (104.6, 19.8, 0)
 for i, r in enumerate(["R71", "C71", "R72", "C72", "R73", "R74"]):

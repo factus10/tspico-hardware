@@ -6,7 +6,8 @@
       Added for proto2 after issue #21: a card that latches up hits the switch's limit instead of pulling
       +3V3 down (which reset the RP2350B), and the firmware can power-cycle a wedged card. The card-side
       pull-ups are on +3V3_SD so they cannot power a switched-off card; the detect pull-up stays on +3V3.
-  J3  7-pin header for the Waveshare 1.27" 128x96 SSD1351 RGB OLED (VCC GND DIN CLK CS DC RST)
+  J3  4-pin header for a 1.54" 128x64 SSD1309 I2C OLED module (GND VCC SCL SDA) on I2C1, R44/R45 4k7 pull-ups.
+      Proto3; proto1/2 had a 7-pin header for the Waveshare 1.27" 128x96 SSD1351 on SPI1.
 """
 import os
 import sys
@@ -18,7 +19,7 @@ R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
 SD_FP = "tspico:microSD_TF-01A"   # custom footprint for the HRO TF-01A push-push socket (pads 1-8, 9 = CD switch, 10 = CD common, SH)
-HDR7 = "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical"
+HDR4 = "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical"
 
 OUT, IN, BI = "output", "input", "bidirectional"
 
@@ -26,7 +27,7 @@ OUT, IN, BI = "output", "input", "bidirectional"
 def main():
     s = Sheet("tspico-v3.kicad_sch", "storage_display.kicad_sch", "TS-Pico v3: SD and Display")
     s.text("Micro SD in SPI mode on the RP2350B SPI0 (GP36-GP39); card detect (switch to GND) into STAT bit 7.", 20, 285, 2.5)
-    s.text("OLED: 7-pin header for the Waveshare 1.27in 128x96 SSD1351 module on SPI1 (GP40-GP43), reset from CTL.", 20, 290, 2.0)
+    s.text("OLED: 4-pin header for a 1.54in 128x64 SSD1309 I2C module on I2C1 (GP42 SDA, GP43 SCL), its own bus so display updates never delay joystick reads.", 20, 290, 2.0)
     s.power("+3V3", 300, 30, "#PWR13", flag=False)
     s.power("GND", 330, 40, "#PWR14", flag=False)
 
@@ -74,15 +75,19 @@ def main():
     s.text("Firmware order: card detected, settle, SD_PWR_EN on, then SPI. SPI lines released (inputs) before SD_PWR_EN goes off.", 90, 191, 1.5)
 
     # ---- J3 OLED header --------------------------------------------------------------
-    J3 = s.place("Connector_Generic:Conn_01x07", "J3", "OLED 1.27in 128x96", HDR7, 300, 110)
-    nets = [("+3V3", "loc"), ("GND", "loc"), ("OLED_MOSI", IN), ("OLED_SCK", IN), ("OLED_CS", IN), ("OLED_DC", IN), ("nOLED_RST", IN)]
+    J3 = s.place("Connector_Generic:Conn_01x04", "J3", "OLED 1.54in 128x64 I2C", HDR4, 300, 110)
+    nets = [("GND", "loc"), ("+3V3", "loc"), ("OLED_SCL", IN), ("OLED_SDA", BI)]
     for k, (net, kind) in enumerate(nets):
         at = J3.pin(str(k + 1))
         if kind == "loc":
             s.label(net, at)
         else:
             s.glabel(net, at, kind)
-    s.text("J3 pin order matches the Waveshare module: VCC GND DIN CLK CS DC RST.", 280, 135, 1.5)
+    # bus pull-ups on the card, so the bus idles high with no module or one without its own
+    for k, (ref, net) in enumerate((("R44", "OLED_SCL"), ("R45", "OLED_SDA"))):
+        R = s.place("Device:R", ref, "4k7", R0603, 330 + 15 * k, 150)
+        s.label("+3V3", R.pin("1")); s.glabel(net, R.pin("2"), BI)
+    s.text("J3 pin order matches the module: GND VCC SCL SDA. VCC is +3V3, so the module's own pull-ups stay at 3.3 V.", 280, 135, 1.5)
 
     s.write()
     print("wrote storage_display.kicad_sch")
