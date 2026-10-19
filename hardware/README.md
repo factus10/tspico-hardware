@@ -1,8 +1,16 @@
 # TS-Pico v3 KiCad project
 
-Status 2026-10-12: prototype 2. Proto1 ([v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) was built and brought up; proto2 adds its fixes (below), routed by `scripts/flow.py` with no hand edits, DRC clean at every severity. ERC: one warning, U4's unused input tied to GND.
+Status 2026-10-12: prototype 3 in this folder (changes below). Proto1 ([v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) was built and brought up; proto2 added its fixes (below). Both proto2 and proto3 were routed by `scripts/flow.py` with no hand edits, DRC clean at every severity. ERC: one warning, U4's unused input tied to GND.
 
 **To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v3.0-proto2.1 release](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1): the proto2 board with L1 and U22 fitted by hand. [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) has the same Gerbers with L1 assembled by JLCPCB. To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
+
+## Proto3 changes
+
+| Change | Parts | Why |
+|---|---|---|
+| Male DE-9 | J5 CONNFLY DS1037-09MNAKT74-0CC (C75750), footprint `DSUB-9_Pins_Horizontal_…` | Atari sticks (CX-40) end in a female plug, like the 2068's own male ports expect. Proto1/2 had a female footprint; a male connector on it mirrors every pin, putting the stick's ground (pin 8) on pin 7 (JOY_5V, open) so nothing reads. Same body position and holes as proto2. On a proto1/2 board, mount a male connector on the back of the board: turning it over puts each pin on its own pad. |
+| Buttons and LED moved | SW3 under SW1, SW4 under SW2; D4/R5 left of the ESP32 | A 1.54 in module on J3 covered BOOTSEL and crowded RUN. |
+| I2C OLED header | J3 1x4 (1 GND, 2 +3V3, 3 SCL, 4 SDA), R44/R45 4k7 pull-ups | For a 1.54 in 128x64 SSD1309 I2C module, on I2C1 (GP43 SCL, GP42 SDA). Replaces the 7-pin header for the 1.27 in SSD1351 SPI module. GP34, GP41 and expander P0.2 (with its pull-down R11) are freed. |
 
 ## Proto2 changes (from proto1 bring-up and issue #21)
 
@@ -96,7 +104,7 @@ Parts without a 3D model in the KiCad library (the four buttons, USB-C, micro SD
 ## Layout notes
 
 - Body 130 x 56 mm (the register row of the first layout is gone). Left edge, top to bottom: ESP32-C3 antenna, USB-C, micro SD. The TF-01A socket's shell is flush with the board edge (its shield pads sit 3 mm back, so nothing needs edge clearance). Right edge: 3.5 mm jack in the corner, DE-9 below it.
-- Top edge: buttons on 0.5 in centres, left to right TS Reset, NMI, RUN, BOOTSEL, then the OLED header. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
+- Top edge: buttons in a 2x2 block on 0.5 in centres (top row TS Reset, NMI; below them RUN, BOOTSEL; proto1/2 had all four in a row), then the OLED header. The module on J3 covers everything right of the buttons, so nothing there may be taller than its standoff. The LED (D4, R5) sits left of the ESP32, between the mounting hole and the USB-C socket. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
 - Row above the fingers: data U3, high address byte U2 directly over fingers A15-A8, control U4 (U3 is turned 180 degrees from the others: its A side is the Z80 side so DIR can be /RD itself). Row above that: low address byte U1 over U2, fed from fingers A0-A3 on the left and A7-A4 on the right along the bottom layer, then strobe OR gates U6 and open-drain drivers U7. Both address buffers put plain bytes on MD0-MD7, so the firmware sees ordinary addresses. I2C expander U15 and the joystick conditioning network sit beside the DE-9; audio and the two LDOs above them.
 - RP2350B core regulator copied from "Hardware design with RP2350" figure 4: input cap C22 and output cap C20 (0402) straddle the VREG_LX pin, LX runs 3.7 mm under both to L1, VIN and PGND go straight into C22, feedback senses at C20, the AVDD filter R28/C39 sits above. L1 is the polarised Abracon part: pad 2 (dot) is the DVDD end, away from the top edge of the board.
 - Crystal 6.5 mm from its pins with R20 between chip and crystal; XOUT_R runs under the crystal to pad 3. XIN and XOUT drop one pad lane after leaving the chip so DVDD pin 32 has room for its via.

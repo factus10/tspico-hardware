@@ -38,19 +38,19 @@ GPIO = {
     24: ("I2C_SDA", BI), 25: ("I2C_SCL", OUT),
     29: ("RESET_HOLD", OUT), 30: ("AUDIO_R", OUT),
     32: ("SD_MISO", IN), 35: ("nIOX_INT", IN), 37: ("SD_CS", OUT), 38: ("SD_SCK", OUT), 39: ("SD_MOSI", OUT),
-    34: ("OLED_DC", OUT), 41: ("OLED_CS", OUT), 42: ("OLED_SCK", OUT), 43: ("OLED_MOSI", OUT),      # DC is a plain GPIO: GP34 sits in the open corner of the fan-out, GP40 is boxed in
+    42: ("OLED_SDA", BI), 43: ("OLED_SCL", OUT),      # I2C1 for the SSD1309 module (proto3; was SPI1 + DC on GP34, CS on GP41)
     44: ("WIFI_TX", OUT), 45: ("WIFI_RX", IN), 46: ("AUDIO_L", OUT),
 }
 DMA_GPIO = {26: ("nWR_ALO", OUT), 27: ("nMRD", OUT), 28: ("nMWR", OUT), 31: ("nWR_AHI", OUT), 33: ("nDMA_EN", OUT), 34: ("nDMA_MREQ", OUT)}
 if DMA_OPTION:
     GPIO.update(DMA_GPIO)
-SPARE = ([36] if DMA_OPTION else [36] + sorted(DMA_GPIO)) + [40]
+SPARE = ([36] if DMA_OPTION else [36] + sorted(DMA_GPIO)) + [34, 40, 41]
 SPARE = [g for g in SPARE if g not in GPIO]
 
 
 def main():
     s = Sheet("tspico-v3.kicad_sch", "mcu.kicad_sch", "TS-Pico v3: RP2350B Core")
-    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP36 spare (plus the six DMA pins when the DMA option is off).", 20, 285, 2.5)
+    s.text("RP2350B core per the RP2350 hardware design guide. GPIO map: docs/v3-architecture.md section 7. GP34, GP36, GP40, GP41 spare (plus the DMA pins when the DMA option is off).", 20, 285, 2.5)
     s.text("USB-C: data, and VBUS to the power sheet (diode-ORed with the edge +5V) so the card runs from USB alone on the bench.", 20, 290, 2.0)
 
     s.power("+3V3", 300, 30, "#PWR06", flag=False)
