@@ -62,7 +62,7 @@ Measured from the v2.2 fab Gerbers (`../old/tsPico2_2Fab/Gerber/tsPico.GTL`, `.G
 
 Pad names are `A1`..`A32` on F.Cu and `B1`..`B32` on B.Cu (no A6/B6), following the TS2068 Technical Manual table 2.4.1-1. Position 1 is at the left when the board is viewed from the top with the connector at the bottom.
 
-**Assumption to verify before ordering:** side A (GND, EAR, D7, ..., SOUND) is on the top (component) side and side B (+15V, +5V, address bus, video) on the bottom. This matches how the v2.2 layout routes +5V (bottom trace from the fourth finger), but confirm it against the v2.2 CircuitStudio PCB or a physical card.
+**Side A is the top (component) side, confirmed:** side A (GND, EAR, D7, ..., SOUND) is on the top and side B (+15V, +5V, address bus, video) on the bottom. Proto1 proved it in a 2068 on 2026-10-07 ([`firmware/bringup/README.md`](../firmware/bringup/README.md)). In shadow mode it logged every address the Z80 read through the side-B fingers, the boot log matching the ROM exactly. It then served the HOME ROM onto side A, with /MREQ and /RD timing each read, /BE on A29 and the data on D0-D7, and the 2068 booted to the card's "TS-Pico v3 ROM" banner. With the sides swapped, the address fingers would sit on data and control lines and none of that could work. This also matches how the v2.2 layout routes +5V (bottom trace from the fourth finger).
 
 Fab notes for the fingers: hard gold over the fingers if the fab offers it (ENIG otherwise), 30 degree bevel on the tongue edge, no copper within 0.3 mm of the slot.
 
