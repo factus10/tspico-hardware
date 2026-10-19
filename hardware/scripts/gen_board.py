@@ -36,9 +36,9 @@ FIRST_FINGER_X = 2.52     # centre of position 1 from the tongue's left edge
 FINGER_Y_OFFSET = 0.32    # finger bottom edge above the tongue's bottom edge
 CHAMFER = 1.0
 
-# Pin names per the TS2068 Technical Manual table 2.4.1-1. Side A is assumed
-# to be the component (top) side, B the solder (bottom) side; verify against
-# the v2.2 CircuitStudio PCB before ordering.
+# Pin names per the TS2068 Technical Manual table 2.4.1-1. Side A is the
+# component (top) side, B the solder (bottom) side: confirmed by v3 proto1 in a
+# 2068 (2026-10-07), which read addresses from side B and served ROM bytes onto side A.
 SIDE_A = ["GND", "EAR", "A7RB", "D7", "DZIN", "SLOT", "D0", "D1", "D2", "D6",
           "D5", "D3", "D4", "~{INT}", "~{NMI}", "~{HALT}", "~{MREQ}", "~{IORQ}",
           "~{RD}", "~{WR}", "~{BUSAK}", "~{WAIT}", "~{BUSRQ}", "~{RESET}",
