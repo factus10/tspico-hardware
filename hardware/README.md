@@ -120,6 +120,7 @@ $PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD spi
 $PY scripts/autoroute.py --jar <freerouting-2.4.1.jar> --passes 100     # about 25 minutes
 $PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets, drop unused vias and stubs
 $PY scripts/silk.py           # place reference designators clear of pads, silk and the edge; trim outlines at the edge
+$PY scripts/labels.py v3      # board name on top; name, URL, licence and OSHW logo on the bottom
 ```
 
 Or all five in one command, which is the way to run it:
@@ -143,5 +144,7 @@ What `preroute.py` fixes in place before the autorouter runs, because the router
 State on 2026-09-17 (DMA option dropped, address buffers delivering plain bytes, audio and joystick passives respaced for silkscreen, U1 address fan pre-routed): **fully routed, DRC clean at every severity (no errors, no warnings, no unconnected items)**, no tracks on either plane layer. 2073 track segments, 378 vias, all 0.6/0.3 mm, no track under 0.13 mm. Produced by `flow.py` on its first attempt with no hand edits. (Run DRC on the board where it sits: a copy outside the project folder is checked against KiCad's default rules and reports hundreds of false clearance errors.)
 
 Silkscreen: `silk.py` sets designators to 0.8 mm text and tries positions around each part until one clears pads, other silk, other parts and the board edge; rows of equal parts all get the label on the same side (above a flat part, to the right of an upright one), and a hidden designator gets a second chance by moving a neighbour's. The layout leaves room for this: passive rows are 3.2 mm apart in the audio block, 2.7 mm in the SD pull-ups, and the joystick RC columns are 2.6 mm apart. 139 of 140 designators are on silk; only C39 (the VREG_AVDD capacitor, boxed in by the design guide's regulator layout) is hidden, and it is on F.Fab with all the others. Outlines of edge connectors that overhang the board are trimmed where they cross the edge.
+
+Board labels: `labels.py` (also run by `flow.py`) puts "TS-Pico v3" on the top silkscreen above the left end of the fingers. On the bottom it puts the name, the repository URL (the CERN-OHL-S Source Location), the licence and the OSHW logo. It only touches its own group of silkscreen items, so it can be rerun on a routed board, and it refuses to save if a label would land on a pad, a courtyard or other silk. `labels.py v2.6` does the same for `../hardware-v2.6/`.
 
 Rerunning `autoroute.py` continues from the current routing (it exports existing tracks); `--fresh` starts over. Do not rerun `gen_layout.py`: it rebuilds the board from placement and discards routing.
