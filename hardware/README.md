@@ -117,7 +117,7 @@ cd hardware
 PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
 $PY scripts/gen_layout.py     # placement, keepouts, planes (discards all routing)
 $PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD spine, inner supply links, bottom-row fan
-$PY scripts/autoroute.py --jar <freerouting-2.4.1.jar> --passes 100     # about 25 minutes
+$PY scripts/autoroute.py --passes 100     # jar from $FREEROUTING_JAR (or --jar); about 25 minutes
 $PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets, drop unused vias and stubs
 $PY scripts/silk.py           # place reference designators clear of pads, silk and the edge; trim outlines at the edge
 $PY scripts/labels.py v3      # board name on top; name, URL, licence and OSHW logo on the bottom
@@ -126,7 +126,7 @@ $PY scripts/labels.py v3      # board name on top; name, URL, licence and OSHW l
 Or all five in one command, which is the way to run it:
 
 ```bash
-$PY scripts/flow.py --jar <freerouting-2.4.1.jar>      # 10 to 15 minutes per attempt, up to 3 attempts
+$PY scripts/flow.py                       # jar from $FREEROUTING_JAR (or --jar); 10 to 15 minutes per attempt, up to 3 attempts
 ```
 
 Freerouting does not give the same result twice from the same input. Before U1's address pins had their pre-routed via fan (below), about one run in three left one of them (A3, A5) sealed in behind its neighbours' vias; with the fan, three runs out of three closed on the first attempt. The safety net stays: if a signal net is left open, `finish.py` tries lifting the neighbours' copper around the pin, routing the open net and putting the neighbours back, but refuses a result that needs more than three vias per net (the only way out of such a pocket has been a 9-via, 70 mm detour). If the board still is not clean `finish.py` exits non-zero and `flow.py` routes again from the placement, keeping the failed board as `fab/route/attempt-N.kicad_pcb`.

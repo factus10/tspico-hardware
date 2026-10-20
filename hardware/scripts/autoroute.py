@@ -108,6 +108,9 @@ def main():
     ap.add_argument("--fresh", action="store_true", help="remove existing tracks/vias before routing")
     ap.add_argument("--import-only", default="", help="skip routing, import this .ses")
     a = ap.parse_args()
+    a.jar = os.path.expanduser(a.jar)
+    if not a.import_only and not os.path.isfile(a.jar):
+        sys.exit(f"Freerouting jar not found: {a.jar or '(none)'}; pass --jar or set FREEROUTING_JAR")
     os.makedirs(a.workdir, exist_ok=True)
     dsn = os.path.join(a.workdir, "tspico-v3.dsn")
     ses = a.import_only or os.path.join(a.workdir, "tspico-v3.ses")
@@ -119,8 +122,6 @@ def main():
         print("stripped existing tracks and vias")
     if not a.import_only:
         plane_fanout(board)          # stitch GND/+3V3 pads to the planes before routing
-        if not a.jar:
-            sys.exit("need --jar or FREEROUTING_JAR")
         pcbnew.ExportSpecctraDSN(board, dsn)
         print("exported", dsn)
         log = os.path.join(a.workdir, "freerouting.log")

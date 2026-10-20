@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """The whole board flow in one go (run with KiCad's Python):
 
-    flow.py --jar <freerouting-2.4.1.jar> [--passes 100] [--attempts 3]
+    flow.py [--jar <freerouting-2.4.1.jar>] [--passes 100] [--attempts 3]
+
+--jar defaults to $FREEROUTING_JAR.
 
 placement -> locked pre-routes -> Freerouting -> finish -> silkscreen -> board labels. Freerouting does not
 give the same result twice from the same input, and now and then it leaves a signal pin
@@ -25,10 +27,13 @@ def step(name, *args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--jar", required=True)
+    ap.add_argument("--jar", default=os.environ.get("FREEROUTING_JAR", ""))
     ap.add_argument("--passes", default="100")
     ap.add_argument("--attempts", type=int, default=3)
     a = ap.parse_args()
+    a.jar = os.path.expanduser(a.jar)
+    if not os.path.isfile(a.jar):
+        sys.exit(f"Freerouting jar not found: {a.jar or '(none)'}; pass --jar or set FREEROUTING_JAR")
     for n in range(1, a.attempts + 1):
         print(f"==== attempt {n}", flush=True)
         if step("gen_layout.py") or step("preroute.py") or step("autoroute.py", "--jar", a.jar, "--passes", a.passes):
