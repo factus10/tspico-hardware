@@ -52,7 +52,7 @@ PARTS = {
     ("74LVC1G86", "SOT-23-5"): ("SN74LVC1G86DBVR", "C402161", "extended, TI"),
     ("SS34", "D_SMA"): ("SS34", "C8678", "basic, MDD"),
     ("green", "LED_0805_2012Metric"): ("KT-0805G", "C2297", "basic, KENTO (the 0603 basic part had 1 in stock)"),
-    ("3.3uH", "L_Abracon_AOTA-B201610"): ("AOTA-B201610S3R3-101-T", "C42411119", "extended, Abracon polarised inductor from the RP2350 design guide; dot = pin 2 = DVDD side. DNP on proto2: 0 at JLCPCB and LCSC (2026-10-12), hand-fitted from DigiKey/Mouser. No substitute: Raspberry Pi found no other polarity-marked 0806 part"),
+    ("3.3uH", "L_Abracon_AOTA-B201610"): ("AOTA-B201610S3R3-101-T", "C42411119", "extended, Abracon polarised inductor from the RP2350 design guide; dot = pin 2 = DVDD side. Out of stock 2026-10-12 (proto2.1 and proto3 hand-fitted it); 326 in stock 2026-10-22, assembled again from proto3.1. No substitute: Raspberry Pi found no other polarity-marked 0806 part"),
     ("12MHz", "Crystal_SMD_3225-4Pin_3.2x2.5mm"): ("ABM8-272-T3", "C20625731", "extended, Abracon, CL 10 pF (RP2350 design guide); basic alternative X322512MSB4SI C9002 needs 27 pF loads"),
     # ---- electromechanical ---------------------------------------------------
     ("USB-C", "USB_C_Receptacle_HRO_TYPE-C-31-M-12"): ("TYPE-C-31-M-12", "C165948", "extended, HRO"),
