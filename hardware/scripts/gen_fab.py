@@ -60,9 +60,27 @@ def main():
     bom_src = os.path.join(HW, "bom", "tspico-v3-jlcpcb-bom.csv")
     run("sch", "export", "bom", "--output", bom_src, "--fields", "Value,Reference,Footprint,LCSC",
         "--labels", "Comment,Designator,Footprint,LCSC Part #", "--group-by", "Value,Footprint", "--exclude-dnp", SCH)
-    run("sch", "export", "bom", "--output", os.path.join(HW, "bom", "tspico-v3-bom-full.csv"),
-        "--fields", "Value,Reference,Footprint,MPN,LCSC,${QUANTITY}", "--labels", "Value,Reference,Footprint,MPN,LCSC,Qty",
-        "--group-by", "Value,Footprint", "--exclude-dnp", SCH)
+    # The full BOM lists every part, DNP ones too, with who fits it: JLCPCB, by hand (DNP
+    # parts and the through-hole J3/J5), or nobody (edge fingers, test points, holes ...).
+    full = os.path.join(HW, "bom", "tspico-v3-bom-full.csv")
+    run("sch", "export", "bom", "--output", full,
+        "--fields", "Value,Reference,Footprint,MPN,LCSC,${QUANTITY},${DNP}", "--labels", "Value,Reference,Footprint,MPN,LCSC,Qty,DNP",
+        "--group-by", "Value,Footprint,${DNP}", SCH)
+    with open(full, newline="") as f:
+        full_rows = list(csv.DictReader(f))
+    for r in full_rows:
+        refs = expand_refs(r["Reference"])
+        if r.pop("DNP").strip():
+            r["Fitted by"] = "hand (DNP)"
+        elif all(NOT_ASSEMBLED.match(x) and x not in ("J3", "J5") for x in refs):
+            r["Fitted by"] = "none (board feature)"
+        elif all(NOT_ASSEMBLED.match(x) for x in refs):
+            r["Fitted by"] = "hand"
+        else:
+            r["Fitted by"] = "JLCPCB"
+    with open(full, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["Value", "Reference", "Footprint", "MPN", "LCSC", "Qty", "Fitted by"], quoting=csv.QUOTE_ALL)
+        w.writeheader(); w.writerows(full_rows)
     rows, assembled, missing = [], set(), []
     with open(bom_src, newline="") as f:
         for r in csv.DictReader(f):
