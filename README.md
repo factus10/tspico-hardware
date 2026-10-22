@@ -47,7 +47,7 @@ The full spec is [docs/v3-architecture.md](docs/v3-architecture.md). Firmware pr
 
 | Folder | What |
 |---|---|
-| `hardware/` | TS-Pico v3: KiCad 10 project. RP2350B chip-down, surface mount, JLCPCB assembly. See `hardware/README.md`; order files in [v3.0-proto3](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3). |
+| `hardware/` | TS-Pico v3: KiCad 10 project. RP2350B chip-down, surface mount, JLCPCB assembly. See `hardware/README.md`; order files in [v3.0-proto3.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3.1). |
 | `hardware-v2.5/` | TS-Pico v2.5: the v2.2 circuit all surface mount on the v3 outline, plus bench programming of the flash from the Pico. KiCad 10. See `hardware-v2.5/README.md`; order files in [v2.5-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v2.5-proto1). |
 | `hardware-v2.6/` | TS-Pico v2.6: the v2.2 circuit with the RP2040 on the board, SMT except the DIP-32 flash and SRAM (socketed, hand-soldered). KiCad 10. See `hardware-v2.6/README.md`; order files in [v2.6-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v2.6-proto2). |
 | `docs/` | [PLAN.md](PLAN.md) (plan), [docs/v3-architecture.md](docs/v3-architecture.md) (interface spec), part mapping, archived variants. |
@@ -75,7 +75,7 @@ Ready-to-upload JLCPCB packages (Gerbers, BOM, placement, ordering notes, schema
 |---|---|
 | v2.6: RP2040 on the board, DIP-32 flash and SRAM in sockets (hand-soldered), 74LVC glue | [v2.6-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v2.6-proto2) (proto1, with 74LS glue: [v2.6-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v2.6-proto1)) |
 | v2.5: all surface mount, Pico module, bench programming of the flash | [v2.5-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v2.5-proto1) |
-| v3: RP2350B, WiFi, audio, joystick | [v3.0-proto3](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3) (earlier: [v3.0-proto2.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1), proto2 with L1 fitted by hand; [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) assembles L1; proto1, built, before the bring-up fixes: [v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) |
+| v3: RP2350B, WiFi, audio, joystick | [v3.0-proto3.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3.1): proto3 with board labels, L1 assembled (earlier: [v3.0-proto3](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3), no labels, L1 by hand; [v3.0-proto2.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1), proto2 with L1 fitted by hand; [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) assembles L1; proto1, built, before the bring-up fixes: [v3.0-proto1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto1)) |
 
 ## Working on the v3 hardware
 
