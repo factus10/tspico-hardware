@@ -99,7 +99,7 @@ $KC pcb render --side bottom --quality high -w 2384 -h 1376 --zoom 1.1 -o render
 $KC pcb render --side top --quality high -w 2384 -h 1568 --rotate '-45,0,45' --perspective -o renders/tspico-v3-iso.png tspico-v3.kicad_pcb
 ```
 
-Parts without a 3D model in the KiCad library (the four buttons, USB-C, micro SD socket, audio jack) show as bare pads in the renders; L1 and U22 are DNP.
+Parts without a 3D model in the KiCad library (the four buttons, USB-C, micro SD socket, audio jack) show as bare pads in the renders; U22 is DNP.
 
 ## Layout notes
 
