@@ -119,7 +119,7 @@ def main():
         f.write(f"- Not in the BOM/CPL (not assembled): {', '.join(sorted(skipped))}.\n")
         f.write("- BOM lines with no LCSC number (pick at upload): " + ("; ".join(f"{c} ({r})" for c, r in missing) or "none") + ".\n")
         f.write("- J3 (OLED header) and J5 (DE-9) are through-hole and hand-soldered: they are not in the BOM or CPL.\n")
-        f.write("- L1 (Abracon AOTA-B201610S3R3-101-T, the RP2350 core-regulator inductor) is polarised. The footprint copies LCSC's land pattern and pad numbering, so no rotation offset should be needed, but check the preview: the dot on L1 must be on pad 2 (net DVDD, marked by the silkscreen dot), the end away from the top edge of the board. Check its stock at upload: it ran out on 2026-10-12. If it is out again, remove it from the BOM and CPL and fit it by hand.\n")
+        f.write("- U33 (ME6211C12M5G-N, SOT-23-5) is the RP2350 core supply (DVDD, 1.2 V) from proto4; there is no L1. Check pin 1 in the placement preview like the other SOT-23-5 parts (U32, U9).\n")
         f.write("- DNP (footprint only, fitted by hand): U22 PSRAM.\n")
         f.write("- All drills are 0.3 mm or larger; all vias 0.6/0.3 mm.\n")
         f.write("- Check rotations in JLCPCB's placement preview: JLC's part orientation differs from KiCad's for many footprints (QFN, SOT-223, SOIC, connectors); fix there, not here.\n")

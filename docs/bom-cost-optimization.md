@@ -42,6 +42,10 @@ of stock or $0.41, now EnergyMath EM74LVC06AD in SOIC-14, C49188178).
 Added by the RP2350 regulator rework: Abracon AOTA-B201610S3R3-101-T C42411119 ($0.28, replaces
 the unsourced Sunlord part), 33 R + 4.7 uF VREG_AVDD filter (both basic).
 
+Proto4 (2026-11-04): L1 is gone. The core is fed by a Microne ME6211C12M5G-N LDO (C236672,
+$0.06, extended, 32k in stock) with a 1 uF basic input cap (C15849); L1 had 1 left in stock that day.
+The LDO's extended fee replaces L1's, so the fee count is unchanged.
+
 ## Logic consolidation (2026-09-17, second pass)
 
 | Change | Removes | Adds |

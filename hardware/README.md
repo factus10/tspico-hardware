@@ -4,6 +4,17 @@ Status 2026-10-19: prototype 3 ([v3.0-proto3](https://github.com/factus10/tspico
 
 **To order:** the JLCPCB upload files (Gerber zip, BOM, placement), ordering notes, schematic PDF and renders are on the [v3.0-proto3.1 release](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3.1): proto3 with the board labels, and L1 assembled by JLCPCB again. U22, J3 and J5 are fitted by hand. [v3.0-proto3](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto3) is the same copper without the labels, with L1 fitted by hand. Proto2: [v3.0-proto2.1](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2.1) (L1 by hand) and [v3.0-proto2](https://github.com/factus10/tspico-hardware/releases/tag/v3.0-proto2) (L1 assembled by JLCPCB), same Gerbers. To regenerate them from this folder, run `python3 scripts/gen_fab.py` (output in `fab/jlcpcb/`).
 
+## Proto4 changes (branch `claude/rp2350-inductor-replacement-f42f1a`, not yet tagged)
+
+| Change | Parts | Why |
+|---|---|---|
+| External core LDO, no inductor | U33 Microne ME6211C12M5G-N (C236672), C53 1 uF input, C20 4.7 uF output; L1 removed | L1 (Abracon AOTA-B201610S3R3-101-T) ran out at JLCPCB twice (0 on 2026-10-12, 1 left on 2026-11-04) and has no substitute. RP2350 datasheet section 6.3.7 / figure 24: VREG_LX (pin 63) open, VREG_FB (pin 65) to GND, VREG_VIN and VREG_AVDD still powered for power-on reset and brown-out. DVDD is 1.2 V, the value the firmware already sets for the 250 MHz bus clock (OpenSpand does the same at 208 MHz). The ME6211 is ±1%, tighter than the on-chip regulator's ±3% at the same setting; 1.2 V is above DVDD's recommended 1.16 V and close to its 1.21 V absolute maximum, as the 1.20 V firmware setting already was. Issue #30 (does 250 MHz run at 1.1 V?) no longer blocks this; it would only matter for a 1.1 V part. |
+| C31 moved | C31 left of R28 | U33 sits in its old place above the chip's top-left corner. |
+
+Routed 2026-11-04 by `scripts/flow.py` on its first attempt with no hand edits: 2112 track segments, 401 vias, DRC clean at every severity (no errors, warnings or unconnected items), no tracks on the plane layers. ERC: the one known warning (U4). 40 BOM lines, 142 parts, $14.19/board on 10 boards with fees (proto3.1: $14.68).
+
+Firmware for proto4: the core voltage is fixed, so `vreg_set_voltage()` has no effect (harmless). Set the VREG `HIZ` bit after boot (unlock with `VREG_CTRL.UNLOCK` first): the on-chip regulator still starts at power-up and draws about 400 µA until then. Never put the regulator in low-power mode: the datasheet says it can't be disconnected from DVDD in that mode.
+
 ## Proto3 changes
 
 | Change | Parts | Why |
@@ -84,7 +95,7 @@ Part choices are priced against JLCPCB's catalog with `python3 scripts/jlc_price
 
 ## Fab outputs
 
-`python3 scripts/gen_fab.py` writes `fab/jlcpcb/`: `tspico-v3-gerbers.zip` (4-layer Gerbers + Excellon drill), `tspico-v3-bom.csv` and `tspico-v3-cpl.csv` (JLCPCB assembly format), and refreshes the two BOMs in `bom/`. `fab/NOTES.md` lists what to check on upload (L1 has no LCSC number yet; rotations of QFN/SOT/connector parts need checking in JLC's placement preview; J3 and J5 are through-hole).
+`python3 scripts/gen_fab.py` writes `fab/jlcpcb/`: `tspico-v3-gerbers.zip` (4-layer Gerbers + Excellon drill), `tspico-v3-bom.csv` and `tspico-v3-cpl.csv` (JLCPCB assembly format), and refreshes the two BOMs in `bom/`. `fab/NOTES.md` lists what to check on upload (rotations of QFN/SOT/connector parts need checking in JLC's placement preview; J3 and J5 are through-hole).
 
 ## Schematic and PCB PDFs, renders
 
@@ -106,9 +117,9 @@ Parts without a 3D model in the KiCad library (the four buttons, USB-C, micro SD
 - Body 130 x 56 mm (the register row of the first layout is gone). Left edge, top to bottom: ESP32-C3 antenna, USB-C, micro SD. The TF-01A socket's shell is flush with the board edge (its shield pads sit 3 mm back, so nothing needs edge clearance). Right edge: 3.5 mm jack in the corner, DE-9 below it.
 - Top edge: buttons in a 2x2 block on 0.5 in centres (top row TS Reset, NMI; below them RUN, BOOTSEL; proto1/2 had all four in a row), then the OLED header. The module on J3 covers everything right of the buttons, so nothing there may be taller than its standoff. The LED (D4, R5) sits left of the ESP32, between the mounting hole and the USB-C socket. A bottom-layer keepout (no tracks or vias) sits under the RP2350B.
 - Row above the fingers: data U3, high address byte U2 directly over fingers A15-A8, control U4 (U3 is turned 180 degrees from the others: its A side is the Z80 side so DIR can be /RD itself). Row above that: low address byte U1 over U2, fed from fingers A0-A3 on the left and A7-A4 on the right along the bottom layer, then strobe OR gates U6 and open-drain drivers U7. Both address buffers put plain bytes on MD0-MD7, so the firmware sees ordinary addresses. I2C expander U15 and the joystick conditioning network sit beside the DE-9; audio and the two LDOs above them.
-- RP2350B core regulator copied from "Hardware design with RP2350" figure 4: input cap C22 and output cap C20 (0402) straddle the VREG_LX pin, LX runs 3.7 mm under both to L1, VIN and PGND go straight into C22, feedback senses at C20, the AVDD filter R28/C39 sits above. L1 is the polarised Abracon part: pad 2 (dot) is the DVDD end, away from the top edge of the board.
+- RP2350B core supply (proto4): the ME6211C12 LDO U33 sits above the chip's top-left corner, input cap C53 to its right, output cap C20 to its left. Its 0.3 mm output track drops straight down beside R28 and enters the pad ring diagonally at the corner between pins 60 and 61, joining the DVDD spine under the package. VREG_LX is open, VREG_FB runs to the PGND via, VIN goes straight into C22 and the AVDD filter R28/C39 sits above, as in "Hardware design with RP2350" figure 4. (Proto1-3 had the design guide's switcher with L1 left of C20/C22.)
 - Crystal 6.5 mm from its pins with R20 between chip and crystal; XOUT_R runs under the crystal to pad 3. XIN and XOUT drop one pad lane after leaving the chip so DVDD pin 32 has room for its via.
-- Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, check `lib/tspico.pretty/microSD_TF-01A` and `L_Abracon_AOTA-B201610` against the parts' drawings (both were generated from LCSC's land patterns). (TF-01A card detect: low = card in, confirmed on proto1.)
+- Before ordering: check the D-sub footprint against the CONNFLY DS1037 drawing, check `lib/tspico.pretty/microSD_TF-01A` against the part's drawing (generated from LCSC's land pattern). (TF-01A card detect: low = card in, confirmed on proto1.)
 
 ## Routing flow and state
 
@@ -116,7 +127,7 @@ Parts without a 3D model in the KiCad library (the four buttons, USB-C, micro SD
 cd hardware
 PY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
 $PY scripts/gen_layout.py     # placement, keepouts, planes (discards all routing)
-$PY scripts/preroute.py       # locked hand routes: regulator, crystal, DVDD spine, inner supply links, bottom-row fan
+$PY scripts/preroute.py       # locked hand routes: core LDO and regulator pins, crystal, DVDD spine, inner supply links, bottom-row fan
 $PY scripts/autoroute.py --passes 100     # jar from $FREEROUTING_JAR (or --jar); about 25 minutes
 $PY scripts/finish.py         # widen necked tracks, join orphan supply islands, retry open nets, drop unused vias and stubs
 $PY scripts/silk.py           # place reference designators clear of pads, silk and the edge; trim outlines at the edge
@@ -135,8 +146,8 @@ Rules: 0.15 mm signal tracks (the router may neck down to 0.11 mm in a squeeze; 
 
 What `preroute.py` fixes in place before the autorouter runs, because the router handles a fully used 0.4 mm pitch QFN badly (whichever pins it leaves for last end up sealed behind its own vias):
 
-- the regulator and crystal, as above;
-- the **DVDD spine**: 0.25 mm track under the package from the regulator's pin 65 to DVDD pins 51, 10 and 32 (10, 15 and 22 mm from the output capacitor; only the first 3 mm at the pins is 0.15 mm), and pin 51's 100 nF 2 mm from its pin;
+- the core LDO and the on-chip regulator's pins, and the crystal, as above;
+- the **DVDD spine**: 0.25 mm track under the package from the LDO's entry at the top-left corner to DVDD pins 51, 10 and 32 (only the first 3 mm at the pins is 0.15 mm), and pin 51's 100 nF 2 mm from its pin;
 - the 3.3 V supply pins linked in groups under the package, each group with one via: 50 to corner pin 41, 68/69 to 76 to pin 5, 24 to 29;
 - the **bottom pad row** (pins 1-20, all used) as a deterministic fan: straight out to a staggered depth, a 45 degree turn, and a via on a common line at 0.75 mm spacing, which is the tightest legal pattern for 0.6 mm vias at 0.4 mm pitch.
 - **U1's Z80-side pins** (A0-A7): each runs straight in under U1's body to its own via, in two staggered rows 1.26 and 2.06 mm from the pads. U1's bottom pad row faces U2's top row across a 0.8 mm gap, so these pins can only leave under U1, and their fingers are on the bottom layer, so each needs a via anyway. Neighbouring vias are 1.03 mm apart, and a track on either layer still passes between two vias of the near row.
