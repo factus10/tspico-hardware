@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Hand routes that must not be left to the autorouter, added (locked) to the
-freshly placed board: the RP2350B core regulator and the crystal, laid out as in
-"Hardware design with RP2350" figure 4 (rotated: the regulator pins 61-65 are at
-the top of the chip's left side). Run with KiCad's Python after gen_layout.py.
+freshly placed board: the RP2350B core supply and the crystal. Run with KiCad's
+Python after gen_layout.py.
 
-Regulator: VIN cap C22 and output cap C20 (0402) straddle the VREG_LX pin, so LX
-runs under both to L1 (3.7 mm); VIN and PGND go straight into C22; FB senses at
-C20; the cap grounds return to PGND with one via beside them; AVDD goes up to
-its RC filter. USB D-/D+ get their first jog so they clear the FB track.
+Core supply (proto4, RP2350 datasheet figure 24): the on-chip switcher is unused.
+VREG_LX (pin 63) is left open and VREG_FB (pin 65) goes to GND, joining PGND at
+C22's ground via. VIN still goes straight into C22 and AVDD up to its RC filter,
+as in "Hardware design with RP2350" figure 4. DVDD comes from the ME6211C12 LDO
+U33 above the chip's top-left corner: its output (with C20) drops down beside R28
+and enters the pad ring diagonally at the corner between pins 60 and 61, joining
+the DVDD spine under the package. USB D-/D+ get their first jog so they clear the
+FB track.
 
 Also fixed here: the DVDD spine and supply links under the RP2350B, the fan of its
 bottom pad row, and the via fan of U1's Z80-side address pins.
@@ -36,17 +39,28 @@ def main():
         else:
             fails.append((name + " via", (x, y)))
 
-    # ---- core regulator (pins 61 AVDD, 62 PGND, 63 LX, 64 VIN, 65 FB) ----------
-    route("VREG_LX", [(57.05, 23.0), (56.35, 23.0), (56.15, 22.8), (53.55, 22.8), (53.0, 22.25), (52.6, 22.0)], 0.13)
+    # ---- on-chip regulator pins (61 AVDD, 62 PGND, 63 LX open, 64 VIN, 65 FB to GND) ----
     route("+3V3", [(57.05, 23.4), (55.4, 23.4)], 0.2)
     via("+3V3", 56.0, 23.4)
     route("GND", [(57.05, 22.6), (56.55, 22.6), (56.3, 22.35), (54.05, 22.35)], 0.15)
     route("GND", [(54.05, 22.32), (54.05, 21.45)], 0.25)
     route("GND", [(54.62, 21.2), (54.05, 21.45)], 0.25)
     via("GND", 54.05, 21.45)
-    route("DVDD", [(52.9, 23.65), (53.85, 23.4)], 0.3)
-    route("DVDD", [(57.05, 23.8), (56.45, 23.8), (56.25, 24.0), (55.8, 24.0)], 0.15)      # 0.15 past the USB jogs, 0.2 after
-    route("DVDD", [(55.8, 24.0), (54.75, 24.0), (54.3, 23.55)], 0.2)
+    route("GND", [(57.05, 23.8), (56.45, 23.8), (56.25, 24.0), (55.8, 24.0)], 0.15)      # VREG_FB to GND: 0.15 past the USB jogs,
+    route("GND", [(55.8, 24.0), (54.75, 24.0), (54.05, 23.3), (54.05, 22.35)], 0.2)       # then up to the PGND via
+    # ---- U33 core LDO (rotated 180: VOUT bottom-left, VIN/GND/CE down its right side) ----
+    route("DVDD", [(56.66, 16.8), (55.23, 16.8)], 0.3)                                   # VOUT to C20
+    route("DVDD", [(56.66, 16.8), (56.66, 20.6), (59.23, 23.17)], 0.3)                    # down beside R28, in at the corner to the spine
+    route("+3V3", [(58.94, 16.8), (60.0, 16.8), (60.2, 16.625), (60.75, 16.625)], 0.3)    # VIN to C53
+    via("+3V3", 60.75, 17.55)
+    route("+3V3", [(60.75, 16.625), (60.75, 17.55)], 0.3)
+    route("+3V3", [(58.94, 14.9), (58.94, 14.05)], 0.25)                                  # CE high: its own plane via
+    via("+3V3", 58.94, 14.05)
+    route("GND", [(58.94, 15.85), (59.9, 15.85), (60.3, 15.45), (60.75, 15.075)], 0.3)   # LDO ground to C53's
+    route("GND", [(60.75, 15.075), (60.75, 14.05)], 0.3)
+    via("GND", 60.75, 14.05)
+    route("GND", [(54.27, 16.8), (53.35, 16.8)], 0.3)                                     # C20 ground
+    via("GND", 53.35, 16.8)
     route("VREG_AVDD", [(57.05, 22.2), (56.6, 22.2), (56.2, 21.8), (55.75, 21.35)], 0.15)
     route("VREG_AVDD", [(55.6, 20.025), (55.6, 21.0)], 0.2)
     route("USB_DM", [(57.05, 24.2), (56.5, 24.2), (56.25, 24.45), (55.6, 24.45)], 0.2)
@@ -73,10 +87,9 @@ def main():
     route("+3V3", [(57.05, 25.0), (57.05, 25.4), (57.75, 25.4), (57.75, 28.2), (57.05, 28.2)], 0.15)
     route("+3V3", [(66.95, 28.6), (66.3, 28.6), (66.3, 26.6), (66.95, 26.6)], 0.15)
     route("+3V3", [(57.75, 28.2), (57.75, 29.6), (58.3, 30.15), (59.8, 30.15), (59.8, 30.95)], 0.15)      # ...and on to pin 5, whose fan via feeds the 68/69/76 group
-    # ---- DVDD spine: the 1.1 V core rail from the regulator's pin 65 to DVDD pins 51, 10 and 32,
-    # 0.25 mm under the package (0.2 mm where it enters a 0.2 mm pad)
-    route("DVDD", [(57.05, 23.8), (57.9, 23.8)], 0.2)
-    route("DVDD", [(57.9, 23.8), (58.6, 23.8), (60.0, 22.4), (61.8, 22.4)], 0.25)
+    # ---- DVDD spine: the core rail from the LDO's entry at the top-left corner to DVDD pins
+    # 51, 10 and 32, 0.25 mm under the package (0.2 mm where it enters a 0.2 mm pad)
+    route("DVDD", [(58.6, 23.8), (60.0, 22.4), (61.8, 22.4)], 0.25)
     route("DVDD", [(61.8, 22.4), (61.8, 21.05)], 0.2)
     route("DVDD", [(58.6, 23.8), (58.6, 28.9), (59.4, 29.7), (61.8, 29.7)], 0.25)
     route("DVDD", [(61.8, 29.7), (61.8, 30.95)], 0.2)

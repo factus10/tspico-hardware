@@ -2,7 +2,8 @@
 """Generate mcu.kicad_sch: RP2350B core.
 
   U20 RP2350B (QFN-80) with the RP2350 hardware-design-guide support parts:
-      internal 1.1 V regulator (L1 3.3 uH, 4.7 uF caps), 100 nF on every IOVDD,
+      core (DVDD) fed by an ME6211C12 LDO (U33, 1.2 V) per datasheet section 6.3.7
+      instead of the internal switcher and its inductor; 100 nF on every IOVDD,
       12 MHz crystal with 15 pF loads and 1 k series, RUN pull-up and button,
       BOOTSEL button on QSPI_SS through 1 k, USB D+/D- 27 R series.
   U21 GD25Q128E (W25Q128 pinout) 16 MB QSPI flash on the QSPI bus (XIP, CS0)
@@ -21,7 +22,7 @@ from config import DMA_OPTION  # noqa: E402
 R0603 = "Resistor_SMD:R_0603_1608Metric"
 C0603 = "Capacitor_SMD:C_0603_1608Metric"
 C0805 = "Capacitor_SMD:C_0805_2012Metric"
-L_FP = "tspico:L_Abracon_AOTA-B201610"
+SOT235 = "Package_TO_SOT_SMD:SOT-23-5"
 C0402 = "Capacitor_SMD:C_0402_1005Metric"
 SW_FP = "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
 TP_FP = "TestPoint:TestPoint_Pad_1.5x1.5mm"
@@ -76,8 +77,8 @@ def main():
             s.label("GND", U.pin(num))
         elif nm == "DVDD":
             s.label("DVDD", U.pin(num))
-    s.label("VREG_LX", U.pin(by_name["VREG_LX"]))
-    s.label("DVDD", U.pin(by_name["VREG_FB"]))
+    s.nc(U.pin(by_name["VREG_LX"]))                 # on-chip switcher unused: no inductor (datasheet fig. 24)
+    s.label("GND", U.pin(by_name["VREG_FB"]))
     s.label("XIN", U.pin(by_name["XIN"])); s.label("XOUT", U.pin(by_name["XOUT"]))
     s.label("SWCLK", U.pin(by_name["SWCLK"])); s.label("SWDIO", U.pin(by_name["SWDIO"]))
     s.label("RUN", U.pin(by_name["RUN"]))
@@ -86,14 +87,19 @@ def main():
         s.label(nm, U.pin(by_name[nm]))
     s.label("nQSPI_SS", U.pin(by_name["~{QSPI_SS}"]))
 
-    # ---- core regulator: VREG_LX -> L1 -> DVDD, 4.7 uF x2, 4.7 uF on VREG_VIN --------
-    # Assembled by JLCPCB again from proto3.1 (2026-10-22: 326 in stock). proto2.1/proto3 had it DNP and hand-fitted.
-    L1 = s.place("Device:L", "L1", "3.3uH", L_FP, 250, 60)
-    s.label("VREG_LX", L1.pin("1")); s.label("DVDD", L1.pin("2"))   # LCSC numbering: dot-marked terminal = pad 2 = DVDD (1.1 V) side
-    for k, (ref, net, val, fp) in enumerate([("C20", "DVDD", "4.7u", C0402), ("C22", "+3V3", "4.7u", C0402), ("C21", "DVDD", "100n", C0603), ("C47", "DVDD", "100n", C0603), ("C48", "DVDD", "100n", C0603)]):
+    # ---- core supply: external LDO on DVDD (RP2350 datasheet 6.3.7, figure 24) -------------
+    # proto4: replaces L1 (Abracon AOTA-B201610S3R3-101-T, out of stock twice) and the on-chip
+    # switcher. VREG_LX open, VREG_FB to GND; VREG_VIN and VREG_AVDD stay powered for the
+    # power-on reset and brown-out blocks. 1.2 V because the firmware runs the core at 1.20 V
+    # for the 250 MHz bus clock (same choice as OpenSpand at 208 MHz).
+    LDO = s.place("Regulator_Linear:ME6211C12M5", "U33", "ME6211C12M5G-N", SOT235, 250, 60)
+    s.label("+3V3", LDO.pin("1")); s.label("GND", LDO.pin("2")); s.label("+3V3", LDO.pin("3"))
+    s.nc(LDO.pin("4")); s.label("DVDD", LDO.pin("5"))
+    for k, (ref, net, val, fp) in enumerate([("C53", "+3V3", "1u", C0603), ("C20", "DVDD", "4.7u", C0402), ("C22", "+3V3", "4.7u", C0402), ("C21", "DVDD", "100n", C0603), ("C47", "DVDD", "100n", C0603), ("C48", "DVDD", "100n", C0603)]):
         C = s.place("Device:C", ref, val, fp, 265 + 10 * k, 60)
         s.label(net, C.pin("1")); s.label("GND", C.pin("2"))
-    s.text("L1 (Abracon AOTA-B201610S3R3-101-T, polarised: dot = pad 2 to DVDD), C20 output, C22 at VREG_VIN (0402 as in the design guide). C21/C47/C48: 100 nF at DVDD pins 51, 32, 10.", 245, 75, 1.5)
+    s.text("U33 ME6211C12 (1.2 V, 300 mA) feeds DVDD; C53 its input, C20 its output. C22 at VREG_VIN (datasheet fig. 24). C21/C47/C48: 100 nF at DVDD pins 51, 32, 10.", 245, 75, 1.5)
+    s.text("Firmware: set VREG.HIZ after boot (internal regulator draws ~400 uA until then); never use the regulator's low-power mode.", 245, 78, 1.5)
     R28 = s.place("Device:R", "R28", "33", R0603, 300, 85)
     s.label("+3V3", R28.pin("1")); s.label("VREG_AVDD", R28.pin("2"))
     C39 = s.place("Device:C", "C39", "4.7u", C0402, 315, 85)
@@ -101,8 +107,6 @@ def main():
     s.text("R28/C39: 33 R + 4.7 uF filter on VREG_AVDD (design guide R3/C9).", 245, 95, 1.5)
     FL2 = s.place("power:PWR_FLAG", "#FLG08", "PWR_FLAG", "", 330, 85)
     s.label("VREG_AVDD", FL2.pin("1"))
-    FL = s.place("power:PWR_FLAG", "#FLG06", "PWR_FLAG", "", 300, 60)
-    s.label("DVDD", FL.pin("1"))
 
     # ---- IOVDD and analog decoupling: 12 x 100 nF ----------------------------------
     for k in range(9):

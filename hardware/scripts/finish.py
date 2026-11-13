@@ -56,7 +56,7 @@ def main():
                     t.SetWidth(t.GetWidth() - MM(0.02)); print("shaved 0.02 mm off a", netname, "segment at", x, y)
         pcbnew.SaveBoard(PCB, b)
     B = Board(PCB)
-    # DVDD first: the +3V3 links the joiner adds under the package can fence in the regulator's feedback pin
+    # DVDD first: the +3V3 links the joiner adds under the package can fence in the DVDD spine
     for net, plane in (("DVDD", False), ("+3V3", True), ("GND", True)):
         print(net, join_islands(B, net, plane=plane, reach=12.0, margin=5.0))
     B.save()

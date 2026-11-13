@@ -71,9 +71,12 @@ P["JP10"] = (105.5, 50.2, 0)
 # RP2350B core, rotated so GPIO0-7 (MD bus) sit at the bottom-left corner, the
 # control GPIOs along the bottom, QSPI/USB/regulator on the left, crystal on the right
 P["U20"] = (62, 26, 90)
-# core regulator, copied from the design guide's figure 4 (rotated): VIN cap C22 and
-# output cap C20 straddle the VREG_LX pin so LX runs under them to L1; AVDD filter above
-P["C22"], P["C20"], P["L1"] = (55.25, 22.8, 90), (54.05, 22.8, 90), (52.25, 22.8, 270)
+# core supply (proto4): the on-chip switcher is unused (VREG_LX open, VREG_FB to GND) and the
+# ME6211C12 LDO U33 sits above the chip's top-left corner, where its output drops straight down
+# beside R28 and enters the pad ring diagonally at the corner to join the DVDD spine (preroute.py).
+# C22 stays at VREG_VIN, the AVDD filter above it, as in the design guide.
+P["C22"] = (55.25, 22.8, 90)
+P["U33"], P["C53"], P["C20"] = (57.8, 15.85, 180), (60.75, 15.85, 90), (54.75, 16.8, 180)
 P["C39"], P["R28"] = (55.1, 21.2, 180), (55.6, 19.2, 270)
 # crystal 6.5 mm from XIN/XOUT (leaving a via ring for the neighbouring pins), series resistor between chip and crystal, load caps at the pads
 P["Y1"], P["R20"], P["C35"], P["C36"] = (75.5, 26.0, 0), (71.7, 25.2, 0), (74.4, 29.3, 270), (76.6, 22.7, 90)
@@ -81,7 +84,7 @@ P["Y1"], P["R20"], P["C35"], P["C36"] = (75.5, 26.0, 0), (71.7, 25.2, 0), (74.4,
 P["C23"], P["C24"] = (51.2, 26.4, 0), (51.2, 29.4, 0)
 P["C25"], P["C48"], P["C26"] = (57.6, 37.0, 270), (61.35, 37.0, 270), (66.0, 37.0, 270)      # under the fan vias of pins 5, 10 (DVDD) and 15
 P["C28"], P["C29"], P["C47"] = (69.4, 30.6, 0), (72.6, 33.0, 0), (70.6, 19.8, 0)
-P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (62.3, 18.2, 90), (57.4, 16.4, 0)     # C21 straight above DVDD pin 51 (pin 50 beside it connects under the package, so its lane is free)
+P["C27"], P["C30"], P["C21"], P["C31"] = (67.4, 17.4, 90), (64.2, 14.0, 0), (62.3, 18.2, 90), (53.3, 19.2, 90)     # C21 straight above DVDD pin 51 (pin 50 beside it connects under the package, so its lane is free); C31 (59/60) left of R28, U33 has its old spot
 P["U21"], P["C37"], P["R21"] = (44, 20, 0), (38, 20, 90), (38, 25, 0)
 P["U22"], P["C38"] = (44, 30, 0), (38, 30, 90)
 P["R27"], P["R26"] = (47.6, 23.7, 0), (47.6, 26.3, 0)          # USB series resistors on the way out to J1
